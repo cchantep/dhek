@@ -18,13 +18,17 @@ main = do
   initGUI
   window <- windowNew
   vbox   <- vBoxNew False 0
+  align  <- alignmentNew 1 0 0 0
   table  <- createTable
   fchb   <- createFileChooserButton
   button <- createViewButton vbox fchb
-  tableAttachDefaults table fchb 0 1 0 1
-  tableAttachDefaults table button 1 2 0 1
-  tableAttachDefaults table vbox 0 2 1 2
-  containerAdd window table
+  bbox   <- hButtonBoxNew
+  containerAdd align bbox
+  containerAdd bbox fchb
+  containerAdd bbox button
+  set bbox [buttonBoxLayoutStyle := ButtonboxStart]
+  boxPackStart vbox align PackNatural 10
+  containerAdd window vbox
   set window windowParams
   onDestroy window mainQuit
   widgetShowAll window
@@ -63,7 +67,7 @@ createViewButton vbox chooser = do
       widgetShowAll vbox
 
 createTable :: IO Table
-createTable = tableNew 2 2 True
+createTable = tableNew 2 2 False
 
 viewerNew :: String -> IO Viewer
 viewerNew filepath = do
