@@ -17,11 +17,13 @@ main :: IO ()
 main = do
   initGUI
   window <- windowNew
+  vbox   <- vBoxNew False 0
   table  <- createTable
   fchb   <- createFileChooserButton
-  button <- createViewButton table fchb
+  button <- createViewButton vbox fchb
   tableAttachDefaults table fchb 0 1 0 1
   tableAttachDefaults table button 1 2 0 1
+  tableAttachDefaults table vbox 0 2 1 2
   containerAdd window table
   set window windowParams
   onDestroy window mainQuit
@@ -44,8 +46,8 @@ createFileChooserButton = do
   fileChooserAddFilter fcb  filt
   return fcb
 
-createViewButton :: Table -> FileChooserButton -> IO Button
-createViewButton table chooser = do
+createViewButton :: VBox -> FileChooserButton -> IO Button
+createViewButton vbox chooser = do
   button <- buttonNewWithLabel "View"
   onClicked button go
   return button
@@ -56,11 +58,9 @@ createViewButton table chooser = do
       maybe (print "(No Selection)") makeView select
 
     makeView filepath = do
-      (Viewer area doc swin) <- viewerNew ("file://" ++ filepath)
-      vbox <- vBoxNew False 0
-      tableAttachDefaults table vbox 0 2 1 2
+      (Viewer _ _ swin) <- viewerNew filepath
       boxPackStart vbox swin PackGrow 0
-
+      widgetShowAll vbox
 
 createTable :: IO Table
 createTable = tableNew 2 2 True
@@ -68,7 +68,7 @@ createTable = tableNew 2 2 True
 viewerNew :: String -> IO Viewer
 viewerNew filepath = do
   area <- drawingAreaNew
-  doc  <- liftM (\(Just x) -> x) (documentNewFromFile filepath Nothing)
+  doc  <- liftM (\(Just x) -> x) (documentNewFromFile ("file://" ++ filepath) Nothing)
   swin <- scrolledWindowNew Nothing Nothing
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
