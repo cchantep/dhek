@@ -26,6 +26,7 @@ As Dhek UI is based on GTK, its bindings should be installed:
 ```
 cabal install gtk2hs-buildtools
 cabal install gtk
+cabal install stm
 ```
 
 Finally Dhek itself can be build:
