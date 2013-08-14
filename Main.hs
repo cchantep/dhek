@@ -15,7 +15,8 @@ data Viewer =
                    , viewerDocument       :: Document
                    , viewerScrolledWindow :: ScrolledWindow
                    , viewerCurrentPage    :: Int
-                   , viewerPageCount      :: Int }
+                   , viewerPageCount      :: Int
+                   , viewerZoom           :: Double }
 
 main :: IO ()
 main = do
@@ -41,9 +42,14 @@ createControlPanel vbox = do
   fchb   <- createFileChooserButton
   label  <- labelNew Nothing
   entry  <- entryNew
-  button <- createViewButton vbox fchb label entry vVar
+  scale  <- hScaleNewWithRange 1 200 1
+  button <- createViewButton vbox fchb label entry scale vVar
+  widgetSetSensitive scale False
+  rangeSetValue scale 100
   entry `on` entryActivate $ pageBrowserChanged entry vVar
+  scale `on` valueChanged $ pageZoomChanged scale vVar
   containerAdd align bbox
+  containerAdd bbox scale
   containerAdd bbox entry
   containerAdd bbox label
   containerAdd bbox fchb
@@ -59,15 +65,26 @@ pageBrowserChanged entry viewerVar = do
       action page =
         readTVar viewerVar >>= \vOpt ->
           let nothingToDo = return (return ())
-              go (Viewer area y swin cur nb)
+              go (Viewer area x swin cur nb y)
                 | page == cur = nothingToDo
                 | page < 1    = return (entrySetText entry "1")
                 | page > nb   = return (entrySetText entry (show nb))
                 | otherwise   =
-                  let newViewer = Viewer area y swin (page - 1) nb in
+                  let newViewer = Viewer area x swin (page - 1) nb y in
                   writeTVar viewerVar (Just newViewer) >>= \_ ->
                     return (widgetQueueDraw area) in
           maybe nothingToDo go vOpt
+
+pageZoomChanged :: HScale -> TVar (Maybe Viewer) -> IO ()
+pageZoomChanged scale viewerVar = do
+  value <- rangeGetValue scale
+  join $ atomically $ action (value / 100)
+    where
+      action value = do
+        (Just v) <- readTVar viewerVar
+        let area = viewerArea v
+        writeTVar viewerVar (Just v{viewerZoom = value})
+        return (widgetQueueDraw area)
 
 windowParams :: [AttrOp Window]
 windowParams =
@@ -89,25 +106,26 @@ createViewButton :: VBox
                  -> FileChooserButton
                  -> Label
                  -> Entry
+                 -> HScale
                  -> TVar (Maybe Viewer)
                  -> IO Button
-createViewButton vbox chooser label entry viewerVar = do
+createViewButton vbox chooser label entry scale viewerVar = do
   button <- buttonNewWithLabel "View"
-  onClicked button go
+  onClicked button (go button)
   return button
 
   where
-    go = do
+    go button = do
       select <- fileChooserGetFilename chooser
-      maybe (print "(No Selection)") makeView select
+      maybe (print "(No Selection)") (makeView button) select
 
-    makeView filepath = do
+    makeView button filepath = do
       updateViewer filepath viewerVar
-      join $ atomically action
+      join $ atomically $ action button
       widgetShowAll vbox
 
-    action =
-      readTVar viewerVar >>= \(Just (Viewer _ _ swin cur nPages)) ->
+    action button =
+      readTVar viewerVar >>= \(Just (Viewer _ _ swin cur nPages _)) ->
         return $ do
           let pagesStr   = show nPages
               charLength = length pagesStr
@@ -116,6 +134,9 @@ createViewButton vbox chooser label entry viewerVar = do
           entrySetMaxLength entry charLength
           entrySetWidthChars entry charLength
           boxPackStart vbox swin PackGrow 0
+          widgetSetSensitive chooser False
+          widgetSetSensitive button False
+          widgetSetSensitive scale True
 
 createTable :: IO Table
 createTable = tableNew 2 2 False
@@ -128,19 +149,19 @@ updateViewer filepath var = do
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
   nPages <- documentGetNPages doc
-  let viewer = Viewer area  doc swin 0 nPages
+  let viewer = Viewer area  doc swin 0 nPages 1
   atomically $ writeTVar var (Just viewer)
   void $ area `on` exposeEvent $ tryEvent $ viewerDraw var
 
 viewerDraw :: TVar (Maybe Viewer) -> EventM EExpose ()
 viewerDraw = liftIO . (go =<<) . readTVarIO
   where
-    go (Just (Viewer area doc swin cur _)) = do
+    go (Just (Viewer area doc swin cur _ zoom)) = do
       page  <- documentGetPage doc cur
       frame <- widgetGetDrawWindow area
       (docWidth, docHeight) <- pageGetSize page
-      let width  = 760
-          scaleX = width / docWidth
+      let width  = 760 * zoom
+          scaleX = (width / docWidth)
           height = scaleX * docHeight
       widgetSetSizeRequest area (truncate width) (truncate height)
       renderWithDrawable frame (setSourceRGB 1.0 1.0 1.0 >>
