@@ -8,6 +8,7 @@ Prerequisites:
 - GHC
 - Cabal
 - GTK
+- Poppler (https://github.com/YoEight/poppler)
 
 ### Mac OS X
 
