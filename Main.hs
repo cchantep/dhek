@@ -8,6 +8,7 @@ import Graphics.Rendering.Cairo
 import Graphics.UI.Gtk
 import Graphics.UI.Gtk.Gdk.EventM
 import Graphics.UI.Gtk.Poppler.Document
+import Graphics.UI.Gtk.Poppler.Annotation
 import Graphics.UI.Gtk.Poppler.Page
 
 data Viewer =
@@ -125,7 +126,7 @@ createViewButton vbox chooser label entry scale viewerVar = do
       widgetShowAll vbox
 
     action button =
-      readTVar viewerVar >>= \(Just (Viewer _ _ swin cur nPages _)) ->
+      readTVar viewerVar >>= \(Just (Viewer _ doc swin cur nPages _)) ->
         return $ do
           let pagesStr   = show nPages
               charLength = length pagesStr
@@ -137,6 +138,45 @@ createViewButton vbox chooser label entry scale viewerVar = do
           widgetSetSensitive chooser False
           widgetSetSensitive button False
           widgetSetSensitive scale True
+          --rect  <- pageRectangleNew
+          --annot <- annotTextNew doc rect
+          page     <- documentGetPage doc 0
+          mappings <- pageGetAnnotMapping page
+          let openTheBox (AnnotMapping (PopplerRectangle x x1 y y1) a) = do
+                annotGetAnnotType a >>= \typ ->
+                  case typ of
+                    PopplerAnnotText ->
+                      do let annotText = castToAnnotText a
+                         --b <- annotMarkupHasPopup annotText
+                         --print b
+                         annotMarkupSetPopupIsOpen annotText True
+                         content <- annotGetContents annotText
+                         popup <- windowNewPopup
+                         buffer <- textBufferNew Nothing
+                         (start, _) <- textBufferGetBounds buffer
+                         textBufferInsert buffer start content
+                         textView <- textViewNewWithBuffer buffer
+                         windowSetDefaultSize popup (truncate (x1 - x)) (truncate (y1 - y))
+                         containerAdd popup textView
+                         widgetShowAll popup
+                         topWidget <- widgetGetToplevel popup
+                         (Just (x', y')) <- widgetTranslateCoordinates topWidget popup (truncate x1) (truncate y1)
+                         print (x', y')
+                         windowMove popup x' y'
+                         --containerAdd vbox area
+                         --b2 <- annotMarkupGetPopupIsOpen annotText
+                         --print b2
+                    _  -> print "not a Text annotation"
+          mapM_ ((print =<<) . openTheBox) mappings
+          --annotSetAnnotFlags annot AnnotFlagPrint
+          --flag <- annotGetAnnotFlags annot
+          --annotSetContents annot "Hello Annotation !!!"
+          --cont  <- annotGetContents annot
+          --print (show flag)
+          --print cont
+          --pageAddAnnot page annot
+         -- r <- documentSave doc "file:///home/yoeight/Desktop/Toto2.pdf"
+          --print (show r)
 
 createTable :: IO Table
 createTable = tableNew 2 2 False

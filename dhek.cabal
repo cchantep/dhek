@@ -18,7 +18,7 @@ executable dhek
   -- other-modules:
   build-depends:       base ==4.6.*
                        , gtk >= 0.12.4
-                       , poppler >=0.12.2.2
+                       , poppler ==0.12.3.0
                        , mtl >= 2.1.2
                        , cairo >= 0.12.4
                        , stm >=2.4.2
