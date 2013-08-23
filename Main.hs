@@ -230,9 +230,24 @@ updateViewer filepath var = do
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
   nPages <- documentGetNPages doc
+  widgetAddEvents area [PointerMotionMask]
   let viewer = Viewer area  doc swin 0 nPages 1
   atomically $ writeTVar var (Just viewer)
   void $ area `on` exposeEvent $ tryEvent $ viewerDraw var
+  void $ area `on` motionNotifyEvent $ tryEvent $ onMove
+
+    where
+      onMove = do
+        (x,y) <- eventCoordinates
+        let over = overRect x y
+        liftIO $ if over
+                 then (putStrLn ("Pointing Rect at " ++ show (x, y)))
+                 else putStrLn ("Out: " ++ show (x, y))
+
+      overRect x y =
+        let rX = 60 * 1.54
+            rY = 150 * 1.54 in
+        x >= 10 && x <= rX && y >= 50 && y <= rY
 
 viewerDraw :: TVar (Maybe Viewer) -> EventM EExpose ()
 viewerDraw = liftIO . (go =<<) . readTVarIO
@@ -244,6 +259,7 @@ viewerDraw = liftIO . (go =<<) . readTVarIO
       let width  = 760 * zoom
           scaleX = (width / docWidth)
           height = scaleX * docHeight
+      liftIO $ print (scaleX, docWidth, docHeight)
       widgetSetSizeRequest area (truncate width) (truncate height)
       renderWithDrawable frame (setSourceRGB 1.0 1.0 1.0 >>
                                 scale scaleX scaleX      >>
