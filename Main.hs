@@ -42,38 +42,48 @@ createControlPanel vbox = do
   bbox   <- hButtonBoxNew
   fchb   <- createFileChooserButton
   label  <- labelNew Nothing
-  entry  <- entryNew
+  spinB  <- spinButtonNewWithRange 0 0 1
   scale  <- hScaleNewWithRange 1 200 1
-  button <- createViewButton vbox fchb label entry scale vVar
+  (prev, nxt) <- createNavButtons spinB vVar
+  button <- createViewButton vbox fchb nxt prev label spinB scale vVar
+  widgetSetSensitive spinB False
   widgetSetSensitive scale False
+  widgetSetSensitive prev False
+  widgetSetSensitive nxt False
   rangeSetValue scale 100
-  entry `on` entryActivate $ pageBrowserChanged entry vVar
+  onValueSpinned spinB (pageBrowserChanged spinB vVar)
   scale `on` valueChanged $ pageZoomChanged scale vVar
   containerAdd align bbox
-  containerAdd bbox scale
-  containerAdd bbox entry
+  containerAdd bbox prev
+  containerAdd bbox spinB
   containerAdd bbox label
+  containerAdd bbox nxt
   containerAdd bbox fchb
+  containerAdd bbox scale
   containerAdd bbox button
   set bbox [buttonBoxLayoutStyle := ButtonboxStart]
+  prev `on` buttonActivated $ updateEntry spinB vVar
+  nxt `on` buttonActivated $ updateEntry spinB vVar
   return align
 
-pageBrowserChanged :: Entry -> TVar (Maybe Viewer) -> IO ()
-pageBrowserChanged entry viewerVar = do
-  text <- entryGetText entry
-  when (all isDigit text) (join $ atomically $ action (read text))
+    where
+      updateEntry spinB vVar = do
+        (Just v) <- readTVarIO vVar
+        spinButtonSetValue spinB
+                          (fromIntegral $ succ $ viewerCurrentPage v)
+
+pageBrowserChanged :: SpinButton -> TVar (Maybe Viewer) -> IO ()
+pageBrowserChanged spinB viewerVar = do
+  value <- spinButtonGetValueAsInt spinB
+  join $ atomically $ action value
     where
       action page =
         readTVar viewerVar >>= \vOpt ->
           let nothingToDo = return (return ())
-              go (Viewer area x swin cur nb y)
-                | page == cur = nothingToDo
-                | page < 1    = return (entrySetText entry "1")
-                | page > nb   = return (entrySetText entry (show nb))
-                | otherwise   =
-                  let newViewer = Viewer area x swin (page - 1) nb y in
-                  writeTVar viewerVar (Just newViewer) >>= \_ ->
-                    return (widgetQueueDraw area) in
+              go (Viewer area x swin cur nb y) =
+                 let newViewer = Viewer area x swin (page - 1) nb y in
+                 writeTVar viewerVar (Just newViewer) >>= \_ ->
+                   return (widgetQueueDraw area) in
           maybe nothingToDo go vOpt
 
 pageZoomChanged :: HScale -> TVar (Maybe Viewer) -> IO ()
@@ -103,14 +113,60 @@ createFileChooserButton = do
   fileChooserAddFilter fcb  filt
   return fcb
 
+createNavButtons :: SpinButton -> TVar (Maybe Viewer) -> IO (Button, Button)
+createNavButtons spinB viewerVar = do
+  predB <- buttonNewWithLabel "Previous"
+  nextB <- buttonNewWithLabel "Next"
+  predB `on` buttonActivated $ onPred predB nextB
+  nextB `on` buttonActivated $ onNext predB nextB
+  onValueSpinned spinB (updateButtonsState spinB predB nextB)
+  return (predB, nextB)
+    where
+      onPred predB nextB =
+        let inactivePrev curPage _ = curPage - 2 < 0
+            action = common inactivePrev pred predB nextB
+            stm = maybe nothingToDo action =<< readTVar viewerVar in
+        join $ atomically stm
+
+      onNext predB nextB =
+        let inactiveNext curPage nb = curPage + 2 > (nb - 1)
+            action = common inactiveNext succ nextB predB
+            stm = maybe nothingToDo action =<< readTVar viewerVar in
+        join $ atomically stm
+
+      common k upd self target v =
+        let curr   = viewerCurrentPage v
+            nb     = viewerPageCount v
+            area   = viewerArea v
+            action = do
+              if k curr nb
+                 then widgetSetSensitive self False
+                 else widgetSetSensitive target True
+              widgetQueueDraw area in
+        fmap (const action) $
+        writeTVar viewerVar (Just (v{viewerCurrentPage=upd curr}))
+
+      updateButtonsState spinB predB nextB =
+        do (Just v) <- readTVarIO viewerVar
+           value <- spinButtonGetValueAsInt spinB
+           let nb = viewerPageCount v
+           when (value - 1 < 1) (widgetSetSensitive predB False)
+           when (value + 1 > nb) (widgetSetSensitive nextB False)
+           when (value - 1 >= 1) (widgetSetSensitive predB True)
+           when (value + 1 <= nb) (widgetSetSensitive nextB True)
+
+      nothingToDo = return (return ())
+
 createViewButton :: VBox
                  -> FileChooserButton
+                 -> Button
+                 -> Button
                  -> Label
-                 -> Entry
+                 -> SpinButton
                  -> HScale
                  -> TVar (Maybe Viewer)
                  -> IO Button
-createViewButton vbox chooser label entry scale viewerVar = do
+createViewButton vbox chooser nxt prev label spinB scale viewerVar = do
   button <- buttonNewWithLabel "View"
   onClicked button (go button)
   return button
@@ -131,52 +187,17 @@ createViewButton vbox chooser label entry scale viewerVar = do
           let pagesStr   = show nPages
               charLength = length pagesStr
           labelSetText label ("/ " ++ pagesStr)
-          entrySetText entry (show (cur +  1))
-          entrySetMaxLength entry charLength
-          entrySetWidthChars entry charLength
+          spinButtonSetValue spinB (fromIntegral (cur + 1))
+          spinButtonSetRange spinB 1 (fromIntegral nPages)
           boxPackStart vbox swin PackGrow 0
+          widgetSetSensitive spinB True
           widgetSetSensitive chooser False
           widgetSetSensitive button False
           widgetSetSensitive scale True
-          --rect  <- pageRectangleNew
-          --annot <- annotTextNew doc rect
-          page     <- documentGetPage doc 0
-          mappings <- pageGetAnnotMapping page
-          let openTheBox (AnnotMapping (PopplerRectangle x x1 y y1) a) = do
-                annotGetAnnotType a >>= \typ ->
-                  case typ of
-                    PopplerAnnotText ->
-                      do let annotText = castToAnnotText a
-                         --b <- annotMarkupHasPopup annotText
-                         --print b
-                         annotMarkupSetPopupIsOpen annotText True
-                         content <- annotGetContents annotText
-                         popup <- windowNewPopup
-                         buffer <- textBufferNew Nothing
-                         (start, _) <- textBufferGetBounds buffer
-                         textBufferInsert buffer start content
-                         textView <- textViewNewWithBuffer buffer
-                         windowSetDefaultSize popup (truncate (x1 - x)) (truncate (y1 - y))
-                         containerAdd popup textView
-                         widgetShowAll popup
-                         topWidget <- widgetGetToplevel popup
-                         (Just (x', y')) <- widgetTranslateCoordinates topWidget popup (truncate x1) (truncate y1)
-                         print (x', y')
-                         windowMove popup x' y'
-                         --containerAdd vbox area
-                         --b2 <- annotMarkupGetPopupIsOpen annotText
-                         --print b2
-                    _  -> print "not a Text annotation"
-          mapM_ ((print =<<) . openTheBox) mappings
-          --annotSetAnnotFlags annot AnnotFlagPrint
-          --flag <- annotGetAnnotFlags annot
-          --annotSetContents annot "Hello Annotation !!!"
-          --cont  <- annotGetContents annot
-          --print (show flag)
-          --print cont
-          --pageAddAnnot page annot
-         -- r <- documentSave doc "file:///home/yoeight/Desktop/Toto2.pdf"
-          --print (show r)
+          widgetSetSensitive prev False
+          if nPages == 1
+             then widgetSetSensitive nxt False
+             else widgetSetSensitive nxt True
 
 createTable :: IO Table
 createTable = tableNew 2 2 False
