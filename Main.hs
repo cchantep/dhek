@@ -19,14 +19,31 @@ data Viewer =
                    , viewerPageCount      :: Int
                    , viewerZoom           :: Double }
 
+type PageHanler = Page -> IO ()
+
+data Rect = Rect { rectX :: Double
+                 , rectY :: Double
+                 , rectH :: Double
+                 , rectW :: Double }
+
+data Field = Field { fieldRect  :: Rect
+                   , fieldType  :: String
+                   , fieldValue :: String }
+
 main :: IO ()
 main = do
   initGUI
-  window <- windowNew
-  vbox   <- vBoxNew False 0
-  align  <- createControlPanel vbox
-  boxPackStart vbox align PackNatural 10
-  containerAdd window vbox
+  window   <- windowNew
+  hbox     <- hBoxNew False 10
+  pageNav  <- vBoxNew False 0
+  pageInfo <- vBoxNew False 0
+  treeV    <- createPageInfoPanel
+  align    <- createControlPanel pageNav
+  boxPackStart pageNav align PackNatural 10
+  containerAdd pageInfo treeV
+  containerAdd hbox pageNav
+  containerAdd hbox pageInfo
+  containerAdd window hbox
   set window windowParams
   onDestroy window mainQuit
   widgetShowAll window
@@ -34,6 +51,9 @@ main = do
 
 createViewerVar :: IO (TVar (Maybe Viewer))
 createViewerVar = newTVarIO Nothing
+
+createPageInfoPanel :: IO TreeView
+createPageInfoPanel = treeViewNew
 
 createControlPanel :: VBox -> IO Alignment
 createControlPanel vbox = do
@@ -227,4 +247,15 @@ viewerDraw = liftIO . (go =<<) . readTVarIO
       widgetSetSizeRequest area (truncate width) (truncate height)
       renderWithDrawable frame (setSourceRGB 1.0 1.0 1.0 >>
                                 scale scaleX scaleX      >>
-                                pageRender page)
+                                pageRender page          >>
+                                --pushGroup                >>
+                                drawing (Rect 10 50 100 50)) -- >>
+                                --popGroupToSource)
+
+    drawing :: Rect -> Render ()
+    drawing (Rect x y h w) = do
+      setSourceRGB 0 0 1.0
+      setLineWidth 5
+      rectangle x y w h
+      closePath
+      stroke
