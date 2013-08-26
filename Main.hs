@@ -1,9 +1,14 @@
 module Main where
 
+import Control.Arrow ((&&&))
+import Control.Applicative (WrappedMonad(..))
 import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.Trans (liftIO)
 import Data.Char (isDigit)
+import Data.Maybe (fromJust)
+import Data.Monoid (First(..))
+import Data.Foldable (traverse_, foldMap)
 import Graphics.Rendering.Cairo
 import Graphics.UI.Gtk
 import Graphics.UI.Gtk.Gdk.EventM
@@ -17,14 +22,17 @@ data Viewer =
                    , viewerScrolledWindow :: ScrolledWindow
                    , viewerCurrentPage    :: Int
                    , viewerPageCount      :: Int
-                   , viewerZoom           :: Double }
+                   , viewerZoom           :: Double
+                   , viewerBaseWidth      :: Int
+                   , viewerRects          :: [Rect]
+                   , viewerSelectedRect   :: Maybe Rect }
 
 type PageHanler = Page -> IO ()
 
 data Rect = Rect { rectX :: Double
                  , rectY :: Double
                  , rectH :: Double
-                 , rectW :: Double }
+                 , rectW :: Double } deriving Eq
 
 data Field = Field { fieldRect  :: Rect
                    , fieldType  :: String
@@ -100,10 +108,12 @@ pageBrowserChanged spinB viewerVar = do
       action page =
         readTVar viewerVar >>= \vOpt ->
           let nothingToDo = return (return ())
-              go (Viewer area x swin cur nb y) =
-                 let newViewer = Viewer area x swin (page - 1) nb y in
-                 writeTVar viewerVar (Just newViewer) >>= \_ ->
-                   return (widgetQueueDraw area) in
+              go v =
+                let area      = viewerArea v
+                    cur       = viewerCurrentPage v
+                    newViewer = v{ viewerCurrentPage=cur+1 } in
+                writeTVar viewerVar (Just newViewer) >>= \_ ->
+                  return (widgetQueueDraw area) in
           maybe nothingToDo go vOpt
 
 pageZoomChanged :: HScale -> TVar (Maybe Viewer) -> IO ()
@@ -202,10 +212,14 @@ createViewButton vbox chooser nxt prev label spinB scale viewerVar = do
       widgetShowAll vbox
 
     action button =
-      readTVar viewerVar >>= \(Just (Viewer _ doc swin cur nPages _)) ->
+      readTVar viewerVar >>= \(Just v) ->
         return $ do
-          let pagesStr   = show nPages
+          let pagesStr   = show $ viewerPageCount v
               charLength = length pagesStr
+              doc        = viewerDocument v
+              swin       = viewerScrolledWindow v
+              cur        = viewerCurrentPage v
+              nPages     = viewerPageCount v
           labelSetText label ("/ " ++ pagesStr)
           spinButtonSetValue spinB (fromIntegral (cur + 1))
           spinButtonSetRange spinB 1 (fromIntegral nPages)
@@ -222,6 +236,10 @@ createViewButton vbox chooser nxt prev label spinB scale viewerVar = do
 createTable :: IO Table
 createTable = tableNew 2 2 False
 
+testRecs :: [Rect]
+testRecs = [Rect 10 50 100 50
+           ,Rect 170 60 50 100]
+
 updateViewer :: String -> TVar (Maybe Viewer) -> IO ()
 updateViewer filepath var = do
   area <- drawingAreaNew
@@ -231,7 +249,7 @@ updateViewer filepath var = do
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
   nPages <- documentGetNPages doc
   widgetAddEvents area [PointerMotionMask]
-  let viewer = Viewer area  doc swin 0 nPages 1
+  let viewer = Viewer area  doc swin 0 nPages 1 760 testRecs Nothing
   atomically $ writeTVar var (Just viewer)
   void $ area `on` exposeEvent $ tryEvent $ viewerDraw var
   void $ area `on` motionNotifyEvent $ tryEvent $ onMove
@@ -239,39 +257,69 @@ updateViewer filepath var = do
     where
       onMove = do
         (x,y) <- eventCoordinates
-        let over = overRect x y
-        liftIO $ if over
-                 then (putStrLn ("Pointing Rect at " ++ show (x, y)))
-                 else putStrLn ("Out: " ++ show (x, y))
+        ratio <- liftIO getPageRatio
+        rects <- liftIO getRects
+        area  <- liftIO getArea
+        let (First res) = foldMap (overRect ratio x y) rects
+            updateSel v = modifyTVar var (\(Just s) -> Just(s{viewerSelectedRect=v}))
+            replaceSel = updateSel . Just
+        liftIO $ atomically $ maybe (updateSel Nothing) replaceSel res
+        liftIO $ widgetQueueDraw area
 
-      overRect x y =
-        let rX = 60 * 1.54
-            rY = 150 * 1.54 in
-        x >= 10 && x <= rX && y >= 50 && y <= rY
+      overRect ratio x y r@(Rect x1 y1 h w) =
+        let rX  = (x1 + w) * ratio
+            rY  = (y1 + h) * ratio
+            res = x >= (x1 * ratio) && x <= rX && y >= (y1 * ratio) && y <= rY in
+        if res then First (Just r)
+               else First Nothing
+
+      getPageRatio = fmap (\(_,r,_,_) -> r) (getPageAndSize var)
+
+      getRects = fmap (fromJust . fmap viewerRects) (readTVarIO var)
+
+      getArea = fmap (fromJust . fmap viewerArea) (readTVarIO var)
+
+
+getPageAndSize :: TVar (Maybe Viewer) -> IO (Page, Double, Double, Double)
+getPageAndSize var =
+  readTVarIO var >>= \(Just v) ->
+    let doc   = viewerDocument v
+        cur   = viewerCurrentPage v
+        baseW = viewerBaseWidth v
+        zoom  = viewerZoom v in
+    do page <- documentGetPage doc cur
+       (width, height) <- pageGetSize page
+       let rWidth = (fromIntegral baseW) * zoom
+           ratio  = rWidth / width
+       return (page, ratio, rWidth, ratio * height)
 
 viewerDraw :: TVar (Maybe Viewer) -> EventM EExpose ()
-viewerDraw = liftIO . (go =<<) . readTVarIO
+viewerDraw = liftIO . go
   where
-    go (Just (Viewer area doc swin cur _ zoom)) = do
-      page  <- documentGetPage doc cur
+    go var = do
+      (page, ratio, width, height) <- getPageAndSize var
+      (Just (area, (rs, sel))) <- fmap (fmap selector) (readTVarIO var)
       frame <- widgetGetDrawWindow area
-      (docWidth, docHeight) <- pageGetSize page
-      let width  = 760 * zoom
-          scaleX = (width / docWidth)
-          height = scaleX * docHeight
-      liftIO $ print (scaleX, docWidth, docHeight)
       widgetSetSizeRequest area (truncate width) (truncate height)
       renderWithDrawable frame (setSourceRGB 1.0 1.0 1.0 >>
-                                scale scaleX scaleX      >>
+                                scale ratio ratio        >>
                                 pageRender page          >>
                                 --pushGroup                >>
-                                drawing (Rect 10 50 100 50)) -- >>
+                                drawRects sel rs) -- >>
                                 --popGroupToSource)
 
-    drawing :: Rect -> Render ()
-    drawing (Rect x y h w) = do
-      setSourceRGB 0 0 1.0
-      setLineWidth 5
-      rectangle x y w h
-      closePath
-      stroke
+    selector = viewerArea &&& viewerRects &&& viewerSelectedRect
+
+    drawRects sel = unwrapMonad . traverse_ (WrapMonad . drawing sel)
+
+    drawing :: Maybe Rect -> Rect -> Render ()
+    drawing sel r@(Rect x y h w) =
+      let step (Just s)
+            | s == r    = setSourceRGB 1.0 0 0
+            | otherwise = setSourceRGB 0 0 1.0
+          step _ = setSourceRGB 0 0 1.0 in
+      do step sel
+         setLineWidth 5
+         rectangle x y w h
+         closePath
+         stroke
