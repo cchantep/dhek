@@ -25,7 +25,8 @@ data Viewer =
                    , viewerZoom           :: Double
                    , viewerBaseWidth      :: Int
                    , viewerRects          :: [Rect]
-                   , viewerSelectedRect   :: Maybe Rect }
+                   , viewerSelectedRect   :: Maybe Rect
+                   , viewerThickness      :: Double }
 
 type PageHanler = Page -> IO ()
 
@@ -249,7 +250,7 @@ updateViewer filepath var = do
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
   nPages <- documentGetNPages doc
   widgetAddEvents area [PointerMotionMask]
-  let viewer = Viewer area  doc swin 0 nPages 1 760 testRecs Nothing
+  let viewer = Viewer area  doc swin 0 nPages 1 760 testRecs Nothing 5.0
   atomically $ writeTVar var (Just viewer)
   void $ area `on` exposeEvent $ tryEvent $ viewerDraw var
   void $ area `on` motionNotifyEvent $ tryEvent $ onMove
@@ -260,16 +261,17 @@ updateViewer filepath var = do
         ratio <- liftIO getPageRatio
         rects <- liftIO getRects
         area  <- liftIO getArea
-        let (First res) = foldMap (overRect ratio x y) rects
+        th    <- liftIO getThick
+        let (First res) = foldMap (overRect ratio (th/2) x y) rects
             updateSel v = modifyTVar var (\(Just s) -> Just(s{viewerSelectedRect=v}))
             replaceSel = updateSel . Just
         liftIO $ atomically $ maybe (updateSel Nothing) replaceSel res
         liftIO $ widgetQueueDraw area
 
-      overRect ratio x y r@(Rect x1 y1 h w) =
-        let rX  = (x1 + w) * ratio
-            rY  = (y1 + h) * ratio
-            res = x >= (x1 * ratio) && x <= rX && y >= (y1 * ratio) && y <= rY in
+      overRect ratio th x y r@(Rect x1 y1 h w) =
+        let rX  = (x1 + w + th) * ratio
+            rY  = (y1 + h + th) * ratio
+            res = x >= ((x1 - th) * ratio) && x <= rX && y >= ((y1 - th) * ratio) && y <= rY in
         if res then First (Just r)
                else First Nothing
 
@@ -279,6 +281,8 @@ updateViewer filepath var = do
 
       getArea = fmap (fromJust . fmap viewerArea) (readTVarIO var)
 
+      getThick = fmap (fromJust . fmap viewerThickness) (readTVarIO var)
+
 
 getPageAndSize :: TVar (Maybe Viewer) -> IO (Page, Double, Double, Double)
 getPageAndSize var =
@@ -287,7 +291,7 @@ getPageAndSize var =
         cur   = viewerCurrentPage v
         baseW = viewerBaseWidth v
         zoom  = viewerZoom v in
-    do page <- documentGetPage doc cur
+    do page <- documentGetPage doc (cur - 1)
        (width, height) <- pageGetSize page
        let rWidth = (fromIntegral baseW) * zoom
            ratio  = rWidth / width
@@ -298,28 +302,31 @@ viewerDraw = liftIO . go
   where
     go var = do
       (page, ratio, width, height) <- getPageAndSize var
-      (Just (area, (rs, sel))) <- fmap (fmap selector) (readTVarIO var)
+      (Just (th, (area, (rs, sel)))) <- fmap (fmap selector) (readTVarIO var)
       frame <- widgetGetDrawWindow area
       widgetSetSizeRequest area (truncate width) (truncate height)
       renderWithDrawable frame (setSourceRGB 1.0 1.0 1.0 >>
                                 scale ratio ratio        >>
                                 pageRender page          >>
                                 --pushGroup                >>
-                                drawRects sel rs) -- >>
+                                drawRects th sel rs) -- >>
                                 --popGroupToSource)
 
-    selector = viewerArea &&& viewerRects &&& viewerSelectedRect
+    selector = viewerThickness &&&
+               viewerArea      &&&
+               viewerRects     &&&
+               viewerSelectedRect
 
-    drawRects sel = unwrapMonad . traverse_ (WrapMonad . drawing sel)
+    drawRects th sel = unwrapMonad . traverse_ (WrapMonad . drawing th sel)
 
-    drawing :: Maybe Rect -> Rect -> Render ()
-    drawing sel r@(Rect x y h w) =
+    drawing :: Double -> Maybe Rect -> Rect -> Render ()
+    drawing th sel r@(Rect x y h w) =
       let step (Just s)
             | s == r    = setSourceRGB 1.0 0 0
             | otherwise = setSourceRGB 0 0 1.0
           step _ = setSourceRGB 0 0 1.0 in
       do step sel
-         setLineWidth 5
+         setLineWidth th
          rectangle x y w h
          closePath
          stroke
