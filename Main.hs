@@ -26,14 +26,15 @@ data Viewer =
                    , viewerBaseWidth      :: Int
                    , viewerRects          :: [Rect]
                    , viewerSelectedRect   :: Maybe Rect
-                   , viewerThickness      :: Double }
+                   , viewerThickness      :: Double
+                   , viewerSelection      :: Maybe Rect }
 
 type PageHanler = Page -> IO ()
 
 data Rect = Rect { rectX :: Double
                  , rectY :: Double
                  , rectH :: Double
-                 , rectW :: Double } deriving Eq
+                 , rectW :: Double } deriving (Eq, Show)
 
 data Field = Field { fieldRect  :: Rect
                    , fieldType  :: String
@@ -250,23 +251,45 @@ updateViewer filepath var = do
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
   nPages <- documentGetNPages doc
   widgetAddEvents area [PointerMotionMask]
-  let viewer = Viewer area  doc swin 0 nPages 1 760 testRecs Nothing 5.0
+  let viewer = Viewer area  doc swin 0 nPages 1 760 testRecs Nothing 5.0 Nothing
   atomically $ writeTVar var (Just viewer)
   void $ area `on` exposeEvent $ tryEvent $ viewerDraw var
-  void $ area `on` motionNotifyEvent $ tryEvent $ onMove
+  --void $ area `on` motionNotifyEvent $ tryEvent $ onMove
+  widgetAddEvents area [Button1MotionMask]
+  void $ area `on` motionNotifyEvent $ tryEvent $ onPress
+  void $ area `on` buttonReleaseEvent $ tryEvent $ onRelease
 
     where
-      onMove = do
-        (x,y) <- eventCoordinates
-        ratio <- liftIO getPageRatio
-        rects <- liftIO getRects
-        area  <- liftIO getArea
-        th    <- liftIO getThick
-        let (First res) = foldMap (overRect ratio (th/2) x y) rects
-            updateSel v = modifyTVar var (\(Just s) -> Just(s{viewerSelectedRect=v}))
-            replaceSel = updateSel . Just
-        liftIO $ atomically $ maybe (updateSel Nothing) replaceSel res
-        liftIO $ widgetQueueDraw area
+      onPress = do
+        (x, y) <- eventCoordinates
+        liftIO $ print "Press"
+        sel    <- liftIO getSelect
+        area   <- liftIO getArea
+        case sel of
+          Nothing -> liftIO $ atomically $ modifyTVar var (fmap (\v -> v{viewerSelection= Just (Rect 0 0 0 0)}))
+          Just (r@(Rect x' y' _ _)) ->
+                 do liftIO $ atomically $ modifyTVar var (fmap (\v -> v{viewerSelection= Just (Rect x' y' (distance x' x) (distance y' y))}))
+                    liftIO $ print r
+                    liftIO $ widgetQueueDraw area
+
+      distance x y = sqrt ((y*y) - (x*x))
+
+      onRelease =
+        liftIO $ atomically $ modifyTVar var (fmap (\v -> v{viewerSelection=Nothing}))
+
+
+      -- onMove = do
+      --   (x,y) <- eventCoordinates
+      --   ratio <- liftIO getPageRatio
+      --   rects <- liftIO getRects
+      --   area  <- liftIO getArea
+      --   th    <- liftIO getThick
+      --   let (First res) = foldMap (overRect ratio (th/2) x y) rects
+      --       updateSel v = modifyTVar var (\(Just s) -> Just(s{viewerSelectedRect=v}))
+      --       replaceSel = updateSel . Just
+      --   liftIO $ cursorNew Pencil
+      --   liftIO $ atomically $ maybe (updateSel Nothing) replaceSel res
+      --   liftIO $ widgetQueueDraw area
 
       overRect ratio th x y r@(Rect x1 y1 h w) =
         let rX  = (x1 + w + th) * ratio
@@ -283,6 +306,8 @@ updateViewer filepath var = do
 
       getThick = fmap (fromJust . fmap viewerThickness) (readTVarIO var)
 
+      getSelect = fmap (viewerSelection =<<) (readTVarIO var)
+
 
 getPageAndSize :: TVar (Maybe Viewer) -> IO (Page, Double, Double, Double)
 getPageAndSize var =
@@ -291,7 +316,8 @@ getPageAndSize var =
         cur   = viewerCurrentPage v
         baseW = viewerBaseWidth v
         zoom  = viewerZoom v in
-    do page <- documentGetPage doc (cur - 1)
+    do print cur
+       page <- documentGetPage doc (cur - 1)
        (width, height) <- pageGetSize page
        let rWidth = (fromIntegral baseW) * zoom
            ratio  = rWidth / width
@@ -302,20 +328,22 @@ viewerDraw = liftIO . go
   where
     go var = do
       (page, ratio, width, height) <- getPageAndSize var
-      (Just (th, (area, (rs, sel)))) <- fmap (fmap selector) (readTVarIO var)
+      (Just (th, (area, (rs, (sel, rectSel))))) <- fmap (fmap selector) (readTVarIO var)
       frame <- widgetGetDrawWindow area
       widgetSetSizeRequest area (truncate width) (truncate height)
       renderWithDrawable frame (setSourceRGB 1.0 1.0 1.0 >>
                                 scale ratio ratio        >>
                                 pageRender page          >>
                                 --pushGroup                >>
-                                drawRects th sel rs) -- >>
+                                drawRects th sel rs >>
+                                drawingSel rectSel) -- >>
                                 --popGroupToSource)
 
-    selector = viewerThickness &&&
-               viewerArea      &&&
-               viewerRects     &&&
-               viewerSelectedRect
+    selector = viewerThickness    &&&
+               viewerArea         &&&
+               viewerRects        &&&
+               viewerSelectedRect &&&
+               viewerSelection
 
     drawRects th sel = unwrapMonad . traverse_ (WrapMonad . drawing th sel)
 
@@ -330,3 +358,12 @@ viewerDraw = liftIO . go
          rectangle x y w h
          closePath
          stroke
+
+    drawingSel = unwrapMonad . traverse_ (WrapMonad . go)
+      where
+        go (Rect x y h w) =
+          do  setSourceRGB 0 1.0 0
+              setLineWidth 1
+              rectangle x y w h
+              closePath
+              stroke
