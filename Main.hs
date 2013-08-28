@@ -253,61 +253,73 @@ updateViewer filepath var = do
   widgetAddEvents area [PointerMotionMask]
   let viewer = Viewer area  doc swin 0 nPages 1 760 testRecs Nothing 5.0 Nothing
   atomically $ writeTVar var (Just viewer)
-  void $ area `on` exposeEvent $ tryEvent $ viewerDraw var
-  --void $ area `on` motionNotifyEvent $ tryEvent $ onMove
-  widgetAddEvents area [Button1MotionMask]
-  void $ area `on` motionNotifyEvent $ tryEvent $ onPress
+  area `on` exposeEvent $ tryEvent $ viewerDraw var
+  area `on` motionNotifyEvent $ tryEvent $ onMove
+  area `on` buttonPressEvent $ tryEvent $ onPress
   void $ area `on` buttonReleaseEvent $ tryEvent $ onRelease
 
     where
       onPress = do
         (x, y) <- eventCoordinates
-        liftIO $ print "Press"
-        sel    <- liftIO getSelect
-        area   <- liftIO getArea
-        case sel of
-          Nothing -> liftIO $ atomically $ modifyTVar var (fmap (\v -> v{viewerSelection= Just (Rect 0 0 0 0)}))
-          Just (r@(Rect x' y' _ _)) ->
-                 do liftIO $ atomically $ modifyTVar var (fmap (\v -> v{viewerSelection= Just (Rect x' y' (distance x' x) (distance y' y))}))
-                    liftIO $ print r
-                    liftIO $ widgetQueueDraw area
+        liftIO $ putStrLn ("Start in " ++ show (x,y))
+        liftIO $ atomically $ modifyTVar var (fmap (\v -> v{viewerSelection= Just (Rect x y 0 0)}))
 
-      distance x y = sqrt ((y*y) - (x*x))
+      onRelease = do
+         (x, y) <- eventCoordinates
+         liftIO $ putStrLn ("End in " ++ show (x,y))
+         liftIO $ atomically $ modifyTVar var (fmap (\v -> v{viewerSelection=Nothing}))
 
-      onRelease =
-        liftIO $ atomically $ modifyTVar var (fmap (\v -> v{viewerSelection=Nothing}))
+      onMove = do
+        rectDetection var
+        updateSelection var
+        area <- liftIO $ fmap (fmap viewerArea) (readTVarIO var)
+        maybe (return ()) (liftIO . widgetQueueDraw) area
 
+rectDetection :: TVar (Maybe Viewer) -> EventM EMotion ()
+rectDetection var = do
+  info <- liftIO $ atomically stm
+  maybe (return ()) go info
+  where
+    stm =
+      let f v =
+            let rects = viewerRects v
+                thick = viewerThickness v in
+            (rects, thick / 2) in
+      fmap (fmap f) (readTVar var)
 
-      -- onMove = do
-      --   (x,y) <- eventCoordinates
-      --   ratio <- liftIO getPageRatio
-      --   rects <- liftIO getRects
-      --   area  <- liftIO getArea
-      --   th    <- liftIO getThick
-      --   let (First res) = foldMap (overRect ratio (th/2) x y) rects
-      --       updateSel v = modifyTVar var (\(Just s) -> Just(s{viewerSelectedRect=v}))
-      --       replaceSel = updateSel . Just
-      --   liftIO $ cursorNew Pencil
-      --   liftIO $ atomically $ maybe (updateSel Nothing) replaceSel res
-      --   liftIO $ widgetQueueDraw area
+    overRect ratio thick x y r@(Rect rX rY height width) =
+      let adjustX = (rX + width  + thick) * ratio
+          adjustY = (rY + height + thick) * ratio in
 
-      overRect ratio th x y r@(Rect x1 y1 h w) =
-        let rX  = (x1 + w + th) * ratio
-            rY  = (y1 + h + th) * ratio
-            res = x >= ((x1 - th) * ratio) && x <= rX && y >= ((y1 - th) * ratio) && y <= rY in
-        if res then First (Just r)
-               else First Nothing
+      x >= ((rX - thick) * ratio) && x <= adjustX &&
+      y >= ((rY - thick) * ratio) && y <= adjustY
 
-      getPageRatio = fmap (\(_,r,_,_) -> r) (getPageAndSize var)
+    getPageRatio = liftIO $ fmap (\(_,r,_,_) -> r) (getPageAndSize var)
 
-      getRects = fmap (fromJust . fmap viewerRects) (readTVarIO var)
+    go (rects, thick) =
+      getPageRatio >>= \ratio ->
+        eventCoordinates >>= \(x,y) ->
+          let f r | overRect ratio thick x y r = First (Just r)
+                  | otherwise                  = First Nothing
+              (First res) = foldMap f rects
+              action = modifyTVar var (fmap (\v -> v{viewerSelectedRect=res})) in
+          liftIO $ atomically action
 
-      getArea = fmap (fromJust . fmap viewerArea) (readTVarIO var)
+updateSelection :: TVar (Maybe Viewer) -> EventM EMotion ()
+updateSelection var = do
+  sel <- getSel
+  maybe (return ()) go sel
+  where
+    getSel = liftIO $ fmap (viewerSelection =<<) (readTVarIO var)
 
-      getThick = fmap (fromJust . fmap viewerThickness) (readTVarIO var)
+    distance x y = sqrt ((y^2) - (x^2))
 
-      getSelect = fmap (viewerSelection =<<) (readTVarIO var)
-
+    go (Rect x0 y0 _ _) =
+      eventCoordinates >>= \(x,y) ->
+        let newHeight = distance y0 y
+            newWidth  = distance x0 x
+            f v = v{viewerSelection = Just (Rect x0 y0 newHeight newWidth)} in
+        liftIO $ atomically $ modifyTVar var (fmap f)
 
 getPageAndSize :: TVar (Maybe Viewer) -> IO (Page, Double, Double, Double)
 getPageAndSize var =
@@ -316,8 +328,7 @@ getPageAndSize var =
         cur   = viewerCurrentPage v
         baseW = viewerBaseWidth v
         zoom  = viewerZoom v in
-    do print cur
-       page <- documentGetPage doc (cur - 1)
+    do page <- documentGetPage doc (cur - 1)
        (width, height) <- pageGetSize page
        let rWidth = (fromIntegral baseW) * zoom
            ratio  = rWidth / width
