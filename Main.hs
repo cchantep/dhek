@@ -261,8 +261,9 @@ updateViewer filepath var = do
     where
       onPress = do
         (x, y) <- eventCoordinates
+        ratio <- getPageRatio
         liftIO $ putStrLn ("Start in " ++ show (x,y))
-        liftIO $ atomically $ modifyTVar var (fmap (\v -> v{viewerSelection= Just (Rect x y 0 0)}))
+        liftIO $ atomically $ modifyTVar var (fmap (\v -> v{viewerSelection= Just (Rect (x/ratio) (y/ratio) 0 0)}))
 
       onRelease = do
          (x, y) <- eventCoordinates
@@ -270,13 +271,17 @@ updateViewer filepath var = do
          liftIO $ atomically $ modifyTVar var (fmap (\v -> v{viewerSelection=Nothing}))
 
       onMove = do
-        rectDetection var
-        updateSelection var
+        ratio <- getPageRatio
+        rectDetection var ratio
+        updateSelection var ratio
         area <- liftIO $ fmap (fmap viewerArea) (readTVarIO var)
         maybe (return ()) (liftIO . widgetQueueDraw) area
 
-rectDetection :: TVar (Maybe Viewer) -> EventM EMotion ()
-rectDetection var = do
+      getPageRatio :: EventM a Double
+      getPageRatio = liftIO $ fmap (\(_,r,_,_) -> r) (getPageAndSize var)
+
+rectDetection :: TVar (Maybe Viewer) -> Double -> EventM EMotion ()
+rectDetection var ratio = do
   info <- liftIO $ atomically stm
   maybe (return ()) go info
   where
@@ -287,37 +292,32 @@ rectDetection var = do
             (rects, thick / 2) in
       fmap (fmap f) (readTVar var)
 
-    overRect ratio thick x y r@(Rect rX rY height width) =
+    overRect thick x y r@(Rect rX rY height width) =
       let adjustX = (rX + width  + thick) * ratio
           adjustY = (rY + height + thick) * ratio in
 
       x >= ((rX - thick) * ratio) && x <= adjustX &&
       y >= ((rY - thick) * ratio) && y <= adjustY
 
-    getPageRatio = liftIO $ fmap (\(_,r,_,_) -> r) (getPageAndSize var)
-
     go (rects, thick) =
-      getPageRatio >>= \ratio ->
-        eventCoordinates >>= \(x,y) ->
-          let f r | overRect ratio thick x y r = First (Just r)
-                  | otherwise                  = First Nothing
-              (First res) = foldMap f rects
-              action = modifyTVar var (fmap (\v -> v{viewerSelectedRect=res})) in
-          liftIO $ atomically action
+      eventCoordinates >>= \(x,y) ->
+        let f r | overRect thick x y r = First (Just r)
+                | otherwise            = First Nothing
+            (First res) = foldMap f rects
+            action = modifyTVar var (fmap (\v -> v{viewerSelectedRect=res})) in
+        liftIO $ atomically action
 
-updateSelection :: TVar (Maybe Viewer) -> EventM EMotion ()
-updateSelection var = do
+updateSelection :: TVar (Maybe Viewer) -> Double -> EventM EMotion ()
+updateSelection var ratio = do
   sel <- getSel
   maybe (return ()) go sel
   where
     getSel = liftIO $ fmap (viewerSelection =<<) (readTVarIO var)
 
-    distance x y = sqrt ((y^2) - (x^2))
-
     go (Rect x0 y0 _ _) =
       eventCoordinates >>= \(x,y) ->
-        let newHeight = distance y0 y
-            newWidth  = distance x0 x
+        let newHeight = (y/ratio) - y0
+            newWidth  = (x/ratio) - x0
             f v = v{viewerSelection = Just (Rect x0 y0 newHeight newWidth)} in
         liftIO $ atomically $ modifyTVar var (fmap f)
 
@@ -372,7 +372,7 @@ viewerDraw = liftIO . go
 
     drawingSel = unwrapMonad . traverse_ (WrapMonad . go)
       where
-        go (Rect x y h w) =
+        go r@(Rect x y h w) =
           do  setSourceRGB 0 1.0 0
               setLineWidth 1
               rectangle x y w h
