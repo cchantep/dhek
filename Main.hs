@@ -268,17 +268,31 @@ updateViewer filepath var = do
       onRelease = do
          (x, y) <- eventCoordinates
          liftIO $ putStrLn ("End in " ++ show (x,y))
+         addRect
          liftIO $ atomically $ modifyTVar var (fmap (\v -> v{viewerSelection=Nothing}))
+         area <- getArea
+         maybe (return ()) (liftIO . widgetQueueDraw) area
 
       onMove = do
         ratio <- getPageRatio
         rectDetection var ratio
         updateSelection var ratio
-        area <- liftIO $ fmap (fmap viewerArea) (readTVarIO var)
+        area <- getArea
         maybe (return ()) (liftIO . widgetQueueDraw) area
 
       getPageRatio :: EventM a Double
       getPageRatio = liftIO $ fmap (\(_,r,_,_) -> r) (getPageAndSize var)
+
+      getArea :: EventM a (Maybe DrawingArea)
+      getArea = liftIO $ fmap (fmap viewerArea) (readTVarIO var)
+
+      addRect =
+        let stm =
+              do (Just v) <- readTVar var
+                 let (Just rect) = viewerSelection v
+                     xs          = viewerRects v
+                 writeTVar var (Just (v{ viewerRects = xs ++ [rect] })) in
+        liftIO $ atomically stm
 
 rectDetection :: TVar (Maybe Viewer) -> Double -> EventM EMotion ()
 rectDetection var ratio = do
