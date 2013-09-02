@@ -15,7 +15,6 @@ import Graphics.UI.Gtk.Gdk.EventM
 import Graphics.UI.Gtk.Poppler.Document
 import Graphics.UI.Gtk.Poppler.Annotation
 import Graphics.UI.Gtk.Poppler.Page
-import Utils (sanitizeFilePath)
 
 data Viewer =
             Viewer { viewerArea           :: DrawingArea
@@ -206,7 +205,7 @@ createViewButton vbox chooser nxt prev label spinB scale viewerVar = do
 
   where
     go button = do
-      select <- fileChooserGetFilename chooser
+      select <- fileChooserGetURI chooser
       maybe (print "(No Selection)") (makeView button) select
 
     makeView button filepath = do
@@ -246,7 +245,7 @@ testRecs = [Rect 10 50 100 50
 updateViewer :: String -> TVar (Maybe Viewer) -> IO ()
 updateViewer filepath var = do
   area <- drawingAreaNew
-  doc  <- liftM (\(Just x) -> x) (documentNewFromFile ("file:///" ++ (sanitizeFilePath filepath)) Nothing)
+  doc  <- liftM (\(Just x) -> x) (documentNewFromFile filepath Nothing)
   swin <- scrolledWindowNew Nothing Nothing
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
