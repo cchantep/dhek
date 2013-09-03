@@ -14,7 +14,7 @@ import Graphics.UI.Gtk
 import Graphics.UI.Gtk.Poppler.Document
   (Page, documentNewFromFile, documentGetNPages, documentGetPage)
 import Graphics.UI.Gtk.Poppler.Page
-import Types (Viewer(..), Rect(..))
+import Types (Viewer(..), Rect(..), rectNew)
 
 
 modifyCurPage :: (Int -> Int) -> Viewer -> Viewer
@@ -65,7 +65,7 @@ onPress ref = do
   (x, y) <- eventCoordinates
   ratio  <- getPageRatio ref
   liftIO $ putStrLn ("Start in " ++ show (x,y))
-  let f v = v{viewerSelection= Just (Rect (x/ratio) (y/ratio) 0 0)}
+  let f v = v{viewerSelection= Just (rectNew (x/ratio) (y/ratio) 0 0)}
   liftIO $ modifyIORef ref f
 
 onRelease :: IORef Viewer -> EventM EButton ()
@@ -88,7 +88,7 @@ rectDetection ref ratio = do
       thick = viewerThickness v
   go rects (thick / 2)
   where
-    overRect thick x y r@(Rect rX rY height width) =
+    overRect thick x y r@(Rect rX rY height width _ _) =
       let adjustX = (rX + width  + thick) * ratio
           adjustY = (rY + height + thick) * ratio in
 
@@ -109,11 +109,11 @@ updateSelection ref ratio =
   where
     getSel = liftIO $ fmap viewerSelection (readIORef ref)
 
-    go (Rect x0 y0 _ _) =
+    go (Rect x0 y0 _ _ _ _) =
       eventCoordinates >>= \(x,y) ->
         let newHeight = (y/ratio) - y0
             newWidth  = (x/ratio) - x0
-            f v = v{viewerSelection = Just (Rect x0 y0 newHeight newWidth)} in
+            f v = v{viewerSelection = Just (rectNew x0 y0 newHeight newWidth)} in
         liftIO $ modifyIORef ref f
 
 getPageRatio :: MonadIO m => IORef Viewer -> m Double
@@ -176,7 +176,7 @@ drawViewer = liftIO . go
     drawRects th sel = unwrapMonad . traverse_ (WrapMonad . drawing th sel)
 
     drawing :: Double -> Maybe Rect -> Rect -> Render ()
-    drawing th sel r@(Rect x y h w) =
+    drawing th sel r@(Rect x y h w _ _) =
       let step (Just s)
             | s == r    = setSourceRGB 1.0 0 0
             | otherwise = setSourceRGB 0 0 1.0
@@ -189,7 +189,7 @@ drawViewer = liftIO . go
 
     drawingSel = unwrapMonad . traverse_ (WrapMonad . go)
       where
-        go r@(Rect x y h w) =
+        go r@(Rect x y h w _ _) =
           do  setSourceRGB 0 1.0 0
               setLineWidth 1
               rectangle x y w h

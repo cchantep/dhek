@@ -8,8 +8,11 @@ import Action
 import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
+import Data.Foldable (traverse_)
+import qualified Data.ByteString.Lazy as B
+import Data.Aeson (encode, decode)
 import Graphics.UI.Gtk
-import Types (Viewer(..))
+import Types (Viewer(..), Save(..))
 
 main :: IO ()
 main = do
@@ -38,11 +41,13 @@ createControlPanel vbox = do
   align  <- alignmentNew 1 0 0 0
   bbox   <- hButtonBoxNew
   fchb   <- createFileChooserButton
+  fchj   <- createJsonFileChooserButton
   label  <- labelNew Nothing
   spinB  <- spinButtonNewWithRange 0 0 1
   scale  <- hScaleNewWithRange 1 200 1
   (prev, nxt) <- createNavButtons
-  button <- createViewButton vbox fchb nxt prev label spinB scale
+  save   <- buttonNewWithLabel "Save Json"
+  button <- createViewButton vbox fchb fchj nxt prev save label spinB scale
   widgetSetSensitive spinB False
   widgetSetSensitive scale False
   widgetSetSensitive prev False
@@ -54,8 +59,10 @@ createControlPanel vbox = do
   containerAdd bbox label
   containerAdd bbox nxt
   containerAdd bbox fchb
+  containerAdd bbox fchj
   containerAdd bbox scale
   containerAdd bbox button
+  containerAdd bbox save
   set bbox [buttonBoxLayoutStyle := ButtonboxStart]
   return align
 
@@ -75,6 +82,15 @@ createFileChooserButton = do
   fileChooserAddFilter fcb  filt
   return fcb
 
+createJsonFileChooserButton :: IO FileChooserButton
+createJsonFileChooserButton = do
+  fcb  <- fileChooserButtonNew "Select Json File" FileChooserActionOpen
+  filt <- fileFilterNew
+  fileFilterAddPattern filt "*.json"
+  fileFilterSetName filt "Json File"
+  fileChooserAddFilter fcb filt
+  return fcb
+
 createNavButtons :: IO (Button, Button)
 createNavButtons = do
   predB <- buttonNewWithLabel "Previous"
@@ -83,13 +99,15 @@ createNavButtons = do
 
 createViewButton :: VBox
                  -> FileChooserButton
+                 -> FileChooserButton
+                 -> Button
                  -> Button
                  -> Button
                  -> Label
                  -> SpinButton
                  -> HScale
                  -> IO Button
-createViewButton vbox chooser nxt prev label spinB scale = do
+createViewButton vbox chooser jsonChooser nxt prev save label spinB scale = do
   button <- buttonNewWithLabel "View"
   button `on` buttonActivated $ go button
   return button
@@ -121,6 +139,7 @@ createViewButton vbox chooser nxt prev label spinB scale = do
       widgetSetSensitive nxt (not onlyOnePage)
       prev  `on` buttonActivated $ onPrev ref
       nxt   `on` buttonActivated $ onNext ref
+      save  `on` buttonActivated $ onSave ref
       scale `on` valueChanged $ pageZoomChanged ref
       onValueSpinned spinB (pageBrowserChanged ref)
       widgetShowAll vbox
@@ -156,6 +175,14 @@ createViewButton vbox chooser nxt prev label spinB scale = do
       let newV = v { viewerZoom = value / 100 }
       writeIORef ref newV
       askDrawingViewer newV
+
+    onSave ref = do
+      v <- readIORef ref
+      let rects = viewerRects v
+          save  = Save 1 rects
+      opt <- fileChooserGetFilename jsonChooser
+      traverse_ (\p -> B.writeFile p (encode save)) opt
+
 
 createTable :: IO Table
 createTable = tableNew 2 2 False
