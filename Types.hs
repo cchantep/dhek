@@ -32,7 +32,7 @@ data Rect = Rect { rectX      :: Double
                  , rectName   :: String
                  , rectType   :: String } deriving (Eq, Show)
 
-data Save = Save { saveAreas :: [(Int, [Rect])] }
+data Save = Save { saveAreas :: [(Int, Maybe [Rect])] }
 
 data Field = Field { fieldRect  :: Rect
                    , fieldType  :: String
@@ -40,10 +40,17 @@ data Field = Field { fieldRect  :: Rect
 
 instance ToJSON Save where
   toJSON (Save areas) =
-    let xsStr = fmap (first (fromString . show)) areas
-        toPair (idx, rects) = [idx .= rects]
-        pages = object (foldMap toPair xsStr) in
+    let toPage (_, rects) = maybe Null (\t -> object ["areas" .= t]) rects
+        pages = fmap toPage areas in
     object ["pages" .= pages]
+
+fillUp :: Int -> [(Int, [Rect])] -> [(Int, Maybe [Rect])]
+fillUp n xs = go xs [0..(n - 1)]
+  where
+    go [] is = fmap (\i -> (i, Nothing)) is
+    go v@((k, rs):xs) (i:is)
+       | k == i = (k, Just rs) : go xs is
+       | k > i  = (i, Nothing) : go v is
 
 rectNew :: Double -> Double -> Double -> Double -> Rect
 rectNew x y h w = Rect x y h w "noname" "text/checkbox"

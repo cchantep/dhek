@@ -13,7 +13,7 @@ import qualified Data.ByteString.Lazy as B
 import Data.Aeson (encode, decode)
 import qualified Data.IntMap as I
 import Graphics.UI.Gtk
-import Types (Viewer(..), Save(..))
+import Types (Viewer(..), Save(..), fillUp)
 
 main :: IO ()
 main = do
@@ -180,7 +180,8 @@ createViewButton vbox chooser jsonChooser nxt prev save label spinB scale = do
     onSave ref = do
       v <- readIORef ref
       let rects = viewerRects v
-          save  = Save (I.toList rects)
+          nb    = viewerPageCount v
+          save  = Save $ fillUp nb (I.toList rects)
       opt <- fileChooserGetFilename jsonChooser
       traverse_ (\p -> B.writeFile p (encode save)) opt
 
