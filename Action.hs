@@ -62,11 +62,10 @@ onMove ref = do
 
 onPress :: IORef Viewer -> EventM EButton ()
 onPress ref = do
-  page   <- liftIO $ fmap viewerCurrentPage (readIORef ref)
   (x, y) <- eventCoordinates
   ratio  <- getPageRatio ref
   liftIO $ putStrLn ("Start in " ++ show (x,y))
-  let f v = v{viewerSelection= Just (rectNew (x/ratio) (y/ratio) 0 0 (page-1))}
+  let f v = v{viewerSelection= Just (rectNew (x/ratio) (y/ratio) 0 0)}
   liftIO $ modifyIORef ref f
 
 onRelease :: IORef Viewer -> EventM EButton ()
@@ -74,10 +73,11 @@ onRelease ref =
   eventCoordinates >>= \(x,y) ->
     liftIO $ do
       v <- readIORef ref
-      let selection   = viewerSelection v
-          rects       = viewerRects v
-          newV        = v { viewerSelection = Nothing
-                          , viewerRects     = foldr addRect rects selection }
+      let select = viewerSelection v
+          rects  = viewerRects v
+          page   = (viewerCurrentPage v) - 1
+          newV   = v { viewerSelection = Nothing
+                     , viewerRects     = foldr (addRect page) rects select }
       putStrLn ("End in " ++ show (x,y))
       writeIORef ref newV
       askDrawingViewer newV
@@ -90,7 +90,7 @@ rectDetection ref ratio = do
       thick = viewerThickness v
   traverse_ (go (thick / 2)) rects
   where
-    overRect thick x y r@(Rect rX rY height width _ _ _) =
+    overRect thick x y r@(Rect rX rY height width _ _) =
       let adjustX = (rX + width  + thick) * ratio
           adjustY = (rY + height + thick) * ratio in
 

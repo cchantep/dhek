@@ -1,9 +1,14 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 module Types where
 
+import Control.Arrow (first)
+import Data.Aeson
 import Data.Aeson.TH
 import Data.Char
+import Data.Foldable (foldMap)
 import Data.IntMap (IntMap, alter)
+import Data.String (fromString)
 import Graphics.UI.Gtk
 import Graphics.UI.Gtk.Poppler.Document (Document)
 
@@ -25,26 +30,28 @@ data Rect = Rect { rectX      :: Double
                  , rectHeight :: Double
                  , rectWidth  :: Double
                  , rectName   :: String
-                 , rectType   :: String
-                 , rectPage   :: Int } deriving (Eq, Show)
+                 , rectType   :: String } deriving (Eq, Show)
 
-data Save = Save { saveResolution :: Double
-                 , saveAreas      :: [Rect] }
+data Save = Save { saveAreas :: [(Int, [Rect])] }
 
 data Field = Field { fieldRect  :: Rect
                    , fieldType  :: String
                    , fieldValue :: String }
 
-rectNew :: Double -> Double -> Double -> Double -> Int -> Rect
-rectNew x y h w page = Rect x y h w "noname" "text/checkbox" page
+instance ToJSON Save where
+  toJSON (Save areas) =
+    let xsStr = fmap (first (fromString . show)) areas
+        toPair (idx, rects) = [idx .= rects]
+        pages = object (foldMap toPair xsStr) in
+    object ["pages" .= pages]
 
-addRect :: Rect -> IntMap [Rect] -> IntMap [Rect]
-addRect x = alter go page
+rectNew :: Double -> Double -> Double -> Double -> Rect
+rectNew x y h w = Rect x y h w "noname" "text/checkbox"
+
+addRect :: Int -> Rect -> IntMap [Rect] -> IntMap [Rect]
+addRect page x = alter go page
   where
     go (Just xs) = Just (x:xs)
     go _         = Just [x]
 
-    page = rectPage x
-
 $(deriveJSON (fmap toLower . drop 4) ''Rect)
-$(deriveJSON (fmap toLower . drop 4) ''Save)
