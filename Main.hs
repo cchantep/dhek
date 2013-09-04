@@ -8,7 +8,7 @@ import Action
 import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
-import Data.Foldable (traverse_)
+import Data.Foldable (traverse_, fold)
 import qualified Data.ByteString.Lazy as B
 import Data.Aeson (encode, decode)
 import Graphics.UI.Gtk
@@ -179,7 +179,7 @@ createViewButton vbox chooser jsonChooser nxt prev save label spinB scale = do
     onSave ref = do
       v <- readIORef ref
       let rects = viewerRects v
-          save  = Save 1 rects
+          save  = Save 1 (fold rects)
       opt <- fileChooserGetFilename jsonChooser
       traverse_ (\p -> B.writeFile p (encode save)) opt
 

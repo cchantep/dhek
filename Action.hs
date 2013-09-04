@@ -4,9 +4,10 @@ import Prelude hiding (foldr)
 import Control.Applicative (WrappedMonad(..))
 import Control.Monad (void)
 import Control.Monad.Trans (MonadIO(..))
-import Data.Maybe (fromJust)
+import qualified Data.IntMap as I
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Foldable (traverse_, foldMap, foldr)
+import Data.Maybe (fromJust)
 import Data.Monoid (First(..))
 import Graphics.Rendering.Cairo
   (Render, setSourceRGB, scale, setLineWidth, rectangle, closePath, stroke)
@@ -14,8 +15,7 @@ import Graphics.UI.Gtk
 import Graphics.UI.Gtk.Poppler.Document
   (Page, documentNewFromFile, documentGetNPages, documentGetPage)
 import Graphics.UI.Gtk.Poppler.Page
-import Types (Viewer(..), Rect(..), rectNew)
-
+import Types (Viewer(..), Rect(..), rectNew, addRect)
 
 modifyCurPage :: (Int -> Int) -> Viewer -> Viewer
 modifyCurPage k v =
@@ -62,10 +62,11 @@ onMove ref = do
 
 onPress :: IORef Viewer -> EventM EButton ()
 onPress ref = do
+  page   <- liftIO $ fmap viewerCurrentPage (readIORef ref)
   (x, y) <- eventCoordinates
   ratio  <- getPageRatio ref
   liftIO $ putStrLn ("Start in " ++ show (x,y))
-  let f v = v{viewerSelection= Just (rectNew (x/ratio) (y/ratio) 0 0)}
+  let f v = v{viewerSelection= Just (rectNew (x/ratio) (y/ratio) 0 0 (page-1))}
   liftIO $ modifyIORef ref f
 
 onRelease :: IORef Viewer -> EventM EButton ()
@@ -76,7 +77,7 @@ onRelease ref =
       let selection   = viewerSelection v
           rects       = viewerRects v
           newV        = v { viewerSelection = Nothing
-                          , viewerRects     = foldr (:) rects selection }
+                          , viewerRects     = foldr addRect rects selection }
       putStrLn ("End in " ++ show (x,y))
       writeIORef ref newV
       askDrawingViewer newV
@@ -84,18 +85,19 @@ onRelease ref =
 rectDetection :: IORef Viewer -> Double -> EventM EMotion ()
 rectDetection ref ratio = do
   v <- liftIO $ readIORef ref
-  let rects = viewerRects v
+  let page  = viewerCurrentPage v
+      rects = I.lookup page (viewerRects v)
       thick = viewerThickness v
-  go rects (thick / 2)
+  traverse_ (go (thick / 2)) rects
   where
-    overRect thick x y r@(Rect rX rY height width _ _) =
+    overRect thick x y r@(Rect rX rY height width _ _ _) =
       let adjustX = (rX + width  + thick) * ratio
           adjustY = (rY + height + thick) * ratio in
 
       x >= ((rX - thick) * ratio) && x <= adjustX &&
       y >= ((rY - thick) * ratio) && y <= adjustY
 
-    go rects thick =
+    go thick rects =
       eventCoordinates >>= \(x,y) ->
         let f r | overRect thick x y r = First (Just r)
                 | otherwise            = First Nothing
@@ -105,15 +107,19 @@ rectDetection ref ratio = do
 
 updateSelection :: IORef Viewer -> Double -> EventM EMotion ()
 updateSelection ref ratio =
-  unwrapMonad . traverse_ (WrapMonad . go) =<< getSel
+  traverse_ go =<< getSel
   where
     getSel = liftIO $ fmap viewerSelection (readIORef ref)
 
-    go (Rect x0 y0 _ _ _ _) =
+    go r =
       eventCoordinates >>= \(x,y) ->
-        let newHeight = (y/ratio) - y0
+        let x0        = rectX r
+            y0        = rectY r
+            newHeight = (y/ratio) - y0
             newWidth  = (x/ratio) - x0
-            f v = v{viewerSelection = Just (rectNew x0 y0 newHeight newWidth)} in
+            newR      = r { rectHeight = newHeight
+                          , rectWidth  = newWidth }
+            f v = v{ viewerSelection = Just newR } in
         liftIO $ modifyIORef ref f
 
 getPageRatio :: MonadIO m => IORef Viewer -> m Double
@@ -127,7 +133,7 @@ loadPdf path = do
   nb   <- documentGetNPages doc
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
-  return (Viewer area doc swin 1 nb 1 760 [] Nothing 5.0 Nothing)
+  return (Viewer area doc swin 1 nb 1 760 I.empty Nothing 5.0 Nothing)
 
 registerViewerEvents :: IORef Viewer -> IO ()
 registerViewerEvents ref = do
@@ -159,8 +165,9 @@ drawViewer = liftIO . go
       v <- readIORef ref
       (page, ratio, width, height) <- getPageAndSize ref
       let th      = viewerThickness v
+          pageIdx = (viewerCurrentPage v) - 1
           area    = viewerArea v
-          rects   = viewerRects v
+          rects   = I.lookup pageIdx (viewerRects v)
           sel     = viewerSelectedRect v
           rectSel = viewerSelection v
       frame <- widgetGetDrawWindow area
@@ -173,11 +180,16 @@ drawViewer = liftIO . go
                                 drawingSel rectSel) -- >>
                                 --popGroupToSource)
 
-    drawRects th sel = unwrapMonad . traverse_ (WrapMonad . drawing th sel)
+    drawRects th sel =
+      unwrapMonad . traverse_ (traverse_ (WrapMonad . drawing th sel))
 
     drawing :: Double -> Maybe Rect -> Rect -> Render ()
-    drawing th sel r@(Rect x y h w _ _) =
-      let step (Just s)
+    drawing th sel r =
+      let x = rectX r
+          y = rectY r
+          h = rectHeight r
+          w = rectWidth r
+          step (Just s)
             | s == r    = setSourceRGB 1.0 0 0
             | otherwise = setSourceRGB 0 0 1.0
           step _ = setSourceRGB 0 0 1.0 in
@@ -189,7 +201,11 @@ drawViewer = liftIO . go
 
     drawingSel = unwrapMonad . traverse_ (WrapMonad . go)
       where
-        go r@(Rect x y h w _ _) =
+        go r =
+          let x = rectX r
+              y = rectY r
+              h = rectHeight r
+              w = rectWidth r in
           do  setSourceRGB 0 1.0 0
               setLineWidth 1
               rectangle x y w h
