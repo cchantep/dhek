@@ -3,19 +3,21 @@ module Action where
 import Prelude hiding (foldr)
 import Control.Applicative (WrappedMonad(..))
 import Control.Monad (void)
+import Control.Monad.Reader (runReaderT, ask)
 import Control.Monad.Trans (MonadIO(..))
 import qualified Data.IntMap as I
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Foldable (traverse_, foldMap, foldr)
 import Data.Maybe (fromJust)
 import Data.Monoid (First(..))
+import Data.Traversable (traverse)
 import Graphics.Rendering.Cairo
   (Render, setSourceRGB, scale, setLineWidth, rectangle, closePath, stroke)
 import Graphics.UI.Gtk
 import Graphics.UI.Gtk.Poppler.Document
   (Page, documentNewFromFile, documentGetNPages, documentGetPage)
 import Graphics.UI.Gtk.Poppler.Page
-import Types (Viewer(..), Rect(..), rectNew, addRect)
+import Types (Viewer(..), Rect(..), RectStore(..), rectNew, addRect, emptyStore)
 
 modifyCurPage :: (Int -> Int) -> Viewer -> Viewer
 modifyCurPage k v =
@@ -45,7 +47,7 @@ onNextState cur count =
 
 onNavButton :: (Int -> Int -> (Bool, Bool, Int))
             -> Viewer
-            -> (Bool, Bool, Viewer) --decide which button to toggle and the new current page valueu
+            -> (Bool, Bool, Viewer) --decide which button to toggle and the new current page value
 onNavButton k v =
   let count = viewerPageCount v
       cur   = viewerCurrentPage v
@@ -74,10 +76,10 @@ onRelease ref =
     liftIO $ do
       v <- readIORef ref
       let select = viewerSelection v
-          rects  = viewerRects v
+          store  = viewerStore v
           page   = (viewerCurrentPage v) - 1
           newV   = v { viewerSelection = Nothing
-                     , viewerRects     = foldr (addRect page) rects select }
+                     , viewerStore     = foldr (addRect page) store select }
       putStrLn ("End in " ++ show (x,y))
       writeIORef ref newV
       askDrawingViewer newV
@@ -86,7 +88,7 @@ rectDetection :: IORef Viewer -> Double -> EventM EMotion ()
 rectDetection ref ratio = do
   v <- liftIO $ readIORef ref
   let page  = (viewerCurrentPage v) - 1
-      rects = I.lookup page (viewerRects v)
+      rects = I.lookup page (rstoreRects $ viewerStore v)
       thick = viewerThickness v
   traverse_ (go (thick / 2)) rects
   where
@@ -133,7 +135,7 @@ loadPdf path = do
   nb   <- documentGetNPages doc
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
-  return (Viewer area doc swin 1 nb 1 760 I.empty Nothing 5.0 Nothing)
+  return (Viewer area doc swin 1 nb 1 760 emptyStore Nothing 5.0 Nothing)
 
 registerViewerEvents :: IORef Viewer -> IO ()
 registerViewerEvents ref = do
@@ -167,7 +169,7 @@ drawViewer = liftIO . go
       let th      = viewerThickness v
           pageIdx = (viewerCurrentPage v) - 1
           area    = viewerArea v
-          rects   = I.lookup pageIdx (viewerRects v)
+          rects   = I.lookup pageIdx (rstoreRects $ viewerStore v)
           sel     = viewerSelectedRect v
           rectSel = viewerSelection v
       frame <- widgetGetDrawWindow area
