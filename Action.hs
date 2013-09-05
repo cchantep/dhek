@@ -85,7 +85,7 @@ onRelease ref =
 rectDetection :: IORef Viewer -> Double -> EventM EMotion ()
 rectDetection ref ratio = do
   v <- liftIO $ readIORef ref
-  let page  = viewerCurrentPage v
+  let page  = (viewerCurrentPage v) - 1
       rects = I.lookup page (viewerRects v)
       thick = viewerThickness v
   traverse_ (go (thick / 2)) rects
