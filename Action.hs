@@ -12,7 +12,7 @@ import Data.Maybe (fromJust)
 import Data.Monoid (First(..))
 import Data.Traversable (traverse)
 import Graphics.Rendering.Cairo
-  (Render, setSourceRGB, scale, setLineWidth, rectangle, closePath, stroke)
+  (Render, setSourceRGB, scale, setLineWidth, rectangle, closePath, stroke, fill)
 import Graphics.UI.Gtk
 import Graphics.UI.Gtk.Poppler.Document
   (Page, documentNewFromFile, documentGetNPages, documentGetPage)
@@ -175,6 +175,11 @@ drawViewer = liftIO . go
       frame <- widgetGetDrawWindow area
       widgetSetSizeRequest area (truncate width) (truncate height)
       renderWithDrawable frame (setSourceRGB 1.0 1.0 1.0 >>
+                                --setLineWidth 10 >>
+                                rectangle 0 0 width height >>
+                                fill >>
+                                --closePath >>
+                                --stroke >>
                                 scale ratio ratio        >>
                                 pageRender page          >>
                                 --pushGroup                >>
