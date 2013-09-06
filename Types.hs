@@ -61,6 +61,22 @@ fillUp n xs = go xs [0..(n - 1)]
 rectNew :: Double -> Double -> Double -> Double -> Rect
 rectNew x y h w = Rect x y h w "field" "text/checkbox"
 
+normalize :: Rect -> Rect
+normalize r = newRectY newRectX
+  where
+    x = rectX r
+    y = rectY r
+    w = rectWidth r
+    h = rectHeight r
+
+    newRectX
+      | w < 0     = r { rectX = x + w, rectWidth = abs w }
+      | otherwise = r
+
+    newRectY r
+      | h < 0     = r { rectY = y + h, rectHeight = abs h }
+      | otherwise = r
+
 addRect :: Int -> Rect -> RectStore -> RectStore
 addRect page x (RectStore i rects) = RectStore (i+1) newRects
   where
