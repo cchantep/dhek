@@ -17,7 +17,9 @@ import Graphics.UI.Gtk
 import Graphics.UI.Gtk.Poppler.Document
   (Page, documentNewFromFile, documentGetNPages, documentGetPage)
 import Graphics.UI.Gtk.Poppler.Page
-import Types (Viewer(..), Rect(..), RectStore(..), rectNew, addRect, emptyStore)
+import Types
+  (Viewer(..), Rect(..), RectStore(..),
+   rectNew, addRect, emptyStore, normalize)
 
 modifyCurPage :: (Int -> Int) -> Viewer -> Viewer
 modifyCurPage k v =
@@ -79,7 +81,7 @@ onRelease ref =
           store  = viewerStore v
           page   = (viewerCurrentPage v) - 1
           newV   = v { viewerSelection = Nothing
-                     , viewerStore     = foldr (addRect page) store select }
+                     , viewerStore     = foldr (addRect page . normalize) store select }
       putStrLn ("End in " ++ show (x,y))
       writeIORef ref newV
       askDrawingViewer newV
