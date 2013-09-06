@@ -21,13 +21,9 @@ main = do
   window   <- windowNew
   hbox     <- hBoxNew False 10
   pageNav  <- vBoxNew False 0
-  pageInfo <- vBoxNew False 0
-  treeV    <- createPageInfoPanel
   align    <- createControlPanel pageNav
   boxPackStart pageNav align PackNatural 10
-  containerAdd pageInfo treeV
   containerAdd hbox pageNav
-  containerAdd hbox pageInfo
   containerAdd window hbox
   set window windowParams
   onDestroy window mainQuit
@@ -70,7 +66,7 @@ createControlPanel vbox = do
 windowParams :: [AttrOp Window]
 windowParams =
   [windowTitle          := "Dhek PDF Viewer"
-  ,windowDefaultWidth   := 800
+  --,windowDefaultWidth   := 800
   ,windowDefaultHeight  := 600
   ,containerBorderWidth := 10]
 

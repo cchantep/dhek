@@ -135,7 +135,7 @@ loadPdf path = do
   nb   <- documentGetNPages doc
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
-  return (Viewer area doc swin 1 nb 1 760 emptyStore Nothing 5.0 Nothing)
+  return (Viewer area doc swin 1 nb 1 777 emptyStore Nothing 5.0 Nothing)
 
 registerViewerEvents :: IORef Viewer -> IO ()
 registerViewerEvents ref = do
@@ -173,10 +173,11 @@ drawViewer = liftIO . go
           sel     = viewerSelectedRect v
           rectSel = viewerSelection v
       frame <- widgetGetDrawWindow area
+      (fW, fH) <- drawableGetSize frame
       widgetSetSizeRequest area (truncate width) (truncate height)
       renderWithDrawable frame (setSourceRGB 1.0 1.0 1.0 >>
                                 --setLineWidth 10 >>
-                                rectangle 0 0 width height >>
+                                rectangle 0 0 (fromIntegral fW) (fromIntegral fH) >>
                                 fill >>
                                 --closePath >>
                                 --stroke >>
