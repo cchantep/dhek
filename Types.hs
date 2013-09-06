@@ -11,6 +11,7 @@ import Data.IntMap (IntMap, alter, empty)
 import Data.String (fromString)
 import Graphics.UI.Gtk
 import Graphics.UI.Gtk.Poppler.Document (Document)
+import Version
 
 data Viewer =
             Viewer { viewerArea           :: DrawingArea
@@ -45,7 +46,7 @@ instance ToJSON Save where
   toJSON (Save areas) =
     let toPage (_, rects) = maybe Null (\t -> object ["areas" .= t]) rects
         pages = fmap toPage areas in
-    object ["pages" .= pages]
+    object ["format" .= dhekFullVersion, "pages" .= pages]
 
 emptyStore :: RectStore
 emptyStore = RectStore 1 empty
