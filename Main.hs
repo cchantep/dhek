@@ -15,6 +15,7 @@ import Data.Maybe (fromJust)
 import qualified Data.IntMap as I
 import Graphics.UI.Gtk
 import Types (Viewer(..), Save(..), RectStore(..), fillUp)
+import Utils
 
 main :: IO ()
 main = do
@@ -29,7 +30,7 @@ main = do
   widgetSetSensitive msave False
   vbox   <- vBoxNew False 10
   fdialog <- createPdfChooserDialog window
-  mopen `on` menuItemActivate $ openFileChooser vbox fdialog window msave
+  mopen `on` menuItemActivate $ openFileChooser vbox fdialog window mopen msave
   menuShellAppend fmenu mopen
   menuShellAppend fmenu msave
   menuItemSetSubmenu mitem fmenu
@@ -60,8 +61,13 @@ createJsonChooserDialog win = do
   fileChooserAddFilter ch filt
   return ch
 
-openFileChooser :: VBox -> FileChooserDialog -> Window -> MenuItem -> IO ()
-openFileChooser vbox dialog win msave = do
+openFileChooser :: VBox
+                -> FileChooserDialog
+                -> Window
+                -> MenuItem
+                -> MenuItem
+                -> IO ()
+openFileChooser vbox dialog win mopen msave = do
   resp <- dialogRun dialog
   widgetHide dialog
   case resp of
@@ -71,6 +77,7 @@ openFileChooser vbox dialog win msave = do
       vvbox <- openPdf dialog msave win
       containerAdd avbox vvbox
       boxPackStart vbox avbox PackGrow 0
+      widgetSetSensitive mopen False
       widgetShowAll avbox
 
 createPageInfoPanel :: IO TreeView
@@ -128,6 +135,7 @@ createNavButtons = do
 openPdf :: FileChooserDialog -> MenuItem -> Window -> IO VBox
 openPdf chooser msave win = do
   uri <- fmap fromJust (fileChooserGetURI chooser)
+  name <- fmap (takeFileName . fromJust) (fileChooserGetFilename chooser)
   ref <- makeViewer uri
   v   <- readIORef ref
   let nb   = viewerPageCount v
@@ -136,8 +144,6 @@ openPdf chooser msave win = do
   align   <- alignmentNew 0 0 0 0
   aswin   <- alignmentNew 0 0 1 1
   bbox    <- hButtonBoxNew
-  nbLabel <- labelNew $ Just ("/ " ++ show nb)
-  spinB   <- spinButtonNewWithRange 1 (fromIntegral nb) 1
   scale   <- hScaleNewWithRange 100 200 1
   prev    <- buttonNewWithLabel "Previous"
   next    <- buttonNewWithLabel "Next"
@@ -145,52 +151,41 @@ openPdf chooser msave win = do
   plus    <- buttonNewWithLabel "+"
   jfch    <- createJsonChooserDialog win
   file    <- fileChooserSetDoOverwriteConfirmation jfch True
-  prev  `on` buttonActivated $ onPrev prev next spinB ref
-  next  `on` buttonActivated $ onNext next prev spinB ref
+  sep     <- hSeparatorNew
+  prev  `on` buttonActivated $ onPrev name prev next ref
+  next  `on` buttonActivated $ onNext name next prev ref
   minus `on` buttonActivated $ onCommonScale pred minus plus ref
   plus  `on` buttonActivated $ onCommonScale succ minus plus ref
   msave `on` menuItemActivate $ void $ dialogRun jfch
   jfch  `on` response $ onJsonSave ref jfch
-  onValueSpinned spinB (pageBrowserChanged spinB prev next ref)
+  windowSetTitle win (name ++ " (page 1 / " ++ show nb ++ ")")
   widgetSetSensitive prev False
+  widgetSetSensitive next (nb /= 1)
   widgetSetSensitive msave True
   containerAdd align bbox
   containerAdd bbox prev
+  containerAdd bbox next
+  containerAdd bbox sep
   containerAdd bbox minus
   containerAdd bbox plus
-  containerAdd bbox nbLabel
-  containerAdd bbox next
   boxPackStart vbox align PackNatural 0
-  --containerAdd vbox align
   containerAdd aswin swin
-  --containerAdd vbox aswin
   boxPackStart vbox aswin PackGrow 0
-  --widgetShowAll vbox
   return vbox
     where
-      onPrev prev next spinB ref = onCommon onPrevState prev next spinB ref
-      onNext next prev spinB ref = onCommon onNextState next prev spinB ref
+      onPrev name prev next ref = onCommon name onPrevState prev next ref
+      onNext name next prev ref = onCommon name onNextState next prev ref
 
-      onCommon k self other spinB ref = do
+      onCommon name k self other ref = do
         v <- readIORef ref
-        let (tSelf, tOther, newV) = onNavButton k v
+        let nb                    = viewerPageCount v
+            (tSelf, tOther, newV) = onNavButton k v
             newCur                = viewerCurrentPage newV
+            title = name ++ " (page " ++ show newCur ++" / " ++ show nb ++ ")"
         widgetSetSensitive self (not tSelf)
         when tOther (widgetSetSensitive other True)
-        spinButtonSetValue spinB (fromIntegral newCur)
         writeIORef ref newV
-        askDrawingViewer newV
-
-      pageBrowserChanged spinB prev next ref = do
-        value <- spinButtonGetValueAsInt spinB
-        v     <- readIORef ref
-        let newV = v { viewerCurrentPage = value }
-            nb   = viewerPageCount v
-        writeIORef ref newV
-        when (value - 1 < 1) (widgetSetSensitive prev False)
-        when (value + 1 > nb) (widgetSetSensitive next False)
-        when (value - 1 >= 1) (widgetSetSensitive prev True)
-        when (value + 1 <= nb) (widgetSetSensitive next True)
+        windowSetTitle win title
         askDrawingViewer newV
 
       onJsonSave _ jfch ResponseCancel = widgetHide jfch
