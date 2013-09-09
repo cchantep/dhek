@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
-module Utils where
+module Utils (takeFileName)  where
 
 #include "config.h"
 
