@@ -5,7 +5,7 @@ import Action
    onPrevState, onNextState, onNavButton,
    askDrawingViewer, loadPdf, registerViewerEvents
   )
-import Control.Monad (when)
+import Control.Monad (when, void)
 import Control.Monad.Trans (liftIO)
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Foldable (traverse_)
@@ -19,22 +19,25 @@ import Types (Viewer(..), Save(..), RectStore(..), fillUp)
 main :: IO ()
 main = do
   initGUI
-  window   <- windowNew
+  window <- windowNew
   --hbox     <- hBoxNew False 10
   --pageNav  <- vBoxNew False 0
-  malign   <- alignmentNew 0 0 1 0
-  mbar     <- menuBarNew
-  mitem    <- menuItemNewWithLabel "File"
-  fmenu    <- menuNew
-  mopen    <- menuItemNewWithLabel "Open"
+  malign <- alignmentNew 0 0 1 0
+  mbar   <- menuBarNew
+  mitem  <- menuItemNewWithLabel "File"
+  fmenu  <- menuNew
+  mopen  <- menuItemNewWithLabel "Open"
+  msave  <- menuItemNewWithLabel "Save"
+  widgetSetSensitive msave False
   --align    <- createControlPanel pageNav
-  vbox     <- vBoxNew False 10
+  vbox   <- vBoxNew False 10
   --boxPackStart pageNav align PackNatural 10
   --containerAdd hbox pageNav
   fdialog <- createPdfChooserDialog window
   --containerAdd window hbox
-  mopen `on` menuItemActivate $ openFileChooser vbox fdialog
+  mopen `on` menuItemActivate $ openFileChooser vbox fdialog window msave
   menuShellAppend fmenu mopen
+  menuShellAppend fmenu msave
   menuItemSetSubmenu mitem fmenu
   containerAdd malign mbar
   menuShellAppend mbar mitem
@@ -55,15 +58,24 @@ createPdfChooserDialog win = do
   fileChooserAddFilter ch filt
   return ch
 
-openFileChooser :: VBox -> FileChooserDialog -> IO ()
-openFileChooser vbox dialog = do
+createJsonChooserDialog :: Window -> IO FileChooserDialog
+createJsonChooserDialog win = do
+  ch <- fileChooserDialogNew (Just "Open a Json file") (Just win) FileChooserActionSave [("Save", ResponseOk), ("Cancel", ResponseCancel)]
+  filt <- fileFilterNew
+  fileFilterAddPattern filt "*.json"
+  fileFilterSetName filt "Json File"
+  fileChooserAddFilter ch filt
+  return ch
+
+openFileChooser :: VBox -> FileChooserDialog -> Window -> MenuItem -> IO ()
+openFileChooser vbox dialog win msave = do
   resp <- dialogRun dialog
   widgetHide dialog
   case resp of
     ResponseCancel -> return ()
     ResponseOk     -> do
       avbox <- alignmentNew 0 0 1 1
-      vvbox <- openPdf dialog
+      vvbox <- openPdf dialog msave win
       containerAdd avbox vvbox
       boxPackStart vbox avbox PackGrow 0
       --containerAdd vbox avbox
@@ -133,8 +145,8 @@ createNavButtons = do
   nextB <- buttonNewWithLabel "Next"
   return (predB, nextB)
 
-openPdf :: FileChooserDialog -> IO VBox
-openPdf chooser = do
+openPdf :: FileChooserDialog -> MenuItem -> Window -> IO VBox
+openPdf chooser msave win = do
   uri <- fmap fromJust (fileChooserGetURI chooser)
   ref <- makeViewer uri
   v   <- readIORef ref
@@ -149,11 +161,16 @@ openPdf chooser = do
   scale   <- hScaleNewWithRange 100 200 1
   prev    <- buttonNewWithLabel "Previous"
   next    <- buttonNewWithLabel "Next"
+  jfch    <- createJsonChooserDialog win
+  file    <- fileChooserSetDoOverwriteConfirmation jfch True
   prev  `on` buttonActivated $ onPrev prev next spinB ref
   next  `on` buttonActivated $ onNext next prev spinB ref
   scale `on` valueChanged $ pageZoomChanged scale ref
+  msave `on` menuItemActivate $ void $ dialogRun jfch
+  jfch  `on` response $ onJsonSave ref jfch
   onValueSpinned spinB (pageBrowserChanged spinB prev next ref)
   widgetSetSensitive prev False
+  widgetSetSensitive msave True
   containerAdd align bbox
   containerAdd bbox prev
   containerAdd bbox spinB
@@ -198,6 +215,16 @@ openPdf chooser = do
         let newV = v { viewerZoom = value / 100 }
         writeIORef ref newV
         askDrawingViewer newV
+
+      onJsonSave _ jfch ResponseCancel = widgetHide jfch
+      onJsonSave ref jfch ResponseOk   = do
+        v <- readIORef ref
+        let nb    = viewerPageCount v
+            rects = I.toList $ rstoreRects $ viewerStore v
+            save  = Save $ fillUp nb rects
+        opt <- fileChooserGetFilename jfch
+        traverse_ (\p -> B.writeFile p (encode save)) opt
+        widgetHide jfch
 
     -- onSave ref = do
     --   v <- readIORef ref
