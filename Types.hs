@@ -19,7 +19,7 @@ data Viewer =
                    , viewerScrolledWindow :: ScrolledWindow
                    , viewerCurrentPage    :: Int
                    , viewerPageCount      :: Int
-                   , viewerZoom           :: Double
+                   , viewerZoom           :: Int
                    , viewerBaseWidth      :: Int
                    , viewerStore          :: RectStore
                    , viewerSelectedRect   :: Maybe Rect

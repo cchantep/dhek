@@ -5,6 +5,7 @@ import Control.Applicative (WrappedMonad(..))
 import Control.Monad (void)
 import Control.Monad.Reader (runReaderT, ask)
 import Control.Monad.Trans (MonadIO(..))
+import Data.Array
 import qualified Data.IntMap as I
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Foldable (traverse_, foldMap, foldr)
@@ -21,12 +22,27 @@ import Types
   (Viewer(..), Rect(..), RectStore(..),
    rectNew, addRect, emptyStore, normalize)
 
+zoomValues :: Array Int Double
+zoomValues = array (0, 10) values
+  where
+    values = [(0,  0.125) -- 12.5%
+             ,(1,  0.25)  -- 25%
+             ,(2,  0.5)   -- 50%
+             ,(3,  1.0)   -- 100%
+             ,(4,  2.0)   -- 200%
+             ,(5,  3.0)   -- 300%
+             ,(6,  4.0)   -- 400%
+             ,(7,  5.0)   -- 500%
+             ,(8,  6.0)   -- 600%
+             ,(9,  7.0)   -- 700%
+             ,(10, 8.0)]  -- 800%
+
 modifyCurPage :: (Int -> Int) -> Viewer -> Viewer
 modifyCurPage k v =
   let cur = viewerCurrentPage v in
   v{ viewerCurrentPage = k cur }
 
-setViewerZoom :: Double -> Viewer -> Viewer
+setViewerZoom :: Int -> Viewer -> Viewer
 setViewerZoom z v = v{ viewerZoom = z }
 
 updatePageSpinValue :: SpinButton -> Viewer -> IO ()
@@ -137,7 +153,7 @@ loadPdf path = do
   nb   <- documentGetNPages doc
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
-  return (Viewer area doc swin 1 nb 1 777 emptyStore Nothing 5.0 Nothing)
+  return (Viewer area doc swin 1 nb 3 777 emptyStore Nothing 5.0 Nothing)
 
 registerViewerEvents :: IORef Viewer -> IO ()
 registerViewerEvents ref = do
@@ -155,7 +171,8 @@ getPageAndSize ref = do
   let doc   = viewerDocument v
       cur   = viewerCurrentPage v
       baseW = viewerBaseWidth v
-      zoom  = viewerZoom v
+      idx   = viewerZoom v
+      zoom  = zoomValues ! idx
   page <- documentGetPage doc (cur - 1)
   (width, height) <- pageGetSize page
   let rWidth = (fromIntegral baseW) * zoom

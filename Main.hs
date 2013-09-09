@@ -20,8 +20,6 @@ main :: IO ()
 main = do
   initGUI
   window <- windowNew
-  --hbox     <- hBoxNew False 10
-  --pageNav  <- vBoxNew False 0
   malign <- alignmentNew 0 0 1 0
   mbar   <- menuBarNew
   mitem  <- menuItemNewWithLabel "File"
@@ -29,12 +27,8 @@ main = do
   mopen  <- menuItemNewWithLabel "Open"
   msave  <- menuItemNewWithLabel "Save"
   widgetSetSensitive msave False
-  --align    <- createControlPanel pageNav
   vbox   <- vBoxNew False 10
-  --boxPackStart pageNav align PackNatural 10
-  --containerAdd hbox pageNav
   fdialog <- createPdfChooserDialog window
-  --containerAdd window hbox
   mopen `on` menuItemActivate $ openFileChooser vbox fdialog window msave
   menuShellAppend fmenu mopen
   menuShellAppend fmenu msave
@@ -43,7 +37,6 @@ main = do
   menuShellAppend mbar mitem
   containerAdd window vbox
   boxPackStart vbox malign PackNatural 0
-  --containerAdd vbox malign
   set window windowParams
   onDestroy window mainQuit
   widgetShowAll window
@@ -78,7 +71,6 @@ openFileChooser vbox dialog win msave = do
       vvbox <- openPdf dialog msave win
       containerAdd avbox vvbox
       boxPackStart vbox avbox PackGrow 0
-      --containerAdd vbox avbox
       widgetShowAll avbox
 
 createPageInfoPanel :: IO TreeView
@@ -88,29 +80,17 @@ createControlPanel :: VBox -> IO Alignment
 createControlPanel vbox = do
   align  <- alignmentNew 1 0 0 0
   bbox   <- hButtonBoxNew
-  --fchb   <- createFileChooserButton
-  --fchj   <- createJsonFileChooserButton
   label  <- labelNew Nothing
   spinB  <- spinButtonNewWithRange 0 0 1
-  scale  <- hScaleNewWithRange 1 200 1
   (prev, nxt) <- createNavButtons
-  --save   <- buttonNewWithLabel "Save Json"
-  --button <- createViewButton vbox fchb fchj nxt prev save label spinB scale
   widgetSetSensitive spinB False
-  widgetSetSensitive scale False
   widgetSetSensitive prev False
   widgetSetSensitive nxt False
-  rangeSetValue scale 100
   containerAdd align bbox
   containerAdd bbox prev
   containerAdd bbox spinB
   containerAdd bbox label
   containerAdd bbox nxt
-  --containerAdd bbox fchb
-  --containerAdd bbox fchj
-  containerAdd bbox scale
-  --containerAdd bbox button
-  --containerAdd bbox save
   set bbox [buttonBoxLayoutStyle := ButtonboxStart]
   return align
 
@@ -161,11 +141,14 @@ openPdf chooser msave win = do
   scale   <- hScaleNewWithRange 100 200 1
   prev    <- buttonNewWithLabel "Previous"
   next    <- buttonNewWithLabel "Next"
+  minus   <- buttonNewWithLabel "-"
+  plus    <- buttonNewWithLabel "+"
   jfch    <- createJsonChooserDialog win
   file    <- fileChooserSetDoOverwriteConfirmation jfch True
   prev  `on` buttonActivated $ onPrev prev next spinB ref
   next  `on` buttonActivated $ onNext next prev spinB ref
-  scale `on` valueChanged $ pageZoomChanged scale ref
+  minus `on` buttonActivated $ onCommonScale pred minus plus ref
+  plus  `on` buttonActivated $ onCommonScale succ minus plus ref
   msave `on` menuItemActivate $ void $ dialogRun jfch
   jfch  `on` response $ onJsonSave ref jfch
   onValueSpinned spinB (pageBrowserChanged spinB prev next ref)
@@ -173,7 +156,8 @@ openPdf chooser msave win = do
   widgetSetSensitive msave True
   containerAdd align bbox
   containerAdd bbox prev
-  containerAdd bbox spinB
+  containerAdd bbox minus
+  containerAdd bbox plus
   containerAdd bbox nbLabel
   containerAdd bbox next
   boxPackStart vbox align PackNatural 0
@@ -209,13 +193,6 @@ openPdf chooser msave win = do
         when (value + 1 <= nb) (widgetSetSensitive next True)
         askDrawingViewer newV
 
-      pageZoomChanged scale ref = do
-        value <- rangeGetValue scale
-        v     <- readIORef ref
-        let newV = v { viewerZoom = value / 100 }
-        writeIORef ref newV
-        askDrawingViewer newV
-
       onJsonSave _ jfch ResponseCancel = widgetHide jfch
       onJsonSave ref jfch ResponseOk   = do
         v <- readIORef ref
@@ -226,6 +203,20 @@ openPdf chooser msave win = do
         traverse_ (\p -> B.writeFile p (encode save)) opt
         widgetHide jfch
 
+      onCommonScale k minus plus ref =
+        let f v =
+              let z   = viewerZoom v
+                  z2  = k z
+                  low = (z2 - 1) < 0
+                  up  = (z2 + 1) > 10
+                  v2  = v { viewerZoom = z2 } in
+              do widgetSetSensitive minus (not low)
+                 widgetSetSensitive plus (not up)
+                 writeIORef ref v2
+                 askDrawingViewer v2 in
+        readIORef ref >>= f
+
+
     -- onSave ref = do
     --   v <- readIORef ref
     --   let nb    = viewerPageCount v
@@ -233,93 +224,6 @@ openPdf chooser msave win = do
     --       save  = Save $ fillUp nb rects
     --   opt <- fileChooserGetFilename jsonChooser
     --   traverse_ (\p -> B.writeFile p (encode save)) opt
-
-createViewButton :: VBox
-                 -> FileChooserButton
-                 -> FileChooserButton
-                 -> Button
-                 -> Button
-                 -> Button
-                 -> Label
-                 -> SpinButton
-                 -> HScale
-                 -> IO Button
-createViewButton vbox chooser jsonChooser nxt prev save label spinB scale = do
-  button <- buttonNewWithLabel "View"
-  button `on` buttonActivated $ go button
-  return button
-
-  where
-    go button = do
-      select <- fileChooserGetURI chooser
-      maybe (print "(No Selection)") (makeView button) select
-
-    makeView button filepath = do
-      ref <- makeViewer filepath
-      v   <- readIORef ref
-      let pagesStr    = show $ viewerPageCount v
-          charLength  = length pagesStr
-          doc         = viewerDocument v
-          swin        = viewerScrolledWindow v
-          cur         = viewerCurrentPage v
-          nPages      = viewerPageCount v
-          onlyOnePage = nPages == 1
-      labelSetText label ("/ " ++ pagesStr)
-      spinButtonSetValue spinB (fromIntegral cur)
-      spinButtonSetRange spinB 1 (fromIntegral nPages)
-      boxPackStart vbox swin PackGrow 0
-      widgetSetSensitive spinB True
-      widgetSetSensitive chooser False
-      widgetSetSensitive button False
-      widgetSetSensitive scale True
-      widgetSetSensitive prev False
-      widgetSetSensitive nxt (not onlyOnePage)
-      prev  `on` buttonActivated $ onPrev ref
-      nxt   `on` buttonActivated $ onNext ref
-      save  `on` buttonActivated $ onSave ref
-      scale `on` valueChanged $ pageZoomChanged ref
-      onValueSpinned spinB (pageBrowserChanged ref)
-      widgetShowAll vbox
-
-    onPrev ref = onCommon onPrevState prev nxt ref
-    onNext ref = onCommon onNextState nxt prev ref
-
-    onCommon k self other ref = do
-      v <- readIORef ref
-      let (tSelf, tOther, newV) = onNavButton k v
-          newCur                = viewerCurrentPage newV
-      widgetSetSensitive self (not tSelf)
-      when tOther (widgetSetSensitive other True)
-      spinButtonSetValue spinB (fromIntegral newCur)
-      writeIORef ref newV
-      askDrawingViewer newV
-
-    pageBrowserChanged ref = do
-      value <- spinButtonGetValueAsInt spinB
-      v     <- readIORef ref
-      let newV = v { viewerCurrentPage = value }
-          nb   = viewerPageCount v
-      writeIORef ref newV
-      when (value - 1 < 1) (widgetSetSensitive prev False)
-      when (value + 1 > nb) (widgetSetSensitive nxt False)
-      when (value - 1 >= 1) (widgetSetSensitive prev True)
-      when (value + 1 <= nb) (widgetSetSensitive nxt True)
-      askDrawingViewer newV
-
-    pageZoomChanged ref = do
-      value <- rangeGetValue scale
-      v     <- readIORef ref
-      let newV = v { viewerZoom = value / 100 }
-      writeIORef ref newV
-      askDrawingViewer newV
-
-    onSave ref = do
-      v <- readIORef ref
-      let nb    = viewerPageCount v
-          rects = I.toList $ rstoreRects $ viewerStore v
-          save  = Save $ fillUp nb rects
-      opt <- fileChooserGetFilename jsonChooser
-      traverse_ (\p -> B.writeFile p (encode save)) opt
 
 createTable :: IO Table
 createTable = tableNew 2 2 False
