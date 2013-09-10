@@ -9,7 +9,7 @@ import Data.Array
 import qualified Data.IntMap as I
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Foldable (traverse_, foldMap, foldr)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, isJust, isNothing)
 import Data.Monoid (First(..))
 import Data.Traversable (traverse)
 import Graphics.Rendering.Cairo
@@ -74,6 +74,7 @@ onNavButton k v =
 
 onMove :: IORef Viewer -> EventM EMotion ()
 onMove ref = do
+  frame <- eventWindow
   v     <- liftIO $ readIORef ref
   ratio <- getPageRatio ref
   dopt  <- rectDetection v ratio
@@ -84,7 +85,15 @@ onMove ref = do
       changed = viewerSelection v /= viewerSelection v2
                 || viewerSelectedRect v /= viewerSelectedRect v2
 
+      cursor
+        | isJust dopt && isNothing sopt = Hand1
+        | otherwise                     = Tcross
+
+      updateCursor =
+        drawWindowSetCursor frame . Just =<< cursorNew cursor
+
   liftIO $ do
+    when changed updateCursor
     when changed (writeIORef ref v2)
     when changed (askDrawingViewer v2)
 
@@ -176,7 +185,13 @@ registerViewerEvents ref = do
   area `on` exposeEvent $ tryEvent $ drawViewer ref
   area `on` motionNotifyEvent $ tryEvent $ onMove ref
   area `on` buttonPressEvent $ tryEvent $ onPress ref
+  area `on` enterNotifyEvent $ tryEvent $ onEnter
   void $ area `on` buttonReleaseEvent $ tryEvent $ onRelease ref
+    where
+      onEnter = do
+        frame  <- eventWindow
+        cursor <- liftIO $ cursorNew Tcross
+        liftIO $ drawWindowSetCursor frame (Just cursor)
 
 getPageAndSize :: IORef Viewer -> IO (Page, Double, Double, Double)
 getPageAndSize ref = do

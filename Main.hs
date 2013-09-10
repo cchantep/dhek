@@ -140,6 +140,7 @@ openPdf chooser msave win = do
   v   <- readIORef ref
   let nb   = viewerPageCount v
       swin = viewerScrolledWindow v
+      area = viewerArea v
   vbox    <- vBoxNew False 10
   align   <- alignmentNew 0 0 0 0
   aswin   <- alignmentNew 0 0 1 1
