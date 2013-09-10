@@ -153,7 +153,7 @@ loadPdf path = do
   nb   <- documentGetNPages doc
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
-  return (Viewer area doc swin 1 nb 3 777 emptyStore Nothing 5.0 Nothing)
+  return (Viewer area doc swin 1 nb 3 777 emptyStore Nothing 1.0 Nothing)
 
 registerViewerEvents :: IORef Viewer -> IO ()
 registerViewerEvents ref = do
