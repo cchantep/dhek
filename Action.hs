@@ -2,7 +2,7 @@ module Action where
 
 import Prelude hiding (foldr)
 import Control.Applicative (WrappedMonad(..))
-import Control.Monad (void)
+import Control.Monad (void, when)
 import Control.Monad.Reader (runReaderT, ask)
 import Control.Monad.Trans (MonadIO(..))
 import Data.Array
@@ -82,25 +82,34 @@ onMove ref = do
 
 onPress :: IORef Viewer -> EventM EButton ()
 onPress ref = do
-  (x, y) <- eventCoordinates
-  ratio  <- getPageRatio ref
-  liftIO $ putStrLn ("Start in " ++ show (x,y))
-  let f v = v{viewerSelection= Just (rectNew (x/ratio) (y/ratio) 0 0)}
-  liftIO $ modifyIORef ref f
+  b <- eventButton
+  when (b == LeftButton) go
+    where
+      go = do
+        (x, y) <- eventCoordinates
+        ratio  <- getPageRatio ref
+        liftIO $ putStrLn ("Start in " ++ show (x,y))
+        let f v = v{viewerSelection= Just (rectNew (x/ratio) (y/ratio) 0 0)}
+        liftIO $ modifyIORef ref f
 
 onRelease :: IORef Viewer -> EventM EButton ()
-onRelease ref =
-  eventCoordinates >>= \(x,y) ->
-    liftIO $ do
-      v <- readIORef ref
-      let select = viewerSelection v
-          store  = viewerStore v
-          page   = (viewerCurrentPage v) - 1
-          newV   = v { viewerSelection = Nothing
-                     , viewerStore     = foldr (addRect page . normalize) store select }
-      putStrLn ("End in " ++ show (x,y))
-      writeIORef ref newV
-      askDrawingViewer newV
+onRelease ref = do
+  b <- eventButton
+  when (b == LeftButton) go
+    where
+      go =
+        eventCoordinates >>= \(x,y) ->
+          liftIO $ do
+            v <- readIORef ref
+            let select = viewerSelection v
+                store  = viewerStore v
+                page   = (viewerCurrentPage v) - 1
+                insert = addRect page . normalize
+                newV   = v { viewerSelection = Nothing
+                           , viewerStore     = foldr insert store select }
+            putStrLn ("End in " ++ show (x,y))
+            writeIORef ref newV
+            askDrawingViewer newV
 
 rectDetection :: IORef Viewer -> Double -> EventM EMotion ()
 rectDetection ref ratio = do
