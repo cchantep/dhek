@@ -140,6 +140,7 @@ openPdf chooser msave win = do
   v   <- readIORef ref
   let nb   = viewerPageCount v
       swin = viewerScrolledWindow v
+      area = viewerArea v
   vbox    <- vBoxNew False 10
   align   <- alignmentNew 0 0 0 0
   aswin   <- alignmentNew 0 0 1 1
@@ -195,7 +196,10 @@ openPdf chooser msave win = do
             rects = I.toList $ rstoreRects $ viewerStore v
             save  = Save $ fillUp nb rects
         opt <- fileChooserGetFilename jfch
-        traverse_ (\p -> B.writeFile p (encode save)) opt
+        let ensure path
+              | takeExtension path == ".json" = path
+              | otherwise                     = path ++ ".json"
+        traverse_ (\p -> B.writeFile (ensure p) (encode save)) opt
         widgetHide jfch
 
       onCommonScale k minus plus ref =
