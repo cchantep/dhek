@@ -2,7 +2,7 @@ module Action where
 
 import Prelude hiding (foldr)
 import Control.Applicative (WrappedMonad(..))
-import Control.Monad (void, when)
+import Control.Monad (void, when, join)
 import Control.Monad.Reader (runReaderT, ask)
 import Control.Monad.Trans (MonadIO(..))
 import Data.Array
@@ -76,9 +76,17 @@ onMove :: IORef Viewer -> EventM EMotion ()
 onMove ref = do
   v     <- liftIO $ readIORef ref
   ratio <- getPageRatio ref
-  rectDetection ref ratio
-  updateSelection ref ratio
-  liftIO $ readIORef ref >>= askDrawingViewer
+  dopt  <- rectDetection v ratio
+  sopt  <- updateSelection v ratio
+  let v1 = v { viewerSelectedRect = dopt }
+      v2 = foldr (\r v -> v {viewerSelection = Just r}) v1 sopt
+
+      changed = viewerSelection v /= viewerSelection v2
+                || viewerSelectedRect v /= viewerSelectedRect v2
+
+  liftIO $ do
+    when changed (writeIORef ref v2)
+    when changed (askDrawingViewer v2)
 
 onPress :: IORef Viewer -> EventM EButton ()
 onPress ref = do
@@ -111,13 +119,12 @@ onRelease ref = do
             writeIORef ref newV
             askDrawingViewer newV
 
-rectDetection :: IORef Viewer -> Double -> EventM EMotion ()
-rectDetection ref ratio = do
-  v <- liftIO $ readIORef ref
+rectDetection :: Viewer -> Double -> EventM EMotion (Maybe Rect)
+rectDetection v ratio = do
   let page  = (viewerCurrentPage v) - 1
       rects = I.lookup page (rstoreRects $ viewerStore v)
       thick = viewerThickness v
-  traverse_ (go (thick / 2)) rects
+  fmap join $ traverse (go (thick / 2)) rects
   where
     overRect thick x y r@(Rect rX rY height width _ _) =
       let adjustX = (rX + width  + thick) * ratio
@@ -130,16 +137,14 @@ rectDetection ref ratio = do
       eventCoordinates >>= \(x,y) ->
         let f r | overRect thick x y r = First (Just r)
                 | otherwise            = First Nothing
-            (First res) = foldMap f rects
-            action = modifyIORef ref (\v -> v{viewerSelectedRect=res}) in
-        liftIO $ action
+            (First res) = foldMap f rects in
+        return res
 
-updateSelection :: IORef Viewer -> Double -> EventM EMotion ()
-updateSelection ref ratio =
-  traverse_ go =<< getSel
+updateSelection :: Viewer -> Double -> EventM EMotion (Maybe Rect)
+updateSelection v ratio =
+  traverse go opt
   where
-    getSel = liftIO $ fmap viewerSelection (readIORef ref)
-
+    opt = viewerSelection  v
     go r =
       eventCoordinates >>= \(x,y) ->
         let x0        = rectX r
@@ -147,9 +152,8 @@ updateSelection ref ratio =
             newHeight = (y/ratio) - y0
             newWidth  = (x/ratio) - x0
             newR      = r { rectHeight = newHeight
-                          , rectWidth  = newWidth }
-            f v = v{ viewerSelection = Just newR } in
-        liftIO $ modifyIORef ref f
+                          , rectWidth  = newWidth } in
+        return newR
 
 getPageRatio :: MonadIO m => IORef Viewer -> m Double
 getPageRatio = liftIO . fmap (\(_,r,_,_) -> r) . getPageAndSize
