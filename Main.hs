@@ -195,7 +195,10 @@ openPdf chooser msave win = do
             rects = I.toList $ rstoreRects $ viewerStore v
             save  = Save $ fillUp nb rects
         opt <- fileChooserGetFilename jfch
-        traverse_ (\p -> B.writeFile p (encode save)) opt
+        let ensure path
+              | takeExtension path == ".json" = path
+              | otherwise                     = path ++ ".json"
+        traverse_ (\p -> B.writeFile (ensure p) (encode save)) opt
         widgetHide jfch
 
       onCommonScale k minus plus ref =
