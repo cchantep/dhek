@@ -151,7 +151,7 @@ openPdf chooser msave win = do
   plus    <- buttonNewWithLabel "+"
   jfch    <- createJsonChooserDialog win
   file    <- fileChooserSetDoOverwriteConfirmation jfch True
-  sep     <- hSeparatorNew
+  sep     <- vSeparatorNew
   prev  `on` buttonActivated $ onPrev name prev next ref
   next  `on` buttonActivated $ onNext name next prev ref
   minus `on` buttonActivated $ onCommonScale pred minus plus ref
