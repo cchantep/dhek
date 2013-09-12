@@ -1,8 +1,11 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Action where
 
 import Prelude hiding (foldr)
 import Control.Applicative (WrappedMonad(..))
+import Control.Lens
 import Control.Monad (void, when, join)
+import Control.Monad.State (execState, evalState)
 import Control.Monad.Reader (runReaderT, ask)
 import Control.Monad.Trans (MonadIO(..))
 import Data.Array
@@ -11,7 +14,6 @@ import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Foldable (traverse_, foldMap, foldr)
 import Data.Maybe (fromJust, isJust, isNothing)
 import Data.Monoid (First(..))
-import Data.Traversable (traverse)
 import Graphics.Rendering.Cairo
   (Render, setSourceRGB, scale, setLineWidth, rectangle, closePath, stroke, fill)
 import Graphics.UI.Gtk
@@ -19,8 +21,6 @@ import Graphics.UI.Gtk.Poppler.Document
   (Page, documentNewFromFile, documentGetNPages, documentGetPage)
 import Graphics.UI.Gtk.Poppler.Page
 import Types
-  (Viewer(..), Rect(..), RectStore(..),
-   rectNew, addRect, emptyStore, normalize)
 
 zoomValues :: Array Int Double
 zoomValues = array (0, 10) values
@@ -37,22 +37,10 @@ zoomValues = array (0, 10) values
              ,(9,  7.0)   -- 700%
              ,(10, 8.0)]  -- 800%
 
-modifyCurPage :: (Int -> Int) -> Viewer -> Viewer
-modifyCurPage k v =
-  let cur = viewerCurrentPage v in
-  v{ viewerCurrentPage = k cur }
-
-setViewerZoom :: Int -> Viewer -> Viewer
-setViewerZoom z v = v{ viewerZoom = z }
-
-updatePageSpinValue :: SpinButton -> Viewer -> IO ()
-updatePageSpinValue spin v =
-  let cur = viewerCurrentPage v in
-  spinButtonSetValue spin (fromIntegral cur)
-
 askDrawingViewer :: Viewer -> IO ()
 askDrawingViewer v =
-  let area = viewerArea v in
+  let page = v ^. viewerCurrentPage
+      area = v ^. viewerBoards.boardsArea in
   widgetQueueDraw area
 
 onPrevState :: Int -> Int -> (Bool, Bool, Int)
@@ -67,10 +55,10 @@ onNavButton :: (Int -> Int -> (Bool, Bool, Int))
             -> Viewer
             -> (Bool, Bool, Viewer) --decide which button to toggle and the new current page value
 onNavButton k v =
-  let count = viewerPageCount v
-      cur   = viewerCurrentPage v
+  let count = v ^. viewerPageCount
+      cur   = v ^. viewerCurrentPage
       (tPrev, tNext, newCur) = k cur count in
-  (tPrev, tNext, modifyCurPage (const newCur) v)
+  (tPrev, tNext, v & viewerCurrentPage .~ newCur)
 
 onMove :: IORef Viewer -> EventM EMotion ()
 onMove ref = do
@@ -79,11 +67,14 @@ onMove ref = do
   ratio <- getPageRatio ref
   dopt  <- rectDetection v ratio
   sopt  <- updateSelection v ratio
-  let v1 = v { viewerSelectedRect = dopt }
-      v2 = foldr (\r v -> v {viewerSelection = Just r}) v1 sopt
+  let page = v ^. viewerCurrentPage
+      detL  = viewerBoards.boardsSelected
+      selL  = viewerBoards.boardsSelection
+      v1 = v & detL .~ dopt
+      v2 = foldr (\r v -> v & selL ?~ r) v1 sopt
 
-      changed = viewerSelection v /= viewerSelection v2
-                || viewerSelectedRect v /= viewerSelectedRect v2
+      changed = (v ^. viewerBoards.boardsSelection) /= (v2 ^. viewerBoards.boardsSelection) ||
+                (v ^. viewerBoards.boardsSelected) /= (v2 ^. viewerBoards.boardsSelected)
 
       cursor
         | isJust dopt && isNothing sopt = Hand1
@@ -106,7 +97,9 @@ onPress ref = do
         (x, y) <- eventCoordinates
         ratio  <- getPageRatio ref
         liftIO $ putStrLn ("Start in " ++ show (x,y))
-        let f v = v{viewerSelection= Just (rectNew (x/ratio) (y/ratio) 0 0)}
+        let f v =
+              let selL = viewerBoards.boardsSelection in
+              v & selL ?~ (rectNew (x/ratio) (y/ratio) 0 0)
         liftIO $ modifyIORef ref f
 
 onRelease :: IORef Viewer -> EventM EButton ()
@@ -118,24 +111,32 @@ onRelease ref = do
         eventCoordinates >>= \(x,y) ->
           liftIO $ do
             v <- readIORef ref
-            let select = viewerSelection v
-                store  = viewerStore v
-                page   = (viewerCurrentPage v) - 1
-                insert = addRect page . normalize
-                newV   = v { viewerSelection = Nothing
-                           , viewerStore     = foldr insert store select }
+            let page = v ^. viewerCurrentPage
+                board = viewerBoards.boardsMap.at page.traverse
+                insert x = do
+                  viewerBoards.boardsState += 1
+                  id <- use (viewerBoards.boardsState)
+                  let x' = x & rectId .~ id & rectName %~ (++ show id)
+                  board.boardRects.at id ?= x'
+                action = do
+                  selection <- use (viewerBoards.boardsSelection)
+                  viewerBoards.boardsSelection .= Nothing
+                  traverse_ insert selection
+                newV = execState action v
             putStrLn ("End in " ++ show (x,y))
             writeIORef ref newV
             askDrawingViewer newV
 
-rectDetection :: Viewer -> Double -> EventM EMotion (Maybe Rect)
+rectDetection :: Viewer -> Double -> EventM EMotion (Maybe Int)
 rectDetection v ratio = do
-  let page  = (viewerCurrentPage v) - 1
-      rects = I.lookup page (rstoreRects $ viewerStore v)
-      thick = viewerThickness v
-  fmap join $ traverse (go (thick / 2)) rects
+  let page   = v ^. viewerCurrentPage
+      board  = viewerBoards.boardsMap.at page.traverse
+      rects' =  v ^. board.boardRects
+      rects  = I.elems rects'
+      thick  = v ^. viewerBoards.boardsThick
+  go (thick / 2) rects
   where
-    overRect thick x y r@(Rect rX rY height width _ _) =
+    overRect thick x y r@(Rect _ rX rY height width _ _) =
       let adjustX = (rX + width  + thick) * ratio
           adjustY = (rY + height + thick) * ratio in
 
@@ -144,25 +145,28 @@ rectDetection v ratio = do
 
     go thick rects =
       eventCoordinates >>= \(x,y) ->
-        let f r | overRect thick x y r = First (Just r)
+        let f r | overRect thick x y r = First (Just (r ^. rectId))
                 | otherwise            = First Nothing
             (First res) = foldMap f rects in
         return res
 
 updateSelection :: Viewer -> Double -> EventM EMotion (Maybe Rect)
-updateSelection v ratio =
-  traverse go opt
+updateSelection v ratio = go
   where
-    opt = viewerSelection  v
-    go r =
+    go =
       eventCoordinates >>= \(x,y) ->
-        let x0        = rectX r
-            y0        = rectY r
-            newHeight = (y/ratio) - y0
-            newWidth  = (x/ratio) - x0
-            newR      = r { rectHeight = newHeight
-                          , rectWidth  = newWidth } in
-        return newR
+        let action = do
+              opt <- use (viewerBoards.boardsSelection)
+              traverse_ upd opt
+              use (viewerBoards.boardsSelection)
+            upd r =
+              let x0   = r ^. rectX
+                  y0   = r ^. rectY
+                  newH = (y/ratio) - y0
+                  newW = (x/ratio) - x0
+                  newR = r & rectHeight .~ newH & rectWidth .~ newW in
+              viewerBoards.boardsSelection ?= newR in
+        return $ evalState action v
 
 getPageRatio :: MonadIO m => IORef Viewer -> m Double
 getPageRatio = liftIO . fmap (\(_,r,_,_) -> r) . getPageAndSize
@@ -175,12 +179,12 @@ loadPdf path = do
   nb   <- documentGetNPages doc
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
-  return (Viewer area doc swin 1 nb 3 777 emptyStore Nothing 1.0 Nothing)
+  return (Viewer doc 1 nb (boardsNew nb area swin 777 3 1.0))
 
 registerViewerEvents :: IORef Viewer -> IO ()
 registerViewerEvents ref = do
   v <- readIORef ref
-  let area = viewerArea v
+  let area = v ^. viewerBoards.boardsArea
   widgetAddEvents area [PointerMotionMask]
   area `on` exposeEvent $ tryEvent $ drawViewer ref
   area `on` motionNotifyEvent $ tryEvent $ onMove ref
@@ -196,10 +200,10 @@ registerViewerEvents ref = do
 getPageAndSize :: IORef Viewer -> IO (Page, Double, Double, Double)
 getPageAndSize ref = do
   v <- readIORef ref
-  let doc   = viewerDocument v
-      cur   = viewerCurrentPage v
-      baseW = viewerBaseWidth v
-      idx   = viewerZoom v
+  let doc   = v ^. viewerDocument
+      cur   = v ^. viewerCurrentPage
+      baseW = v ^. viewerBoards.boardsBaseWidth
+      idx   = v ^. viewerBoards.boardsZoom
       zoom  = zoomValues ! idx
   page <- documentGetPage doc (cur - 1)
   (width, height) <- pageGetSize page
@@ -213,12 +217,17 @@ drawViewer = liftIO . go
     go ref = do
       v <- readIORef ref
       (page, ratio, width, height) <- getPageAndSize ref
-      let th      = viewerThickness v
-          pageIdx = (viewerCurrentPage v) - 1
-          area    = viewerArea v
-          rects   = I.lookup pageIdx (rstoreRects $ viewerStore v)
-          sel     = viewerSelectedRect v
-          rectSel = viewerSelection v
+      let th      = v ^. viewerBoards.boardsThick
+          pageId  = v ^. viewerCurrentPage
+          area    = v ^. viewerBoards.boardsArea
+          rects'  = v ^. viewerBoards.boardsMap.at pageId.traverse.boardRects
+          rects   = I.elems rects'
+          sel' = v ^. viewerBoards.boardsSelected
+          rmap = v ^. viewerBoards.boardsMap.at pageId.traverse.boardRects
+          sel = (\i -> I.lookup i rmap) =<< sel' --v ^. viewerBoards.boardsMap.at page.traverse.boardRects.at sel'
+          --sf idx  = use (viewerBoards.boardsMap.at page.traverse.boardRects.at idx)
+          --sel     = evalState (traverse sf sel') v
+          rectSel = v ^. viewerBoards.boardsSelection
       frame <- widgetGetDrawWindow area
       (fW, fH) <- drawableGetSize frame
       widgetSetSizeRequest area (truncate width) (truncate height)
@@ -236,14 +245,14 @@ drawViewer = liftIO . go
                                 --popGroupToSource)
 
     drawRects th sel =
-      unwrapMonad . traverse_ (traverse_ (WrapMonad . drawing th sel))
+      unwrapMonad . traverse_ (WrapMonad . drawing th sel)
 
     drawing :: Double -> Maybe Rect -> Rect -> Render ()
     drawing th sel r =
-      let x = rectX r
-          y = rectY r
-          h = rectHeight r
-          w = rectWidth r
+      let x = r ^. rectX
+          y = r ^. rectY
+          h = r ^. rectHeight
+          w = r ^. rectWidth
           step (Just s)
             | s == r    = setSourceRGB 1.0 0 0
             | otherwise = setSourceRGB 0 0 1.0
@@ -257,10 +266,10 @@ drawViewer = liftIO . go
     drawingSel = unwrapMonad . traverse_ (WrapMonad . go)
       where
         go r =
-          let x = rectX r
-              y = rectY r
-              h = rectHeight r
-              w = rectWidth r in
+          let x = r ^. rectX
+              y = r ^. rectY
+              h = r ^. rectHeight
+              w = r ^. rectWidth in
           do  setSourceRGB 0 1.0 0
               setLineWidth 1
               rectangle x y w h

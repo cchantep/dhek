@@ -3,38 +3,43 @@
 module Types where
 
 import Control.Arrow (first)
+import Control.Lens hiding ((.=))
+import Control.Monad.State (execState)
 import Data.Aeson
 import Data.Aeson.TH
 import Data.Char
 import Data.Foldable (foldMap)
-import Data.IntMap (IntMap, alter, empty)
+import Data.IntMap (IntMap, alter, empty, fromList)
+import Data.Monoid (Monoid (..))
 import Data.String (fromString)
 import Graphics.UI.Gtk
 import Graphics.UI.Gtk.Poppler.Document (Document)
 import Version
 
-data Viewer =
-            Viewer { viewerArea           :: DrawingArea
-                   , viewerDocument       :: Document
-                   , viewerScrolledWindow :: ScrolledWindow
-                   , viewerCurrentPage    :: Int
-                   , viewerPageCount      :: Int
-                   , viewerZoom           :: Int
-                   , viewerBaseWidth      :: Int
-                   , viewerStore          :: RectStore
-                   , viewerSelectedRect   :: Maybe Rect
-                   , viewerThickness      :: Double
-                   , viewerSelection      :: Maybe Rect }
+data Viewer = Viewer { _viewerDocument    :: Document
+                     , _viewerCurrentPage :: Int
+                     , _viewerPageCount   :: Int
+                     , _viewerBoards      :: Boards }
 
-data RectStore = RectStore { rstoreState :: Int
-                           , rstoreRects :: IntMap [Rect] }
+data Board = Board { _boardRects :: IntMap Rect }
 
-data Rect = Rect { rectX      :: Double
-                 , rectY      :: Double
-                 , rectHeight :: Double
-                 , rectWidth  :: Double
-                 , rectName   :: String
-                 , rectType   :: String } deriving (Eq, Show)
+data Boards = Boards { _boardsState        :: Int
+                     , _boardsSelection    :: Maybe Rect
+                     , _boardsThick        :: Double
+                     , _boardsArea         :: DrawingArea
+                     , _boardsScrollWindow :: ScrolledWindow
+                     , _boardsSelected     :: Maybe Int
+                     , _boardsZoom         :: Int
+                     , _boardsBaseWidth    :: Int
+                     , _boardsMap          :: IntMap Board }
+
+data Rect = Rect { _rectId     :: Int
+                 , _rectX      :: Double
+                 , _rectY      :: Double
+                 , _rectHeight :: Double
+                 , _rectWidth  :: Double
+                 , _rectName   :: String
+                 , _rectType   :: String } deriving (Eq, Show)
 
 data Save = Save { saveAreas :: [(Int, Maybe [Rect])] }
 
@@ -42,14 +47,32 @@ data Field = Field { fieldRect  :: Rect
                    , fieldType  :: String
                    , fieldValue :: String }
 
+instance Monoid Board where
+  mempty = Board empty
+  mappend (Board l) (Board r) = Board (mappend l r)
+
 instance ToJSON Save where
   toJSON (Save areas) =
     let toPage (_, rects) = maybe Null (\t -> object ["areas" .= t]) rects
         pages = fmap toPage areas in
     object ["format" .= dhekFullVersion, "pages" .= pages]
 
-emptyStore :: RectStore
-emptyStore = RectStore 1 empty
+$(deriveJSON (fmap toLower . drop 4) ''Rect)
+makeLenses ''Viewer
+makeLenses ''Board
+makeLenses ''Boards
+makeLenses ''Rect
+
+boardsNew :: Int -- page count
+          -> DrawingArea
+          -> ScrolledWindow
+          -> Int -- base width
+          -> Int -- zoom
+          -> Double -- thick
+          -> Boards
+boardsNew nb area win bw z th = Boards 1 Nothing th area win Nothing z bw boards
+  where
+    boards = fromList $ fmap (\i -> (i, Board empty)) [1..nb]
 
 fillUp :: Int -> [(Int, [Rect])] -> [(Int, Maybe [Rect])]
 fillUp n xs = go xs [0..(n - 1)]
@@ -60,31 +83,29 @@ fillUp n xs = go xs [0..(n - 1)]
        | k > i  = (i, Nothing) : go v is
 
 rectNew :: Double -> Double -> Double -> Double -> Rect
-rectNew x y h w = Rect x y h w "field" "text/checkbox"
+rectNew x y h w = Rect 0 x y h w "field" "text/checkbox"
 
 normalize :: Rect -> Rect
 normalize r = newRectY newRectX
   where
-    x = rectX r
-    y = rectY r
-    w = rectWidth r
-    h = rectHeight r
+    x = _rectX r
+    y = _rectY r
+    w = _rectWidth r
+    h = _rectHeight r
 
     newRectX
-      | w < 0     = r { rectX = x + w, rectWidth = abs w }
+      | w < 0     = r { _rectX = x + w, _rectWidth = abs w }
       | otherwise = r
 
     newRectY r
-      | h < 0     = r { rectY = y + h, rectHeight = abs h }
+      | h < 0     = r { _rectY = y + h, _rectHeight = abs h }
       | otherwise = r
 
-addRect :: Int -> Rect -> RectStore -> RectStore
-addRect page x (RectStore i rects) = RectStore (i+1) newRects
+addRect :: Int -> Rect -> Boards -> Boards
+addRect page x = execState action
   where
-    newRects = alter go page rects
-    x'       = x { rectName = rectName x ++ (show i) }
-
-    go (Just xs) = Just (x':xs)
-    go _         = Just [x']
-
-$(deriveJSON (fmap toLower . drop 4) ''Rect)
+    action = do
+      i <- use boardsState
+      boardsState += 1
+      let x' = x & rectId .~ i & rectName %~ (++ show i)
+      (boardsMap.at page.traverse.boardRects.at i) ?= x'

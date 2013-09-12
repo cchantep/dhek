@@ -5,6 +5,7 @@ import Action
    onPrevState, onNextState, onNavButton,
    askDrawingViewer, loadPdf, registerViewerEvents
   )
+import Control.Lens hiding (set)
 import Control.Monad (when, void)
 import Control.Monad.Trans (liftIO)
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
@@ -14,7 +15,7 @@ import Data.Aeson (encode, decode)
 import Data.Maybe (fromJust)
 import qualified Data.IntMap as I
 import Graphics.UI.Gtk
-import Types (Viewer(..), Save(..), RectStore(..), fillUp)
+import Types
 import Utils
 
 main :: IO ()
@@ -138,9 +139,9 @@ openPdf chooser msave win = do
   name <- fmap (takeFileName . fromJust) (fileChooserGetFilename chooser)
   ref <- makeViewer uri
   v   <- readIORef ref
-  let nb   = viewerPageCount v
-      swin = viewerScrolledWindow v
-      area = viewerArea v
+  let nb   = v ^. viewerPageCount
+      swin = v ^. viewerBoards.boardsScrollWindow
+      area = v ^. viewerBoards.boardsArea
   vbox    <- vBoxNew False 10
   align   <- alignmentNew 0 0 0 0
   aswin   <- alignmentNew 0 0 1 1
@@ -179,9 +180,9 @@ openPdf chooser msave win = do
 
       onCommon name k self other ref = do
         v <- readIORef ref
-        let nb                    = viewerPageCount v
+        let nb                    = v ^. viewerPageCount
             (tSelf, tOther, newV) = onNavButton k v
-            newCur                = viewerCurrentPage newV
+            newCur                = newV ^. viewerCurrentPage
             title = name ++ " (page " ++ show newCur ++" / " ++ show nb ++ ")"
         widgetSetSensitive self (not tSelf)
         when tOther (widgetSetSensitive other True)
@@ -192,9 +193,10 @@ openPdf chooser msave win = do
       onJsonSave _ jfch ResponseCancel = widgetHide jfch
       onJsonSave ref jfch ResponseOk   = do
         v <- readIORef ref
-        let nb    = viewerPageCount v
-            rects = I.toList $ rstoreRects $ viewerStore v
-            save  = Save $ fillUp nb rects
+        let nb     = v ^. viewerPageCount
+            rects' = v ^. viewerBoards.boardsMap
+            rects  = fmap (\(i, bs) -> (i, I.elems $ bs ^. boardRects)) (I.toList rects')
+            save   = Save $ fillUp nb rects
         opt <- fileChooserGetFilename jfch
         let ensure path
               | takeExtension path == ".json" = path
@@ -204,11 +206,11 @@ openPdf chooser msave win = do
 
       onCommonScale k minus plus ref =
         let f v =
-              let z   = viewerZoom v
+              let z   = v ^. viewerBoards.boardsZoom
                   z2  = k z
                   low = (z2 - 1) < 0
                   up  = (z2 + 1) > 10
-                  v2  = v { viewerZoom = z2 } in
+                  v2  = v & viewerBoards.boardsZoom .~ z2 in
               do widgetSetSensitive minus (not low)
                  widgetSetSensitive plus (not up)
                  writeIORef ref v2
