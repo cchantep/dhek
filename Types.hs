@@ -24,7 +24,17 @@ data Viewer = Viewer { _viewerDocument    :: Document
 data Board = Board { _boardRects :: IntMap Rect }
 
 data BoardEvent = None
-                | Hold Rect (Double, Double) deriving (Show, Eq)
+                | Hold Rect (Double, Double)
+                | Resize Rect (Double, Double) Area deriving (Show, Eq)
+
+data Area = TOP_LEFT
+          | TOP
+          | TOP_RIGHT
+          | RIGHT
+          | BOTTOM_RIGHT
+          | BOTTOM
+          | BOTTOM_LEFT
+          | LEFT deriving (Enum, Show, Eq)
 
 data Boards = Boards { _boardsState        :: Int
                      , _boardsEvent        :: BoardEvent
@@ -93,6 +103,11 @@ rectNew x y h w = Rect 0 x y h w "field" "text/checkbox"
 translateRect :: Double -> Double -> Rect -> Rect
 translateRect x y r = r & rectX +~ x & rectY +~ y
 
+eventGetRect :: BoardEvent -> Maybe Rect
+eventGetRect (Hold r _)     = Just r
+eventGetRect (Resize r _ _) = Just r
+eventGetRect _              = Nothing
+
 normalize :: Rect -> Rect
 normalize r = newRectY newRectX
   where
@@ -117,3 +132,34 @@ addRect page x = execState action
       boardsState += 1
       let x' = x & rectId .~ i & rectName %~ (++ show i)
       (boardsMap.at page.traverse.boardRects.at i) ?= x'
+
+rectArea :: Double -> Rect -> Area -> Rect
+rectArea eps r area = go area
+  where
+    x = r ^. rectX
+    y = r ^. rectY
+    h = r ^. rectHeight
+    w = r ^. rectWidth
+
+    go TOP_LEFT     = rectNew x y eps eps
+    go TOP          = rectNew (x+eps) y eps (w-2*eps)
+    go TOP_RIGHT    = rectNew (x+w-eps) y eps eps
+    go RIGHT        = rectNew (x+w-eps) (y+eps) (h-2*eps) eps
+    go BOTTOM_RIGHT = rectNew (x+w-eps) (y+h-eps) eps eps
+    go BOTTOM       = rectNew (x+eps) (y+h-eps) eps (w-2*eps)
+    go BOTTOM_LEFT  = rectNew x (y+h-eps) eps eps
+    go LEFT         = rectNew x (y+eps) (h-2*eps) eps
+
+isOver :: Double -> Double -> Double -> Double -> Rect -> Bool
+isOver ratio thick x y r = go
+  where
+    x0 = r ^. rectX
+    y0 = r ^. rectY
+    h  = r ^. rectHeight
+    w  = r ^. rectWidth
+    x1 = (x0 + w + thick)
+    y1 = (y0 + h + thick)
+    x' = (x0 - thick)
+    y' = (y0 - thick)
+
+    go = x >= x' && x <= x1 && y >= y' && y <= y1

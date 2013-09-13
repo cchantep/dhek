@@ -13,7 +13,7 @@ import qualified Data.IntMap as I
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Foldable (traverse_, foldMap, foldr)
 import Data.Maybe (fromJust, isJust, isNothing)
-import Data.Monoid (First(..))
+import Data.Monoid (First(..), Sum(..))
 import Graphics.Rendering.Cairo
   (Render, setSourceRGB, scale, setLineWidth, rectangle, closePath, stroke, fill)
 import Graphics.UI.Gtk
@@ -79,6 +79,8 @@ onMove ref = do
         case event of
           (Hold rect (x0, y0)) ->
             Hold (translateRect (xR-x0) (yR-y0) rect) (xR,yR)
+          (Resize rect  (x0, y0) area) ->
+            Resize (resizeRect (xR-x0) (yR-y0) area rect) (xR, yR) area
           e -> e
       v3 = v2 & viewerBoards.boardsEvent .~ newE
 
@@ -98,6 +100,36 @@ onMove ref = do
     when changed (writeIORef ref v3)
     when changed (askDrawingViewer v3)
 
+resizeRect :: Double -> Double -> Area -> Rect -> Rect
+resizeRect dx dy area r = execState (go area) r
+  where
+    go TOP_LEFT = do
+      rectX += dx
+      rectY += dy
+      rectWidth  -= dx
+      rectHeight -= dy
+    go TOP = do
+      rectY += dy
+      rectHeight -= dy
+    go TOP_RIGHT = do
+      rectY += dy
+      rectWidth  += dx
+      rectHeight -= dy
+    go RIGHT = do
+      rectWidth += dx
+    go BOTTOM_RIGHT = do
+      rectWidth += dx
+      rectHeight += dy
+    go BOTTOM = do
+      rectHeight += dy
+    go BOTTOM_LEFT = do
+      rectX += dx
+      rectWidth -= dx
+      rectHeight += dy
+    go LEFT = do
+      rectX += dx
+      rectWidth -= dx
+
 onPress :: IORef Viewer -> EventM EButton ()
 onPress ref = do
   b <- eventButton
@@ -107,19 +139,36 @@ onPress ref = do
         (x, y) <- eventCoordinates
         ratio  <- getPageRatio ref
         v      <- liftIO $ readIORef ref
-        let sel    = v ^. viewerBoards.boardsSelected
-            page   = v ^. viewerCurrentPage
-            board  = v ^. viewerBoards.boardsMap.at page.traverse
-            selL   = viewerBoards.boardsSelection
-            recL i = board ^. boardRects.at i
-            toH r  = Hold r (x/ratio, y/ratio)
-            v'     = v & selL ?~ (rectNew (x/ratio) (y/ratio) 0 0)
-            sRec   = fmap toH (recL =<< sel)
-            ff (Hold r _) = r ^. rectId
-            board' r = board & boardRects.at (ff r) .~ Nothing
-        case sRec of
-          Nothing -> liftIO $ writeIORef ref v'
-          Just r  -> liftIO $ writeIORef ref (v & viewerBoards.boardsEvent .~ r & viewerBoards.boardsMap.at page.traverse .~ (board' r))
+        let xR = x / ratio
+            yR = y / ratio
+
+            onNoSel = viewerBoards.boardsSelection ?= rectNew xR yR 0 0
+
+            onHold board page sel h = do
+              viewerBoards.boardsEvent .= h
+              let board' = board & boardRects.at sel .~ Nothing
+              viewerBoards.boardsMap.at page.traverse .= board'
+
+            toEvent th r =
+              let areas  = enumFrom TOP_LEFT
+                  pred a = if isOver ratio th xR yR (rectArea 20 r a)
+                           then Just a
+                           else Nothing
+                  (First aOpt) = foldMap (First . pred) areas in
+              maybe (Hold r (xR, yR)) (Resize r (xR, yR)) aOpt
+
+            action = do
+              sel'   <- use (viewerBoards.boardsSelected.traverse.to Sum)
+              page   <- use viewerCurrentPage
+              thick  <- use (viewerBoards.boardsThick)
+              board  <- use (viewerBoards.boardsMap.at page.traverse)
+              select <- use (viewerBoards.boardsSelection)
+              let sel  = getSum sel'
+                  rOpt = board ^. boardRects.at sel
+                  hOpt = fmap (toEvent thick) rOpt
+              maybe onNoSel (onHold board page sel) hOpt
+
+        liftIO $ writeIORef ref (execState action v)
 
 onRelease :: IORef Viewer -> EventM EButton ()
 onRelease ref = do
@@ -138,11 +187,10 @@ onRelease ref = do
                   let x' = x & rectId .~ id & rectName %~ (++ show id)
                   board.boardRects.at id ?= x'
 
-                onHold (Hold r _) = do
+                onHold r = do
                   board <- use (viewerBoards.boardsMap.at page.traverse)
                   let rId = r ^. rectId
                   viewerBoards.boardsMap.at page.traverse .= (board & boardRects.at rId .~ (Just r))
-                onHold _ = return ()
 
                 action = do
                   selection <- use (viewerBoards.boardsSelection)
@@ -150,7 +198,7 @@ onRelease ref = do
                   viewerBoards.boardsSelection .= Nothing
                   viewerBoards.boardsEvent .= None
                   traverse_ insert selection
-                  onHold event
+                  traverse_ onHold (eventGetRect event)
                 newV = execState action v
             putStrLn ("End in " ++ show (x,y))
             writeIORef ref newV
@@ -257,28 +305,21 @@ drawViewer = liftIO . go
           event = v ^. viewerBoards.boardsEvent
           evRect =
             case event of
-              (Hold r _) -> Just r
+              (Hold r _)     -> Just r
+              (Resize r _ _) -> Just r
               _          -> Nothing
-          --v ^. viewerBoards.boardsMap.at page.traverse.boardRects.at sel'
-          --sf idx  = use (viewerBoards.boardsMap.at page.traverse.boardRects.at idx)
-          --sel     = evalState (traverse sf sel') v
           rectSel = v ^. viewerBoards.boardsSelection
       frame <- widgetGetDrawWindow area
       (fW, fH) <- drawableGetSize frame
       widgetSetSizeRequest area (truncate width) (truncate height)
       renderWithDrawable frame (setSourceRGB 1.0 1.0 1.0 >>
-                                --setLineWidth 10 >>
                                 rectangle 0 0 (fromIntegral fW) (fromIntegral fH) >>
-                                fill >>
-                                --closePath >>
-                                --stroke >>
-                                scale ratio ratio        >>
-                                pageRender page          >>
-                                --pushGroup                >>
+                                fill                   >>
+                                scale ratio ratio      >>
+                                pageRender page        >>
                                 drawRects th sel rects >>
-                                drawingSel rectSel >>
-                                drawRects th Nothing evRect) -- >>
-                                --popGroupToSource)
+                                drawingSel rectSel     >>
+                                drawRects th Nothing evRect)
 
     drawRects th sel =
       unwrapMonad . traverse_ (WrapMonad . drawing th sel)
