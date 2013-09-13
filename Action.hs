@@ -13,7 +13,7 @@ import qualified Data.IntMap as I
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Foldable (traverse_, foldMap, foldr)
 import Data.Maybe (fromJust, isJust, isNothing)
-import Data.Monoid (First(..))
+import Data.Monoid (First(..), Sum(..))
 import Graphics.Rendering.Cairo
   (Render, setSourceRGB, scale, setLineWidth, rectangle, closePath, stroke, fill)
 import Graphics.UI.Gtk
@@ -107,19 +107,28 @@ onPress ref = do
         (x, y) <- eventCoordinates
         ratio  <- getPageRatio ref
         v      <- liftIO $ readIORef ref
-        let sel    = v ^. viewerBoards.boardsSelected
-            page   = v ^. viewerCurrentPage
-            board  = v ^. viewerBoards.boardsMap.at page.traverse
-            selL   = viewerBoards.boardsSelection
-            recL i = board ^. boardRects.at i
-            toH r  = Hold r (x/ratio, y/ratio)
-            v'     = v & selL ?~ (rectNew (x/ratio) (y/ratio) 0 0)
-            sRec   = fmap toH (recL =<< sel)
-            ff (Hold r _) = r ^. rectId
-            board' r = board & boardRects.at (ff r) .~ Nothing
-        case sRec of
-          Nothing -> liftIO $ writeIORef ref v'
-          Just r  -> liftIO $ writeIORef ref (v & viewerBoards.boardsEvent .~ r & viewerBoards.boardsMap.at page.traverse .~ (board' r))
+        let xR = x / ratio
+            yR = y / ratio
+
+            onNoSel = viewerBoards.boardsSelection ?= rectNew xR yR 0 0
+
+            onHold board page sel h = do
+              viewerBoards.boardsEvent .= h
+              let board' = board & boardRects.at sel .~ Nothing
+              viewerBoards.boardsMap.at page.traverse .= board'
+
+            action = do
+              sel'   <- use (viewerBoards.boardsSelected.traverse.to Sum)
+              page   <- use viewerCurrentPage
+              board  <- use (viewerBoards.boardsMap.at page.traverse)
+              select <- use (viewerBoards.boardsSelection)
+              let sel      = getSum sel'
+                  rOpt     = board ^. boardRects.at sel
+                  toHold r = Hold r (xR, yR)
+                  hOpt     = fmap toHold rOpt
+              maybe onNoSel (onHold board page sel) hOpt
+
+        liftIO $ writeIORef ref (execState action v)
 
 onRelease :: IORef Viewer -> EventM EButton ()
 onRelease ref = do
