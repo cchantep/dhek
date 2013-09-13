@@ -25,7 +25,7 @@ data Board = Board { _boardRects :: IntMap Rect }
 
 data BoardEvent = None
                 | Hold Rect (Double, Double)
-                | Resize Rect deriving (Show, Eq)
+                | Resize Rect (Double, Double) Area deriving (Show, Eq)
 
 data Area = TOP_LEFT
           | TOP
@@ -34,7 +34,7 @@ data Area = TOP_LEFT
           | BOTTOM_RIGHT
           | BOTTOM
           | BOTTOM_LEFT
-          | LEFT deriving Enum
+          | LEFT deriving (Enum, Show, Eq)
 
 data Boards = Boards { _boardsState        :: Int
                      , _boardsEvent        :: BoardEvent
@@ -103,6 +103,11 @@ rectNew x y h w = Rect 0 x y h w "field" "text/checkbox"
 translateRect :: Double -> Double -> Rect -> Rect
 translateRect x y r = r & rectX +~ x & rectY +~ y
 
+eventGetRect :: BoardEvent -> Maybe Rect
+eventGetRect (Hold r _)     = Just r
+eventGetRect (Resize r _ _) = Just r
+eventGetRect _              = Nothing
+
 normalize :: Rect -> Rect
 normalize r = newRectY newRectX
   where
@@ -141,7 +146,7 @@ rectArea eps r area = go area
     go TOP_RIGHT    = rectNew (x+w-eps) y eps eps
     go RIGHT        = rectNew (x+w-eps) (y+eps) (h-2*eps) eps
     go BOTTOM_RIGHT = rectNew (x+w-eps) (y+h-eps) eps eps
-    go BOTTOM       = rectNew (x+eps) (y+h+eps) eps (w-2*eps)
+    go BOTTOM       = rectNew (x+eps) (y+h-eps) eps (w-2*eps)
     go BOTTOM_LEFT  = rectNew x (y+h-eps) eps eps
     go LEFT         = rectNew x (y+eps) (h-2*eps) eps
 
@@ -152,9 +157,9 @@ isOver ratio thick x y r = go
     y0 = r ^. rectY
     h  = r ^. rectHeight
     w  = r ^. rectWidth
-    x1 = (x0 + w + thick) * ratio
-    y1 = (y0 + h + thick) * ratio
-    x' = (x0 - thick) * ratio
-    y' = (y0 - thick) * ratio
+    x1 = (x0 + w + thick)
+    y1 = (y0 + h + thick)
+    x' = (x0 - thick)
+    y' = (y0 - thick)
 
     go = x >= x' && x <= x1 && y >= y' && y <= y1
