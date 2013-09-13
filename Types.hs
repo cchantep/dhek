@@ -23,7 +23,11 @@ data Viewer = Viewer { _viewerDocument    :: Document
 
 data Board = Board { _boardRects :: IntMap Rect }
 
+data BoardEvent = None
+                | Hold Rect (Double, Double) deriving (Show, Eq)
+
 data Boards = Boards { _boardsState        :: Int
+                     , _boardsEvent        :: BoardEvent
                      , _boardsSelection    :: Maybe Rect
                      , _boardsThick        :: Double
                      , _boardsArea         :: DrawingArea
@@ -70,7 +74,8 @@ boardsNew :: Int -- page count
           -> Int -- zoom
           -> Double -- thick
           -> Boards
-boardsNew nb area win bw z th = Boards 1 Nothing th area win Nothing z bw boards
+boardsNew nb area win bw z th =
+  Boards 1 None Nothing th area win Nothing z bw boards
   where
     boards = fromList $ fmap (\i -> (i, Board empty)) [1..nb]
 
@@ -84,6 +89,9 @@ fillUp n xs = go xs [0..(n - 1)]
 
 rectNew :: Double -> Double -> Double -> Double -> Rect
 rectNew x y h w = Rect 0 x y h w "field" "text/checkbox"
+
+translateRect :: Double -> Double -> Rect -> Rect
+translateRect x y r = r & rectX +~ x & rectY +~ y
 
 normalize :: Rect -> Rect
 normalize r = newRectY newRectX

@@ -67,14 +67,24 @@ onMove ref = do
   ratio <- getPageRatio ref
   dopt  <- rectDetection v ratio
   sopt  <- updateSelection v ratio
+  (x, y) <- eventCoordinates
   let page = v ^. viewerCurrentPage
       detL  = viewerBoards.boardsSelected
       selL  = viewerBoards.boardsSelection
       v1 = v & detL .~ dopt
       v2 = foldr (\r v -> v & selL ?~ r) v1 sopt
+      event = v ^. viewerBoards.boardsEvent
+      (xR, yR) = (x/ratio, y/ratio)
+      newE =
+        case event of
+          (Hold rect (x0, y0)) ->
+            Hold (translateRect (xR-x0) (yR-y0) rect) (xR,yR)
+          e -> e
+      v3 = v2 & viewerBoards.boardsEvent .~ newE
 
-      changed = (v ^. viewerBoards.boardsSelection) /= (v2 ^. viewerBoards.boardsSelection) ||
-                (v ^. viewerBoards.boardsSelected) /= (v2 ^. viewerBoards.boardsSelected)
+      changed = (v ^. viewerBoards.boardsSelection) /= (v3 ^. viewerBoards.boardsSelection) ||
+                (v ^. viewerBoards.boardsSelected) /= (v3 ^. viewerBoards.boardsSelected) ||
+                (v ^. viewerBoards.boardsEvent) /= (v3 ^. viewerBoards.boardsEvent)
 
       cursor
         | isJust dopt && isNothing sopt = Hand1
@@ -85,8 +95,8 @@ onMove ref = do
 
   liftIO $ do
     when changed updateCursor
-    when changed (writeIORef ref v2)
-    when changed (askDrawingViewer v2)
+    when changed (writeIORef ref v3)
+    when changed (askDrawingViewer v3)
 
 onPress :: IORef Viewer -> EventM EButton ()
 onPress ref = do
@@ -96,11 +106,20 @@ onPress ref = do
       go = do
         (x, y) <- eventCoordinates
         ratio  <- getPageRatio ref
-        liftIO $ putStrLn ("Start in " ++ show (x,y))
-        let f v =
-              let selL = viewerBoards.boardsSelection in
-              v & selL ?~ (rectNew (x/ratio) (y/ratio) 0 0)
-        liftIO $ modifyIORef ref f
+        v      <- liftIO $ readIORef ref
+        let sel    = v ^. viewerBoards.boardsSelected
+            page   = v ^. viewerCurrentPage
+            board  = v ^. viewerBoards.boardsMap.at page.traverse
+            selL   = viewerBoards.boardsSelection
+            recL i = board ^. boardRects.at i
+            toH r  = Hold r (x/ratio, y/ratio)
+            v'     = v & selL ?~ (rectNew (x/ratio) (y/ratio) 0 0)
+            sRec   = fmap toH (recL =<< sel)
+            ff (Hold r _) = r ^. rectId
+            board' r = board & boardRects.at (ff r) .~ Nothing
+        case sRec of
+          Nothing -> liftIO $ writeIORef ref v'
+          Just r  -> liftIO $ writeIORef ref (v & viewerBoards.boardsEvent .~ r & viewerBoards.boardsMap.at page.traverse .~ (board' r))
 
 onRelease :: IORef Viewer -> EventM EButton ()
 onRelease ref = do
@@ -118,10 +137,20 @@ onRelease ref = do
                   id <- use (viewerBoards.boardsState)
                   let x' = x & rectId .~ id & rectName %~ (++ show id)
                   board.boardRects.at id ?= x'
+
+                onHold (Hold r _) = do
+                  board <- use (viewerBoards.boardsMap.at page.traverse)
+                  let rId = r ^. rectId
+                  viewerBoards.boardsMap.at page.traverse .= (board & boardRects.at rId .~ (Just r))
+                onHold _ = return ()
+
                 action = do
                   selection <- use (viewerBoards.boardsSelection)
+                  event     <- use (viewerBoards.boardsEvent)
                   viewerBoards.boardsSelection .= Nothing
+                  viewerBoards.boardsEvent .= None
                   traverse_ insert selection
+                  onHold event
                 newV = execState action v
             putStrLn ("End in " ++ show (x,y))
             writeIORef ref newV
@@ -224,7 +253,13 @@ drawViewer = liftIO . go
           rects   = I.elems rects'
           sel' = v ^. viewerBoards.boardsSelected
           rmap = v ^. viewerBoards.boardsMap.at pageId.traverse.boardRects
-          sel = (\i -> I.lookup i rmap) =<< sel' --v ^. viewerBoards.boardsMap.at page.traverse.boardRects.at sel'
+          sel = (\i -> I.lookup i rmap) =<< sel'
+          event = v ^. viewerBoards.boardsEvent
+          evRect =
+            case event of
+              (Hold r _) -> Just r
+              _          -> Nothing
+          --v ^. viewerBoards.boardsMap.at page.traverse.boardRects.at sel'
           --sf idx  = use (viewerBoards.boardsMap.at page.traverse.boardRects.at idx)
           --sel     = evalState (traverse sf sel') v
           rectSel = v ^. viewerBoards.boardsSelection
@@ -241,7 +276,8 @@ drawViewer = liftIO . go
                                 pageRender page          >>
                                 --pushGroup                >>
                                 drawRects th sel rects >>
-                                drawingSel rectSel) -- >>
+                                drawingSel rectSel >>
+                                drawRects th Nothing evRect) -- >>
                                 --popGroupToSource)
 
     drawRects th sel =
