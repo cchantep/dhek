@@ -146,27 +146,33 @@ openPdf chooser msave win = do
       area = v ^. viewerBoards.boardsArea
   vbox    <- vBoxNew False 10
   hbox    <- hBoxNew False 10
+  vleft   <- vBoxNew False 10
   align   <- alignmentNew 0 0 0 0
   aswin   <- alignmentNew 0 0 1 1
+  arem    <- alignmentNew 0.5 0 0 0
   bbox    <- hButtonBoxNew
   scale   <- hScaleNewWithRange 100 200 1
   prev    <- buttonNewWithLabel "Previous"
   next    <- buttonNewWithLabel "Next"
   minus   <- buttonNewWithLabel "-"
   plus    <- buttonNewWithLabel "+"
+  rem     <- buttonNewWithLabel "Remove"
   jfch    <- createJsonChooserDialog win
   file    <- fileChooserSetDoOverwriteConfirmation jfch True
   sep     <- vSeparatorNew
+  sel     <- treeViewGetSelection treeV
   prev  `on` buttonActivated $ onPrev name prev next store ref
   next  `on` buttonActivated $ onNext name next prev store ref
   minus `on` buttonActivated $ onCommonScale pred minus plus ref
   plus  `on` buttonActivated $ onCommonScale succ minus plus ref
+  rem   `on` buttonActivated $ onRemoveRect sel store ref
   msave `on` menuItemActivate $ void $ dialogRun jfch
   jfch  `on` response $ onJsonSave ref jfch
   windowSetTitle win (name ++ " (page 1 / " ++ show nb ++ ")")
   widgetSetSensitive prev False
   widgetSetSensitive next (nb /= 1)
   widgetSetSensitive msave True
+  containerAdd arem rem
   containerAdd align bbox
   containerAdd bbox prev
   containerAdd bbox next
@@ -175,9 +181,11 @@ openPdf chooser msave win = do
   containerAdd bbox plus
   boxPackStart vbox align PackNatural 0
   containerAdd aswin swin
+  boxPackStart vleft arem PackNatural 0
+  boxPackStart vleft treeV PackGrow 0
   boxPackStart vbox aswin PackGrow 0
   boxPackStart hbox vbox PackGrow 0
-  boxPackStart hbox treeV PackGrow 0
+  boxPackStart hbox vleft PackGrow 0
   return hbox
     where
       createTreeView store ref = do
@@ -192,6 +200,20 @@ openPdf chooser msave win = do
         sel <- treeViewGetSelection treeV
         sel `on` treeSelectionSelectionChanged $ onSelection sel store ref
         return treeV
+
+      onRemoveRect sel store ref = do
+        v <- readIORef ref
+        let page = v ^. viewerCurrentPage
+            del i = do
+              let idx = listStoreIterToIndex i
+              r <- listStoreGetValue store idx
+              let id = r ^. rectId
+                  v' = v & viewerBoards.boardsMap.at page.traverse.boardRects.at id .~ Nothing
+              listStoreRemove store idx
+              writeIORef ref v'
+              askDrawingViewer v'
+        opt <- treeSelectionGetSelected sel
+        traverse_ del opt
 
       onSelection sel store ref = do
         opt  <- treeSelectionGetSelected sel
