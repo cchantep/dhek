@@ -5,7 +5,7 @@ import Prelude hiding (foldr)
 import Control.Applicative (WrappedMonad(..))
 import Control.Lens
 import Control.Monad (void, when, join)
-import Control.Monad.State (execState, evalState)
+import Control.Monad.State (execState, evalState, execStateT)
 import Control.Monad.Reader (runReaderT, ask)
 import Control.Monad.Trans (MonadIO(..))
 import Data.Array
@@ -170,8 +170,8 @@ onPress ref = do
 
         liftIO $ writeIORef ref (execState action v)
 
-onRelease :: IORef Viewer -> EventM EButton ()
-onRelease ref = do
+onRelease :: ListStore Rect -> IORef Viewer -> EventM EButton ()
+onRelease store ref = do
   b <- eventButton
   when (b == LeftButton) go
     where
@@ -184,13 +184,16 @@ onRelease ref = do
                 insert x = do
                   viewerBoards.boardsState += 1
                   id <- use (viewerBoards.boardsState)
-                  let x' = x & rectId .~ id & rectName %~ (++ show id)
-                  board.boardRects.at id ?= x'
+                  let x'  = x & rectId .~ id & rectName %~ (++ show id)
+                      x'' = normalize x'
+                  liftIO $ listStoreAppend store x''
+                  board.boardRects.at id ?= x''
 
                 onHold r = do
                   board <- use (viewerBoards.boardsMap.at page.traverse)
                   let rId = r ^. rectId
-                  viewerBoards.boardsMap.at page.traverse .= (board & boardRects.at rId .~ (Just r))
+                      r'  = normalize r
+                  viewerBoards.boardsMap.at page.traverse .= (board & boardRects.at rId .~ (Just r'))
 
                 action = do
                   selection <- use (viewerBoards.boardsSelection)
@@ -199,7 +202,7 @@ onRelease ref = do
                   viewerBoards.boardsEvent .= None
                   traverse_ insert selection
                   traverse_ onHold (eventGetRect event)
-                newV = execState action v
+            newV <- execStateT action v
             putStrLn ("End in " ++ show (x,y))
             writeIORef ref newV
             askDrawingViewer newV
@@ -258,8 +261,8 @@ loadPdf path = do
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
   return (Viewer doc 1 nb (boardsNew nb area swin 777 3 1.0))
 
-registerViewerEvents :: IORef Viewer -> IO ()
-registerViewerEvents ref = do
+registerViewerEvents :: ListStore Rect -> IORef Viewer -> IO ()
+registerViewerEvents store ref = do
   v <- readIORef ref
   let area = v ^. viewerBoards.boardsArea
   widgetAddEvents area [PointerMotionMask]
@@ -267,7 +270,7 @@ registerViewerEvents ref = do
   area `on` motionNotifyEvent $ tryEvent $ onMove ref
   area `on` buttonPressEvent $ tryEvent $ onPress ref
   area `on` enterNotifyEvent $ tryEvent $ onEnter
-  void $ area `on` buttonReleaseEvent $ tryEvent $ onRelease ref
+  void $ area `on` buttonReleaseEvent $ tryEvent $ onRelease store ref
     where
       onEnter = do
         frame  <- eventWindow
