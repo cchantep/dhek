@@ -133,16 +133,19 @@ createNavButtons = do
   nextB <- buttonNewWithLabel "Next"
   return (predB, nextB)
 
-openPdf :: FileChooserDialog -> MenuItem -> Window -> IO VBox
+openPdf :: FileChooserDialog -> MenuItem -> Window -> IO HBox
 openPdf chooser msave win = do
-  uri <- fmap fromJust (fileChooserGetURI chooser)
-  name <- fmap (takeFileName . fromJust) (fileChooserGetFilename chooser)
-  ref <- makeViewer uri
-  v   <- readIORef ref
+  uri    <- fmap fromJust (fileChooserGetURI chooser)
+  name   <- fmap (takeFileName . fromJust) (fileChooserGetFilename chooser)
+  store  <- listStoreNew ([] :: [Rect])
+  ref    <- makeViewer uri store
+  treeV  <- createTreeView store ref
+  v      <- readIORef ref
   let nb   = v ^. viewerPageCount
       swin = v ^. viewerBoards.boardsScrollWindow
       area = v ^. viewerBoards.boardsArea
   vbox    <- vBoxNew False 10
+  hbox    <- hBoxNew False 10
   align   <- alignmentNew 0 0 0 0
   aswin   <- alignmentNew 0 0 1 1
   bbox    <- hButtonBoxNew
@@ -173,8 +176,30 @@ openPdf chooser msave win = do
   boxPackStart vbox align PackNatural 0
   containerAdd aswin swin
   boxPackStart vbox aswin PackGrow 0
-  return vbox
+  boxPackStart hbox vbox PackGrow 0
+  boxPackStart hbox treeV PackGrow 0
+  return hbox
     where
+      createTreeView store ref = do
+        treeV <- treeViewNewWithModel store
+        col <- treeViewColumnNew
+        treeViewColumnSetTitle col "Areas"
+        trenderer <- cellRendererTextNew
+        cellLayoutPackStart col trenderer False
+        cellLayoutSetAttributes col trenderer store $ \r -> [cellText := _rectName r]
+        treeViewAppendColumn treeV col
+        sel <- treeViewGetSelection treeV
+        sel `on` treeSelectionSelectionChanged $ onSelection sel store ref
+        return treeV
+
+      onSelection sel store ref = do
+        opt  <- treeSelectionGetSelected sel
+        rOpt <- traverse (listStoreGetValue store . listStoreIterToIndex) opt
+        v    <- readIORef ref
+        let v' = v & viewerBoards.boardsSelected .~ (fmap _rectId rOpt)
+        writeIORef ref v'
+        askDrawingViewer v'
+
       onPrev name prev next ref = onCommon name onPrevState prev next ref
       onNext name next prev ref = onCommon name onNextState next prev ref
 
@@ -229,9 +254,9 @@ openPdf chooser msave win = do
 createTable :: IO Table
 createTable = tableNew 2 2 False
 
-makeViewer :: String -> IO (IORef Viewer)
-makeViewer filepath = do
+makeViewer :: String -> ListStore Rect -> IO (IORef Viewer)
+makeViewer filepath store = do
   viewer <- loadPdf filepath
   ref    <- newIORef viewer
-  registerViewerEvents ref
+  registerViewerEvents store ref
   return ref
