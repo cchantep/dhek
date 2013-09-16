@@ -85,7 +85,7 @@ boardsNew :: Int -- page count
           -> Double -- thick
           -> Boards
 boardsNew nb area win bw z th =
-  Boards 1 None Nothing th area win Nothing z bw boards
+  Boards 0 None Nothing th area win Nothing z bw boards
   where
     boards = fromList $ fmap (\i -> (i, Board empty)) [1..nb]
 

@@ -133,16 +133,19 @@ createNavButtons = do
   nextB <- buttonNewWithLabel "Next"
   return (predB, nextB)
 
-openPdf :: FileChooserDialog -> MenuItem -> Window -> IO VBox
+openPdf :: FileChooserDialog -> MenuItem -> Window -> IO HBox
 openPdf chooser msave win = do
-  uri <- fmap fromJust (fileChooserGetURI chooser)
-  name <- fmap (takeFileName . fromJust) (fileChooserGetFilename chooser)
-  ref <- makeViewer uri
-  v   <- readIORef ref
+  uri    <- fmap fromJust (fileChooserGetURI chooser)
+  name   <- fmap (takeFileName . fromJust) (fileChooserGetFilename chooser)
+  store  <- listStoreNew ([] :: [Rect])
+  ref    <- makeViewer uri store
+  treeV  <- createTreeView store ref
+  v      <- readIORef ref
   let nb   = v ^. viewerPageCount
       swin = v ^. viewerBoards.boardsScrollWindow
       area = v ^. viewerBoards.boardsArea
   vbox    <- vBoxNew False 10
+  hbox    <- hBoxNew False 10
   align   <- alignmentNew 0 0 0 0
   aswin   <- alignmentNew 0 0 1 1
   bbox    <- hButtonBoxNew
@@ -154,8 +157,8 @@ openPdf chooser msave win = do
   jfch    <- createJsonChooserDialog win
   file    <- fileChooserSetDoOverwriteConfirmation jfch True
   sep     <- vSeparatorNew
-  prev  `on` buttonActivated $ onPrev name prev next ref
-  next  `on` buttonActivated $ onNext name next prev ref
+  prev  `on` buttonActivated $ onPrev name prev next store ref
+  next  `on` buttonActivated $ onNext name next prev store ref
   minus `on` buttonActivated $ onCommonScale pred minus plus ref
   plus  `on` buttonActivated $ onCommonScale succ minus plus ref
   msave `on` menuItemActivate $ void $ dialogRun jfch
@@ -173,17 +176,44 @@ openPdf chooser msave win = do
   boxPackStart vbox align PackNatural 0
   containerAdd aswin swin
   boxPackStart vbox aswin PackGrow 0
-  return vbox
+  boxPackStart hbox vbox PackGrow 0
+  boxPackStart hbox treeV PackGrow 0
+  return hbox
     where
-      onPrev name prev next ref = onCommon name onPrevState prev next ref
-      onNext name next prev ref = onCommon name onNextState next prev ref
+      createTreeView store ref = do
+        treeV <- treeViewNewWithModel store
+        col <- treeViewColumnNew
+        treeViewColumnSetTitle col "Areas"
+        trenderer <- cellRendererTextNew
+        cellLayoutPackStart col trenderer False
+        let mapping r = [cellText := r ^. rectName]
+        cellLayoutSetAttributes col trenderer store mapping
+        treeViewAppendColumn treeV col
+        sel <- treeViewGetSelection treeV
+        sel `on` treeSelectionSelectionChanged $ onSelection sel store ref
+        return treeV
 
-      onCommon name k self other ref = do
+      onSelection sel store ref = do
+        opt  <- treeSelectionGetSelected sel
+        rOpt <- traverse (listStoreGetValue store . listStoreIterToIndex) opt
+        v    <- readIORef ref
+        let v' = v & viewerBoards.boardsSelected .~ (fmap _rectId rOpt)
+        writeIORef ref v'
+        askDrawingViewer v'
+
+      onPrev name prev next s ref = onCommon name onPrevState prev next s ref
+      onNext name next prev s ref = onCommon name onNextState next prev s ref
+
+      onCommon name k self other store ref = do
         v <- readIORef ref
         let nb                    = v ^. viewerPageCount
             (tSelf, tOther, newV) = onNavButton k v
             newCur                = newV ^. viewerCurrentPage
             title = name ++ " (page " ++ show newCur ++" / " ++ show nb ++ ")"
+            rects =
+              v ^. viewerBoards.boardsMap.at newCur.traverse.boardRects.to I.elems
+        listStoreClear store
+        traverse_ (listStoreAppend store) rects
         widgetSetSensitive self (not tSelf)
         when tOther (widgetSetSensitive other True)
         writeIORef ref newV
@@ -229,9 +259,9 @@ openPdf chooser msave win = do
 createTable :: IO Table
 createTable = tableNew 2 2 False
 
-makeViewer :: String -> IO (IORef Viewer)
-makeViewer filepath = do
+makeViewer :: String -> ListStore Rect -> IO (IORef Viewer)
+makeViewer filepath store = do
   viewer <- loadPdf filepath
   ref    <- newIORef viewer
-  registerViewerEvents ref
+  registerViewerEvents store ref
   return ref
