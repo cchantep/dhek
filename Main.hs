@@ -181,8 +181,8 @@ openPdf chooser msave win = do
   containerAdd bbox plus
   boxPackStart vbox align PackNatural 0
   containerAdd aswin swin
-  boxPackStart vleft arem PackNatural 0
   boxPackStart vleft treeV PackGrow 0
+  boxPackStart vleft arem PackNatural 0
   boxPackStart vbox aswin PackGrow 0
   boxPackStart hbox vbox PackGrow 0
   boxPackStart hbox vleft PackGrow 0
