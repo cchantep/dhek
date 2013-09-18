@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
-module Types where
+module Dhek.Types where
 
 import Control.Arrow (first)
 import Control.Lens hiding ((.=))
@@ -12,9 +12,9 @@ import Data.Foldable (foldMap)
 import Data.IntMap (IntMap, alter, empty, fromList)
 import Data.Monoid (Monoid (..))
 import Data.String (fromString)
+import Dhek.Version
 import Graphics.UI.Gtk
 import Graphics.UI.Gtk.Poppler.Document (Document)
-import Version
 
 data Viewer = Viewer { _viewerDocument    :: Document
                      , _viewerCurrentPage :: Int

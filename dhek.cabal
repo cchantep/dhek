@@ -12,9 +12,12 @@ cabal-version:       >=1.8
 
 executable dhek
   main-is: Main.hs
-  other-modules: Utils
-                 Action
-                 Types
+  other-modules:
+                 Dhek.Action
+                 Dhek.Callbacks
+                 Dhek.Types
+                 Dhek.Utils
+                 Dhek.Views
   build-depends:       base          == 4.6.*
                        , gtk         >= 0.12.4
                        , poppler     == 0.12.2.2

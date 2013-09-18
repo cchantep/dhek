@@ -1,4 +1,4 @@
-module Version where
+module Dhek.Version where
 
 dhekVersion :: String
 dhekVersion = "0.1.0.0"

@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
-module Utils (takeFileName, takeExtension)  where
+module Dhek.Utils (takeFileName, takeExtension)  where
 
-#include "config.h"
+#include "../config.h"
 
 #if defined __WINDOWS__
 import System.FilePath.Windows
