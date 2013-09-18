@@ -40,7 +40,7 @@ zoomValues = array (0, 10) values
 askDrawingViewer :: Viewer -> IO ()
 askDrawingViewer v =
     let page = v ^. viewerCurrentPage
-        area = v ^. viewerBoards.boardsArea in
+        area = v ^. viewerArea in
     widgetQueueDraw area
 
 onPrevState :: Int -> Int -> (Bool, Bool, Int)
@@ -59,6 +59,19 @@ onNavButton k v =
         cur   = v ^. viewerCurrentPage
         (tPrev, tNext, newCur) = k cur count in
     (tPrev, tNext, v & viewerCurrentPage .~ newCur)
+
+saveToBoards :: Save -> Boards
+saveToBoards (Save _ xs) = execState (traverse_ go xs) (boardsNew nb)
+    where
+      nb = length xs
+
+      go (page, rects) = traverse_ (traverse_ (insert page)) rects
+
+      insert page r = do
+        boardsState += 1
+        id <- use boardsState
+        let r' = r & rectId .~ id
+        boardsMap.at page.traverse.boardRects.at id ?= r'
 
 resizeRect :: Double -> Double -> Area -> Rect -> Rect
 resizeRect dx dy area r = execState (go area) r
@@ -101,15 +114,15 @@ loadPdf path = do
   nb   <- documentGetNPages doc
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
-  return (Viewer doc 1 nb (boardsNew nb area swin 777 3 1.0))
+  return (Viewer doc 1 nb area swin 777 3 1.0 (boardsNew nb))
 
 getPageAndSize :: IORef Viewer -> IO (Page, Double, Double, Double)
 getPageAndSize ref = do
   v <- readIORef ref
   let doc   = v ^. viewerDocument
       cur   = v ^. viewerCurrentPage
-      baseW = v ^. viewerBoards.boardsBaseWidth
-      idx   = v ^. viewerBoards.boardsZoom
+      baseW = v ^. viewerBaseWidth
+      idx   = v ^. viewerZoom
       zoom  = zoomValues ! idx
   page <- documentGetPage doc (cur - 1)
   (width, height) <- pageGetSize page
@@ -123,9 +136,9 @@ drawViewer = liftIO . go
       go ref = do
         v <- readIORef ref
         (page, ratio, width, height) <- getPageAndSize ref
-        let th      = v ^. viewerBoards.boardsThick
+        let th      = v ^. viewerThick
             pageId  = v ^. viewerCurrentPage
-            area    = v ^. viewerBoards.boardsArea
+            area    = v ^. viewerArea
             rects'  = v ^. viewerBoards.boardsMap.at pageId.traverse.boardRects
             rects   = I.elems rects'
             sel' = v ^. viewerBoards.boardsSelected

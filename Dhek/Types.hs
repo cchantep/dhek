@@ -2,26 +2,36 @@
 {-# LANGUAGE TemplateHaskell   #-}
 module Dhek.Types where
 
+import Control.Applicative ((<*>), (<$>))
 import Control.Arrow (first)
-import Control.Lens hiding ((.=))
-import Control.Monad.State (execState)
+import Control.Lens hiding ((.=), get)
+import Control.Monad (mzero)
+import Control.Monad.State (execState, evalStateT, modify, get)
+import Control.Monad.Trans (lift)
 import Data.Aeson
+import Data.Aeson.Types (Parser)
 import Data.Aeson.TH
 import Data.Char
 import Data.Foldable (foldMap)
 import Data.IntMap (IntMap, alter, empty, fromList)
 import Data.Monoid (Monoid (..))
 import Data.String (fromString)
+import qualified Data.Vector as V
 import Dhek.Version
-import Graphics.UI.Gtk
+import Graphics.UI.Gtk hiding (get)
 import Graphics.UI.Gtk.Poppler.Document (Document)
 
-data Viewer = Viewer { _viewerDocument    :: Document
-                     , _viewerCurrentPage :: Int
-                     , _viewerPageCount   :: Int
-                     , _viewerBoards      :: Boards }
+data Viewer = Viewer { _viewerDocument     :: Document
+                     , _viewerCurrentPage  :: Int
+                     , _viewerPageCount    :: Int
+                     , _viewerArea         :: DrawingArea
+                     , _viewerScrollWindow :: ScrolledWindow
+                     , _viewerBaseWidth    :: Int
+                     , _viewerZoom         :: Int
+                     , _viewerThick        :: Double
+                     , _viewerBoards       :: Boards }
 
-data Board = Board { _boardRects :: IntMap Rect }
+data Board = Board { _boardRects :: IntMap Rect } deriving Show
 
 data BoardEvent = None
                 | Hold Rect (Double, Double)
@@ -39,12 +49,7 @@ data Area = TOP_LEFT
 data Boards = Boards { _boardsState        :: Int
                      , _boardsEvent        :: BoardEvent
                      , _boardsSelection    :: Maybe Rect
-                     , _boardsThick        :: Double
-                     , _boardsArea         :: DrawingArea
-                     , _boardsScrollWindow :: ScrolledWindow
                      , _boardsSelected     :: Maybe Int
-                     , _boardsZoom         :: Int
-                     , _boardsBaseWidth    :: Int
                      , _boardsMap          :: IntMap Board }
 
 data Rect = Rect { _rectId     :: Int
@@ -55,47 +60,93 @@ data Rect = Rect { _rectId     :: Int
                  , _rectName   :: String
                  , _rectType   :: String } deriving (Eq, Show)
 
-data Save = Save { saveAreas :: [(Int, Maybe [Rect])] }
+data Save = Save { saveVersion :: String
+                 , saveAreas   :: [(Int, Maybe [Rect])] }
 
 data Field = Field { fieldRect  :: Rect
                    , fieldType  :: String
                    , fieldValue :: String }
+
+makeLenses ''Viewer
+makeLenses ''Board
+makeLenses ''Boards
+makeLenses ''Rect
 
 instance Monoid Board where
     mempty = Board empty
     mappend (Board l) (Board r) = Board (mappend l r)
 
 instance ToJSON Save where
-    toJSON (Save areas) =
+    toJSON (Save v areas) =
         let toPage (_, rects) = maybe Null (\t -> object ["areas" .= t]) rects
             pages             = fmap toPage areas in
-        object ["format" .= dhekFullVersion, "pages" .= pages]
+        object ["format" .= v, "pages" .= pages]
 
-$(deriveJSON (fmap toLower . drop 4) ''Rect)
-makeLenses ''Viewer
-makeLenses ''Board
-makeLenses ''Boards
-makeLenses ''Rect
-
-boardsNew :: Int -- page count
-          -> DrawingArea
-          -> ScrolledWindow
-          -> Int -- base width
-          -> Int -- zoom
-          -> Double -- thick
-          -> Boards
-boardsNew nb area win bw z th =
-    Boards 0 None Nothing th area win Nothing z bw boards
+instance FromJSON Save where
+    parseJSON (Object v) = do
+      ver   <- v .: "format"
+      pages <- v .: "pages"
+      areas <- withArray "list of pages" (go . V.toList) pages
+      return (Save ver areas)
         where
-          boards = fromList $ fmap (\i -> (i, Board empty)) [1..nb]
+          go xs = evalStateT (traverse pageToAreas xs) 0
+
+          pageToAreas opt = do
+            modify (+1)
+            i <- get
+            case opt of
+              Null -> return (i, Nothing)
+              _    -> do
+                  xs <- lift $ withObject "page" extractAreas opt
+                  return (i, Just xs)
+
+          extractAreas obj = do
+            areas <- obj .: "areas"
+            withArray "areas" (toAreas . V.toList) areas
+
+          toAreas = traverse parseJSON
+    parseJSON _          = mzero
+
+instance ToJSON Rect where
+    toJSON r =
+        object ["x"      .= _rectX r
+               ,"y"      .= _rectY r
+               ,"height" .= _rectHeight r
+               ,"width"  .= _rectWidth r
+               ,"name"   .= _rectName r
+               ,"type"   .= _rectType r]
+
+instance FromJSON Rect where
+    parseJSON (Object v) =
+        Rect 0        <$>
+        v .: "x"      <*>
+        v .: "y"      <*>
+        v .: "height" <*>
+        v .: "width"  <*>
+        v .: "name"   <*>
+        v .: "type"
+    parseJSON _ = mzero
+
+saveNew :: [(Int, Maybe [Rect])] -> Save
+saveNew = Save dhekFullVersion
+
+boardsNew :: Int -> Boards
+boardsNew n = Boards 0 None Nothing Nothing maps
+    where
+      maps = fromList $ fmap (\i -> (i, Board empty)) [1..n]
 
 fillUp :: Int -> [(Int, [Rect])] -> [(Int, Maybe [Rect])]
-fillUp n xs = go xs [0..(n - 1)]
+fillUp n xs = go xs [1..n]
     where
       go [] is = fmap (\i -> (i, Nothing)) is
+      go _ []  = []
       go v@((k, rs):xs) (i:is)
-          | k == i = (k, Just rs) : go xs is
+          | k == i = (k, bool (null rs) Nothing (Just rs)) : go xs is
           | k > i  = (i, Nothing) : go v is
+
+bool :: Bool -> a -> a -> a
+bool True x _  = x
+bool False _ y = y
 
 rectNew :: Double -> Double -> Double -> Double -> Rect
 rectNew x y h w = Rect 0 x y h w "field" "text/checkbox"

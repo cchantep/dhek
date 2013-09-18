@@ -29,3 +29,4 @@ executable dhek
                        , containers  >= 0.4.0    && < 0.6
                        , array       >= 0.4.0.1
                        , lens        >= 2.6      && < 3.10
+                       , vector      >=0.7.1

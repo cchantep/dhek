@@ -37,6 +37,19 @@ createJsonChooserDialog win = do
                   ,("Cancel", ResponseCancel)]
       title = Just "Open a Json file"
 
+createJsonImportDialog :: Window -> IO FileChooserDialog
+createJsonImportDialog win = do
+  ch <- fileChooserDialogNew title (Just win) FileChooserActionOpen responses
+  filt <- fileFilterNew
+  fileFilterAddPattern filt "*.json"
+  fileFilterSetName filt "Json File"
+  fileChooserAddFilter ch filt
+  return ch
+    where
+      responses = [("Choose", ResponseOk)
+                  ,("Cancel", ResponseCancel)]
+      title = Just "Choose a Json file"
+
 windowParams :: [AttrOp Window]
 windowParams =
     [windowTitle          := "Dhek PDF Viewer"
@@ -53,17 +66,20 @@ createMenuBar win vbox fdialog = do
   malign <- alignmentNew 0 0 1 0
   fitem  <- menuItemNewWithLabel "File"
   oitem  <- menuItemNewWithLabel "Open"
-  sitem  <- menuItemNewWithLabel "Save"
+  iitem  <- menuItemNewWithLabel "Import..."
+  sitem  <- menuItemNewWithLabel "Export..."
   fmenu  <- menuNew
   menuShellAppend fmenu oitem
+  menuShellAppend fmenu iitem
   menuShellAppend fmenu sitem
   menuItemSetSubmenu fitem fmenu
   menuShellAppend mbar fitem
   containerAdd malign mbar
+  widgetSetSensitive iitem False
   widgetSetSensitive sitem False
   boxPackStart vbox malign PackNatural 0
   void $ oitem `on` menuItemActivate $
-        openPdfFileChooser openPdf vbox fdialog win oitem sitem
+        openPdfFileChooser openPdf vbox fdialog win oitem iitem sitem
 
 createNavButtons :: String
                  -> Window
@@ -108,8 +124,8 @@ createTreeView store ref = do
   sel `on` treeSelectionSelectionChanged $ onTreeSelection sel store ref
   return treeV
 
-openPdf :: FileChooserDialog -> MenuItem -> Window -> IO HBox
-openPdf chooser msave win = do
+openPdf :: FileChooserDialog -> MenuItem -> MenuItem -> Window -> IO HBox
+openPdf chooser mimport msave win = do
   uri    <- fmap fromJust (fileChooserGetURI chooser)
   name   <- fmap (takeFileName . fromJust) (fileChooserGetFilename chooser)
   store  <- listStoreNew ([] :: [Rect])
@@ -117,8 +133,8 @@ openPdf chooser msave win = do
   treeV  <- createTreeView store ref
   v      <- readIORef ref
   let nb   = v ^. viewerPageCount
-      swin = v ^. viewerBoards.boardsScrollWindow
-      area = v ^. viewerBoards.boardsArea
+      swin = v ^. viewerScrollWindow
+      area = v ^. viewerArea
   vbox    <- vBoxNew False 10
   hbox    <- hBoxNew False 10
   vleft   <- vBoxNew False 10
@@ -129,15 +145,19 @@ openPdf chooser msave win = do
   scale   <- hScaleNewWithRange 100 200 1
   (prev, next)  <- createNavButtons name win store ref
   (minus, plus) <- createZoomButtons ref
+  ifch    <- createJsonImportDialog win
   jfch    <- createJsonChooserDialog win
   sep     <- vSeparatorNew
   sel     <- treeViewGetSelection treeV
   rem <- createRemoveAreaButton sel store ref
+  mimport `on` menuItemActivate $ void $ dialogRun ifch
   msave `on` menuItemActivate $ void $ dialogRun jfch
+  ifch  `on` response $ onJsonImport ref store ifch
   jfch  `on` response $ onJsonSave ref jfch
   windowSetTitle win (name ++ " (page 1 / " ++ show nb ++ ")")
   widgetSetSensitive prev False
   widgetSetSensitive next (nb /= 1)
+  widgetSetSensitive mimport True
   widgetSetSensitive msave True
   containerAdd arem rem
   containerAdd align bbox

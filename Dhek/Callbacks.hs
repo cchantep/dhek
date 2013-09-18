@@ -5,7 +5,7 @@ import Control.Lens
 import Control.Monad (when, void)
 import Control.Monad.State (execState, evalState, execStateT)
 import Control.Monad.Trans (liftIO)
-import Data.Aeson (encode, decode)
+import Data.Aeson (encode, eitherDecode)
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Foldable (traverse_, foldMap, foldr)
 import qualified Data.ByteString.Lazy as B
@@ -70,7 +70,7 @@ onJsonSave ref jfch ResponseOk =
             tup (i, b)  = (i, b ^. boardRects.to I.elems)
             toList      = fmap tup . I.toList
             rects       = v ^. viewerBoards.boardsMap.to toList
-            save        = Save $ fillUp nb rects
+            save        = saveNew $ fillUp nb rects
             ensure path
                 | takeExtension path == ".json" = path
                 | otherwise                     = path ++ ".json"
@@ -79,6 +79,40 @@ onJsonSave ref jfch ResponseOk =
            traverse_ write opt
            widgetHide jfch
 
+onJsonImport :: IORef Viewer
+             -> ListStore Rect
+             -> FileChooserDialog
+             -> ResponseId
+             -> IO ()
+onJsonImport _ _ ifch ResponseCancel = widgetHide ifch
+onJsonImport ref store ifch ResponseOk = do
+  opt  <- fileChooserGetFilename ifch
+  bOpt <- traverse go opt
+  traverse_ (traverse_ updViewer) bOpt
+    where
+      go path = do
+        bytes <- B.readFile path
+        let boardsE = fmap saveToBoards (eitherDecode bytes)
+        either showError (return . Just) boardsE
+
+      showError e = do
+        p <- windowGetTransientFor ifch
+        m <- messageDialogNew p [DialogModal] MessageError ButtonsOk e
+        dialogRun m
+        widgetHide m
+        return Nothing
+
+      updViewer boards = do
+        v <- readIORef ref
+        let v'    = v & viewerBoards .~ boards
+            page  = v ^. viewerCurrentPage
+            rects = boards ^. boardsMap.at page.traverse.boardRects.to I.elems
+        writeIORef ref v'
+        listStoreClear store
+        traverse_ (listStoreAppend store) rects
+        widgetHide ifch
+        askDrawingViewer v'
+
 onCommonScale :: (Int -> Int)
               -> Button -- minus button
               -> Button -- plus button
@@ -86,10 +120,10 @@ onCommonScale :: (Int -> Int)
               -> IO ()
 onCommonScale upd minus plus ref =
     readIORef ref >>= \v ->
-        let z   = v ^. viewerBoards.boardsZoom.to upd
+        let z   = v ^. viewerZoom.to upd
             low = (z-1) < 0
             up  = (z+1) > 10
-            v'  = v & viewerBoards.boardsZoom .~ z in
+            v'  = v & viewerZoom .~ z in
         do widgetSetSensitive minus (not low)
            widgetSetSensitive plus (not up)
            writeIORef ref v'
@@ -121,21 +155,28 @@ onRemoveArea sel store ref = do
              writeIORef ref v'
              askDrawingViewer v'
 
-openPdfFileChooser :: (FileChooserDialog -> MenuItem -> Window -> IO HBox)
+type PdfCallback = FileChooserDialog
+                 -> MenuItem -- Import item
+                 -> MenuItem -- Export item
+                 -> Window
+                 -> IO HBox
+
+openPdfFileChooser :: PdfCallback
                    -> VBox
                    -> FileChooserDialog
                    -> Window
                    -> MenuItem
                    -> MenuItem
+                   -> MenuItem
                    -> IO ()
-openPdfFileChooser k vbox dialog win mopen msave = do
+openPdfFileChooser k vbox dialog win mopen mimport msave = do
   resp <- dialogRun dialog
   widgetHide dialog
   case resp of
     ResponseCancel -> return ()
     ResponseOk     -> do
       avbox <- alignmentNew 0 0 1 1
-      vvbox <- k dialog msave win
+      vvbox <- k dialog mimport msave win
       containerAdd avbox vvbox
       boxPackStart vbox avbox PackGrow 0
       widgetSetSensitive mopen False
@@ -211,7 +252,7 @@ onPress ref = do
             action = do
               sel'   <- use (viewerBoards.boardsSelected.traverse.to Sum)
               page   <- use viewerCurrentPage
-              thick  <- use (viewerBoards.boardsThick)
+              thick  <- use viewerThick
               board  <- use (viewerBoards.boardsMap.at page.traverse)
               select <- use (viewerBoards.boardsSelection)
               let sel  = getSum sel'
@@ -264,7 +305,7 @@ rectDetection v ratio = do
       board  = viewerBoards.boardsMap.at page.traverse
       rects' =  v ^. board.boardRects
       rects  = I.elems rects'
-      thick  = v ^. viewerBoards.boardsThick
+      thick  = v ^. viewerThick
   go (thick / 2) rects
     where
       overRect thick x y r@(Rect _ rX rY height width _ _) =
@@ -302,7 +343,7 @@ updateSelection v ratio = go
 registerViewerEvents :: ListStore Rect -> IORef Viewer -> IO ()
 registerViewerEvents store ref = do
   v <- readIORef ref
-  let area = v ^. viewerBoards.boardsArea
+  let area = v ^. viewerArea
   widgetAddEvents area [PointerMotionMask]
   area `on` exposeEvent $ tryEvent $ drawViewer ref
   area `on` motionNotifyEvent $ tryEvent $ onMove ref
