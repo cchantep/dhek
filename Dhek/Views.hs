@@ -2,6 +2,7 @@ module Dhek.Views where
 
 import Control.Lens
 import Control.Monad (void)
+import Data.Foldable (traverse_)
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Maybe (fromJust)
 import Dhek.Action
@@ -9,6 +10,10 @@ import Dhek.Callbacks
 import Dhek.Types
 import Dhek.Utils
 import Graphics.UI.Gtk
+
+data SelectionHandlers = SelectionHandlers
+    { hOnSelection :: Rect -> IO ()
+    , hOnClear     :: IO () }
 
 createPdfChooserDialog :: Window -> IO FileChooserDialog
 createPdfChooserDialog win = do
@@ -173,7 +178,48 @@ openPdf chooser mimport msave win = do
   boxPackStart vbox aswin PackGrow 0
   boxPackStart hbox vbox PackGrow 0
   boxPackStart hbox vleft PackGrow 0
+  handlers <- createPropView vleft store ref
+  let onSel = hOnSelection handlers
+      onRem = hOnClear handlers
+  sel `on` treeSelectionSelectionChanged $ onAreaSelection onSel sel store
+  rem `on` buttonActivated $ onRem
   return hbox
+
+createPropView :: BoxClass b => b -> ListStore Rect -> IORef Viewer -> IO SelectionHandlers
+createPropView b rectStore ref = do
+  nlabel <- labelNew (Just "Name")
+  tlabel <- labelNew (Just "Type")
+  updbut <- buttonNewWithLabel "Update"
+  nentry <- entryNew
+  talign <- alignmentNew 0 0 0 0
+  calign <- alignmentNew 0 0 1 0
+  salign <- alignmentNew 0 0 1 0
+  ualign <- alignmentNew 0.5 0 0 0
+  tcombo <- comboBoxNew
+  store  <- comboBoxSetModelText tcombo
+  nhbox  <- hBoxNew False 10
+  tvbox  <- vBoxNew False 10
+  sep    <- hSeparatorNew
+  traverse_ (listStoreAppend store) model
+  containerAdd talign tlabel
+  containerAdd calign tcombo
+  containerAdd salign sep
+  containerAdd ualign updbut
+  boxPackStart nhbox nlabel PackNatural 0
+  boxPackStart nhbox nentry PackGrow 0
+  boxPackStart tvbox nhbox PackNatural 0
+  boxPackStart tvbox talign PackNatural 0
+  boxPackStart tvbox calign PackNatural 0
+  boxPackStart tvbox ualign PackNatural 0
+  boxPackStart b salign PackNatural 0
+  containerAdd b tvbox
+  updbut `on` buttonActivated $ onPropUpdate rectStore nentry tcombo ref
+  let hdls = SelectionHandlers
+             (onPropAreaSelection nentry store tcombo)
+             (onPropClear nentry tcombo)
+  return hdls
+    where
+      model = ["text", "checkbox"]
 
 makeViewer :: String -> ListStore Rect -> IO (IORef Viewer)
 makeViewer filepath store = do
