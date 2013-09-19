@@ -1,3 +1,4 @@
+{-# LANGUAGE DoAndIfThenElse #-}
 module Dhek.Callbacks where
 
 import Prelude hiding (foldr)
@@ -355,3 +356,59 @@ registerViewerEvents store ref = do
         frame  <- eventWindow
         cursor <- liftIO $ cursorNew Tcross
         liftIO $ drawWindowSetCursor frame (Just cursor)
+
+onAreaSelection :: (Rect -> IO ())
+                -> TreeSelection
+                -> ListStore Rect
+                -> IO ()
+onAreaSelection handler sel store = do
+  opt  <- treeSelectionGetSelected sel
+  rOpt <- traverse (listStoreGetValue store . listStoreIterToIndex) opt
+  traverse_ handler rOpt
+
+onPropAreaSelection :: Entry -> ListStore String -> ComboBox -> Rect -> IO ()
+onPropAreaSelection entry store combo r = do
+  entrySetText entry (r ^. rectName)
+  let pred x = x == (r ^. rectType)
+  opt <- lookupStoreIter pred store
+  traverse_ (comboBoxSetActiveIter combo) opt
+
+onPropClear :: Entry -> ComboBox -> IO ()
+onPropClear entry combo = do
+  entrySetText entry ""
+  comboBoxSetActive combo (negate 1)
+
+onPropUpdate :: ListStore Rect -> Entry -> ComboBox -> IORef Viewer -> IO ()
+onPropUpdate rectStore entry combo ref = do
+  v <- readIORef ref
+  let page     = v ^. viewerCurrentPage
+      selOpt   = v ^. viewerBoards.boardsSelected
+      board    = v ^. viewerBoards.boardsMap.at page.traverse
+      toRect i = board ^. boardRects.at i
+      rectOpt  = selOpt >>= toRect
+  traverse_ (go page v) rectOpt
+    where
+      go page v r = do
+        name    <- entryGetText entry
+        typeOpt <- comboBoxGetActiveText combo
+        traverse_ (upd page v r name) typeOpt
+
+      upd page v r name typ =
+          let id = r ^. rectId
+              r' = r & rectName .~ name & rectType .~ typ
+              b  = v ^. viewerBoards.boardsMap.at page.traverse
+              b' = b & boardRects.at id ?~ r'
+              v' = v & viewerBoards.boardsMap.at page ?~ b' in
+          do writeIORef ref v'
+             listStoreClear rectStore
+             traverse_ (listStoreAppend rectStore) (b' ^. boardRects.to I.elems)
+
+lookupStoreIter :: (a -> Bool) -> ListStore a -> IO (Maybe TreeIter)
+lookupStoreIter pred store = treeModelGetIterFirst store >>= go
+    where
+      go (Just it) = do
+        a <- listStoreGetValue store (listStoreIterToIndex it)
+        if pred a
+        then return (Just it)
+        else treeModelIterNext store it >>= go
+      go _ = return Nothing

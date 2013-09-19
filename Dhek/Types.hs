@@ -149,7 +149,7 @@ bool True x _  = x
 bool False _ y = y
 
 rectNew :: Double -> Double -> Double -> Double -> Rect
-rectNew x y h w = Rect 0 x y h w "field" "text/checkbox"
+rectNew x y h w = Rect 0 x y h w "field" "text"
 
 translateRect :: Double -> Double -> Rect -> Rect
 translateRect x y r = r & rectX +~ x & rectY +~ y
