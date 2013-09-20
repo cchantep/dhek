@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Dhek.Action where
 
-import Prelude hiding (foldr)
+import Prelude hiding (foldr, mapM_)
 import Control.Applicative (WrappedMonad(..))
 import Control.Lens
 import Control.Monad (void, when, join)
@@ -11,8 +11,8 @@ import Control.Monad.Trans (MonadIO(..))
 import Data.Array
 import qualified Data.IntMap as I
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
-import Data.Foldable (traverse_, foldMap, foldr)
-import Data.Maybe (fromJust, isJust, isNothing)
+import Data.Foldable (traverse_, foldMap, foldr, mapM_)
+import Data.Maybe (fromJust, isJust, isNothing, maybeToList)
 import Data.Monoid (First(..), Sum(..))
 import Dhek.Types
 import Graphics.Rendering.Cairo
@@ -142,8 +142,10 @@ drawViewer = liftIO . go
             rects'  = v ^. viewerBoards.boardsMap.at pageId.traverse.boardRects
             rects   = I.elems rects'
             sel' = v ^. viewerBoards.boardsSelected
+            ove' = v ^. viewerBoards.boardsOvered
             rmap = v ^. viewerBoards.boardsMap.at pageId.traverse.boardRects
-            sel = (\i -> I.lookup i rmap) =<< sel'
+            sel  = (\i -> I.lookup i rmap) =<< sel'
+            ove  = (\i -> I.lookup i rmap) =<< ove'
             event = v ^. viewerBoards.boardsEvent
             evRect =
                 case event of
@@ -156,33 +158,37 @@ drawViewer = liftIO . go
         widgetSetSizeRequest area (truncate width) (truncate height)
         renderWithDrawable frame (setSourceRGB 1.0 1.0 1.0 >>
                                   rectangle 0 0 (fromIntegral fW) (fromIntegral fH) >>
-                                  fill                   >>
-                                  scale ratio ratio      >>
-                                  pageRender page        >>
-                                  drawRects th sel rects >>
-                                  drawingSel rectSel     >>
-                                  drawRects th Nothing evRect)
+                                  fill                       >>
+                                  scale ratio ratio          >>
+                                  pageRender page            >>
+                                  drawRects th sel ove rects >>
+                                  drawingSel rectSel         >>
+                                  drawRects th Nothing evRect evRect)
 
-      drawRects th sel =
-          unwrapMonad . traverse_ (WrapMonad . drawing th sel)
+      drawRects th sel ove = mapM_ (drawing th sel ove)
 
-      drawing :: Double -> Maybe Rect -> Rect -> Render ()
-      drawing th sel r =
+      drawing :: Double -> Maybe Rect -> Maybe Rect -> Rect -> Render ()
+      drawing th sel ove r =
           let x = r ^. rectX
               y = r ^. rectY
               h = r ^. rectHeight
               w = r ^. rectWidth
-              step (Just s)
+              onSel s
                   | s == r    = setSourceRGB 1.0 0 0
-                  | otherwise = setSourceRGB 0 0 1.0
+                  | otherwise = return ()
+              onOver o
+                  | o == r    = setSourceRGB 0.16 0.72 0.92
+                  | otherwise = return ()
               step _ = setSourceRGB 0 0 1.0 in
-          do step sel
+          do setSourceRGB 0 0 1.0
+             mapM_ onOver ove
+             mapM_ onSel sel
              setLineWidth th
              rectangle x y w h
              closePath
              stroke
 
-      drawingSel = unwrapMonad . traverse_ (WrapMonad . go)
+      drawingSel = mapM_ go
           where
             go r =
                 let x = r ^. rectX

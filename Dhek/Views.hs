@@ -70,9 +70,9 @@ createMenuBar win vbox fdialog = do
   mbar   <- menuBarNew
   malign <- alignmentNew 0 0 1 0
   fitem  <- menuItemNewWithLabel "File"
-  oitem  <- menuItemNewWithLabel "Open"
-  iitem  <- menuItemNewWithLabel "Import..."
-  sitem  <- menuItemNewWithLabel "Export..."
+  oitem  <- menuItemNewWithLabel "Open PDF"
+  iitem  <- menuItemNewWithLabel "Load mappings"
+  sitem  <- menuItemNewWithLabel "Save mappings"
   fmenu  <- menuNew
   menuShellAppend fmenu oitem
   menuShellAppend fmenu iitem
