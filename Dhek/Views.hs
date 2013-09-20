@@ -198,6 +198,7 @@ createPropView b rectStore ref = do
   tcombo <- comboBoxNew
   store  <- comboBoxSetModelText tcombo
   nhbox  <- hBoxNew False 10
+  thbox  <- hBoxNew False 10
   tvbox  <- vBoxNew False 10
   sep    <- hSeparatorNew
   traverse_ (listStoreAppend store) model
@@ -207,9 +208,10 @@ createPropView b rectStore ref = do
   containerAdd ualign updbut
   boxPackStart nhbox nlabel PackNatural 0
   boxPackStart nhbox nentry PackGrow 0
+  boxPackStart thbox talign PackNatural 0
+  boxPackStart thbox calign PackGrow 0
   boxPackStart tvbox nhbox PackNatural 0
-  boxPackStart tvbox talign PackNatural 0
-  boxPackStart tvbox calign PackNatural 0
+  boxPackStart tvbox thbox PackNatural 0
   boxPackStart tvbox ualign PackNatural 0
   boxPackStart b salign PackNatural 0
   containerAdd b tvbox
