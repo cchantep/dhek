@@ -192,7 +192,7 @@ onMove ref = do
   sopt  <- updateSelection v ratio
   (x, y) <- eventCoordinates
   let page = v ^. viewerCurrentPage
-      detL  = viewerBoards.boardsSelected
+      detL  = viewerBoards.boardsOvered
       selL  = viewerBoards.boardsSelection
       v1 = v & detL .~ dopt
       v2 = foldr (\r v -> v & selL ?~ r) v1 sopt
@@ -208,7 +208,7 @@ onMove ref = do
       v3 = v2 & viewerBoards.boardsEvent .~ newE
 
       changed = (v ^. viewerBoards.boardsSelection) /= (v3 ^. viewerBoards.boardsSelection) ||
-                (v ^. viewerBoards.boardsSelected) /= (v3 ^. viewerBoards.boardsSelected) ||
+                (v ^. viewerBoards.boardsOvered) /= (v3 ^. viewerBoards.boardsOvered) ||
                 (v ^. viewerBoards.boardsEvent) /= (v3 ^. viewerBoards.boardsEvent)
 
       cursor
@@ -251,7 +251,7 @@ onPress ref = do
               maybe (Hold r (xR, yR)) (Resize r (xR, yR)) aOpt
 
             action = do
-              sel'   <- use (viewerBoards.boardsSelected.traverse.to Sum)
+              sel'   <- use (viewerBoards.boardsOvered.traverse.to Sum)
               page   <- use viewerCurrentPage
               thick  <- use viewerThick
               board  <- use (viewerBoards.boardsMap.at page.traverse)

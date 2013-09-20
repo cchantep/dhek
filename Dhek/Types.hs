@@ -46,11 +46,12 @@ data Area = TOP_LEFT
           | BOTTOM_LEFT
           | LEFT deriving (Enum, Show, Eq)
 
-data Boards = Boards { _boardsState        :: Int
-                     , _boardsEvent        :: BoardEvent
-                     , _boardsSelection    :: Maybe Rect
-                     , _boardsSelected     :: Maybe Int
-                     , _boardsMap          :: IntMap Board }
+data Boards = Boards { _boardsState     :: Int
+                     , _boardsEvent     :: BoardEvent
+                     , _boardsSelection :: Maybe Rect
+                     , _boardsOvered    :: Maybe Int
+                     , _boardsSelected  :: Maybe Int
+                     , _boardsMap       :: IntMap Board }
 
 data Rect = Rect { _rectId     :: Int
                  , _rectX      :: Double
@@ -131,7 +132,7 @@ saveNew :: [(Int, Maybe [Rect])] -> Save
 saveNew = Save dhekFullVersion
 
 boardsNew :: Int -> Boards
-boardsNew n = Boards 0 None Nothing Nothing maps
+boardsNew n = Boards 0 None Nothing Nothing Nothing maps
     where
       maps = fromList $ fmap (\i -> (i, Board empty)) [1..n]
 
