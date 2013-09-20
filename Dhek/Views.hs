@@ -177,7 +177,7 @@ openPdf chooser mimport msave win = do
   boxPackStart vleft arem PackNatural 0
   boxPackStart vbox aswin PackGrow 0
   boxPackStart hbox vbox PackGrow 0
-  boxPackStart hbox vleft PackGrow 0
+  boxPackStart hbox vleft PackNatural 0
   handlers <- createPropView vleft store ref
   let onSel = hOnSelection handlers
       onRem = hOnClear handlers
