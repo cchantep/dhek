@@ -4,39 +4,77 @@ PDF app (or on the Discworld, supreme Djelibeybian god).
 
 ## Build
 
-Prerequisites:
-- GHC
-- Cabal
-- GTK
-- [Poppler](https://github.com/YoEight/poppler)
+### Unix/Mac OS X
+Depending on how you've installed GHC, you have 2 different prerequisites.
 
-### Mac OS X
+Make sure gtk, pango, cairo and poppler are installed on your machine.
+
+#### Haskell Platform
 
 ```
-port ghc cabal-install
-port cairo-devel pango
-```
-
-### Cabal
-
-It's recommanded to ensure Cabal is up-to-date: `cabal update`
-
-Programs alex and happy are required: `cabal install alex happy`
-
-As Dhek UI is based on GTK, its bindings should be installed:
-```
+cabal update
 cabal install gtk2hs-buildtools
 cabal install gtk
-cabal install stm
 ```
 
-Finally Dhek itself can be build:
+#### Other (from sources or package manager)
+
 ```
+cabal update
+cabal install alex
+cabal install happy
+cabal install gtk2hs-buildtools
+cabal install gtk
+```
+
+--
+
+In order to build Dhek:
+```
+cabal install --only-dependencies
 cabal configure
 cabal build
 ```
 
-At this point, built Dhek can be launched with `./dist/build/dhek/dhek`
+You can produce an executable by doing:
+
+```
+cabal install
+```
+
+At this point, Dhek can be launched with `./dist/build/dhek/dhek`
+
+### Windows (only tested on Seven)
+
+Make sure you've installed GTK all-in-one [32Bits](http://ftp.gnome.org/pub/gnome/binaries/win32/gtk+/2.24/gtk+-bundle_2.24.10-20120208_win32.zip) or [64Bits](http://ftp.gnome.org/pub/gnome/binaries/win64/gtk+/2.22/gtk+-bundle_2.22.1-20101229_win64.zip) and MinGW poppler and poppler-glib.
+
+Note: Unfortunately, it only works when packages are installed globally.
+
+```
+cabal update
+cabal install gtk2hs-buildtools
+cabal install gtk
+```
+
+Then, in project directory:
+
+```
+cabal install --only-dependencies --global
+runghc Setup configure --global # Don't ask me why it only works that way on Windows
+runghc Setup build
+```
+
+To produce an exe:
+
+```
+runghc Setup install --global
+```
+
+At this point, Dhek can be launched with `HASKELL_HOME\bin\dhek.exe`
+
+--
+
+Anyway, for people working on crippled Operating Systems, we've already packaged Dhek for OSX and Windows (>= Seven) in [release section](https://github.com/applicius/dhek/releases)
 
 ### JSON format
 
