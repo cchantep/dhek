@@ -244,7 +244,7 @@ onPress ref = do
 
             toEvent th r =
               let areas  = enumFrom TOP_LEFT
-                  pred a = if isOver ratio th xR yR (rectArea 20 r a)
+                  pred a = if isOver ratio th xR yR (rectArea 10 r a)
                            then Just a
                            else Nothing
                   (First aOpt) = foldMap (First . pred) areas in
