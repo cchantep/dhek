@@ -191,27 +191,23 @@ createPropView b rectStore ref = do
   tlabel <- labelNew (Just "Type")
   updbut <- buttonNewWithLabel "Update"
   nentry <- entryNew
-  talign <- alignmentNew 0 0 0 0
-  calign <- alignmentNew 0 0 1 0
   salign <- alignmentNew 0 0 1 0
   ualign <- alignmentNew 0.5 0 0 0
   tcombo <- comboBoxNew
   store  <- comboBoxSetModelText tcombo
-  nhbox  <- hBoxNew False 10
-  thbox  <- hBoxNew False 10
+  table  <- tableNew 2 2 False
   tvbox  <- vBoxNew False 10
   sep    <- hSeparatorNew
+  tableAttachDefaults table nlabel 0 1 0 1
+  tableAttachDefaults table nentry 1 2 0 1
+  tableAttachDefaults table tlabel 0 1 1 2
+  tableAttachDefaults table tcombo 1 2 1 2
+  tableSetRowSpacings table 10
+  tableSetColSpacings table 10
   traverse_ (listStoreAppend store) model
-  containerAdd talign tlabel
-  containerAdd calign tcombo
   containerAdd salign sep
   containerAdd ualign updbut
-  boxPackStart nhbox nlabel PackNatural 0
-  boxPackStart nhbox nentry PackGrow 0
-  boxPackStart thbox talign PackNatural 0
-  boxPackStart thbox calign PackGrow 0
-  boxPackStart tvbox nhbox PackNatural 0
-  boxPackStart tvbox thbox PackNatural 0
+  boxPackStart tvbox table PackNatural 0
   boxPackStart tvbox ualign PackNatural 0
   boxPackStart b salign PackNatural 0
   containerAdd b tvbox
