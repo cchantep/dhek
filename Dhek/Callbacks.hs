@@ -277,10 +277,13 @@ onRelease store ref = do
                 insert x = do
                   viewerBoards.boardsState += 1
                   id <- use (viewerBoards.boardsState)
-                  let x'  = x & rectId .~ id & rectName %~ (++ show id)
-                      x'' = normalize x'
-                  liftIO $ listStoreAppend store x''
-                  board.boardRects.at id ?= x''
+                  let x'    = x & rectId .~ id & rectName %~ (++ show id)
+                      x''   = normalize x'
+                      w     = x'' ^. rectWidth
+                      h     = x'' ^. rectHeight
+                      addIt = (liftIO $ listStoreAppend store x'') >>
+                              board.boardRects.at id ?= x''
+                  when (w*h >= 400) addIt
 
                 onHold r = do
                   board <- use (viewerBoards.boardsMap.at page.traverse)
