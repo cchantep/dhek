@@ -244,7 +244,7 @@ onPress ref = do
 
             toEvent th r =
               let areas  = enumFrom TOP_LEFT
-                  pred a = if isOver ratio th xR yR (rectArea 10 r a)
+                  pred a = if isOver ratio th xR yR (rectArea 2 r a)
                            then Just a
                            else Nothing
                   (First aOpt) = foldMap (First . pred) areas in
@@ -275,15 +275,17 @@ onRelease store ref = do
             let page = v ^. viewerCurrentPage
                 board = viewerBoards.boardsMap.at page.traverse
                 insert x = do
-                  viewerBoards.boardsState += 1
-                  id <- use (viewerBoards.boardsState)
-                  let x'    = x & rectId .~ id & rectName %~ (++ show id)
-                      x''   = normalize x'
-                      w     = x'' ^. rectWidth
-                      h     = x'' ^. rectHeight
-                      addIt = (liftIO $ listStoreAppend store x'') >>
-                              board.boardRects.at id ?= x''
-                  when (w*h >= 400) addIt
+                  let x' = normalize x
+                      w  = x' ^. rectWidth
+                      h  = x' ^. rectHeight
+                      addIt =
+                          do viewerBoards.boardsState += 1
+                             id <- use $ viewerBoards.boardsState
+                             let x'' =
+                                     x' & rectId .~ id & rectName %~ (++ show id)
+                             liftIO $ listStoreAppend store x''
+                             board.boardRects.at id ?= x''
+                  when (w*h >= 50) addIt
 
                 onHold r = do
                   board <- use (viewerBoards.boardsMap.at page.traverse)
