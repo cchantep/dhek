@@ -178,15 +178,20 @@ openPdf chooser mimport msave win = do
   boxPackStart vbox aswin PackGrow 0
   boxPackStart hbox vbox PackGrow 0
   boxPackStart hbox vleft PackNatural 0
-  handlers <- createPropView vleft store ref
+  handlers <- createPropView win vleft store ref
   let onSel = hOnSelection handlers
       onRem = hOnClear handlers
   sel `on` treeSelectionSelectionChanged $ onAreaSelection onSel sel store
   rem `on` buttonActivated $ onRem
   return hbox
 
-createPropView :: BoxClass b => b -> ListStore Rect -> IORef Viewer -> IO SelectionHandlers
-createPropView b rectStore ref = do
+createPropView :: BoxClass b
+               => Window
+               -> b
+               -> ListStore Rect
+               -> IORef Viewer
+               -> IO SelectionHandlers
+createPropView win b rectStore ref = do
   nlabel <- labelNew (Just "Name")
   tlabel <- labelNew (Just "Type")
   updbut <- buttonNewWithLabel "Update"
@@ -215,7 +220,7 @@ createPropView b rectStore ref = do
   boxPackStart tvbox ualign PackNatural 0
   boxPackStart b salign PackNatural 0
   containerAdd b tvbox
-  updbut `on` buttonActivated $ onPropUpdate rectStore nentry tcombo ref
+  updbut `on` buttonActivated $ onPropUpdate win rectStore nentry tcombo ref
   let hdls = SelectionHandlers
              (onPropAreaSelection nentry store tcombo)
              (onPropClear nentry tcombo)

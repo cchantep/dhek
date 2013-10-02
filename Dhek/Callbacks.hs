@@ -7,10 +7,12 @@ import Control.Monad (when, void)
 import Control.Monad.State (execState, evalState, execStateT)
 import Control.Monad.Trans (liftIO)
 import Data.Aeson (encode, eitherDecode)
+import Data.Char (isSpace)
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Foldable (traverse_, foldMap, foldr)
 import qualified Data.ByteString.Lazy as B
 import qualified Data.IntMap as I
+import Data.List (dropWhileEnd)
 import Dhek.Action
 import Dhek.Types
 import Dhek.Utils
@@ -383,8 +385,13 @@ onPropClear entry combo = do
   entrySetText entry ""
   comboBoxSetActive combo (negate 1)
 
-onPropUpdate :: ListStore Rect -> Entry -> ComboBox -> IORef Viewer -> IO ()
-onPropUpdate rectStore entry combo ref = do
+onPropUpdate :: Window
+             -> ListStore Rect
+             -> Entry
+             -> ComboBox
+             -> IORef Viewer
+             -> IO ()
+onPropUpdate win rectStore entry combo ref = do
   v <- readIORef ref
   let page     = v ^. viewerCurrentPage
       selOpt   = v ^. viewerBoards.boardsSelected
@@ -394,9 +401,22 @@ onPropUpdate rectStore entry combo ref = do
   traverse_ (go page v) rectOpt
     where
       go page v r = do
-        name    <- entryGetText entry
-        typeOpt <- comboBoxGetActiveText combo
-        traverse_ (upd page v r name) typeOpt
+          name' <- entryGetText entry
+          let name     = trimStr name'
+              emptyStr = null name
+          when (not emptyStr) (onValidStr page v r name)
+
+      onValidStr page v r name = do
+          nOpt  <- lookupStoreIter ((== name) . _rectName) rectStore
+          let exist = isJust nOpt
+          typeOpt <- comboBoxGetActiveText combo
+          when exist (showError ("\"" ++ name ++ "\" is used"))
+          when (not exist) (traverse_ (upd page v r name) typeOpt)
+
+      showError e = do
+          m <- messageDialogNew (Just win) [DialogModal] MessageError ButtonsOk e
+          dialogRun m
+          widgetHide m
 
       upd page v r name typ =
           let id = r ^. rectId
@@ -407,6 +427,9 @@ onPropUpdate rectStore entry combo ref = do
           do writeIORef ref v'
              listStoreClear rectStore
              traverse_ (listStoreAppend rectStore) (b' ^. boardRects.to I.elems)
+
+trimStr :: String -> String
+trimStr = dropWhileEnd isSpace . dropWhile isSpace
 
 lookupStoreIter :: (a -> Bool) -> ListStore a -> IO (Maybe TreeIter)
 lookupStoreIter pred store = treeModelGetIterFirst store >>= go
