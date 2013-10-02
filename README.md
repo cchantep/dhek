@@ -4,10 +4,16 @@ PDF app (or on the Discworld, supreme Djelibeybian god).
 
 ## Build
 
-### Unix/Mac OS X
+### Unix
 Depending on how you've installed GHC, you have 2 different prerequisites.
 
 Make sure gtk, pango, cairo and poppler are installed on your machine.
+
+#### MacPorts
+
+```
+port install pango poppler cairo gtk2
+```
 
 #### Haskell Platform
 
