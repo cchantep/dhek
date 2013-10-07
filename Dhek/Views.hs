@@ -1,9 +1,10 @@
 module Dhek.Views where
 
 import Control.Lens
-import Control.Monad (void)
+import Control.Monad (void, (<=<))
 import Control.Monad.Trans (liftIO)
 import Data.Foldable (traverse_)
+import Data.Functor ((<$))
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Maybe (fromJust)
 import Dhek.Action
@@ -140,6 +141,9 @@ openPdf chooser mimport msave win = do
   area   <- drawingAreaNew
   swin   <- scrolledWindowNew Nothing Nothing
   let redraw = widgetQueueDraw area
+      updateStore  = updateRectStore store
+      appendStore  = appendRectStore store
+      withRectIter = withRectStoreIter store
   ref    <- makeViewer uri store
   treeV  <- createTreeView store redraw ref
   v      <- readIORef ref
@@ -158,7 +162,8 @@ openPdf chooser mimport msave win = do
   jfch    <- createJsonChooserDialog win
   sep     <- vSeparatorNew
   sel     <- treeViewGetSelection treeV
-  let selection = treeSelection sel store
+  let selection  = treeSelection sel store
+      selectItem = selectTreeItem sel store redraw ref
   rem <- createRemoveAreaButton sel store redraw ref
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
@@ -169,7 +174,7 @@ openPdf chooser mimport msave win = do
   area `on` buttonPressEvent $ tryEvent $ onPress ref
   area `on` enterNotifyEvent $ tryEvent $ onEnter
   area `on` buttonReleaseEvent $ tryEvent $ onRelease
-           (onAreaCreation store sel) redraw ref
+           (withRectIter selectItem <=< appendStore) redraw ref
   mimport `on` menuItemActivate $ void $ dialogRun ifch
   msave `on` menuItemActivate $ void $ dialogRun jfch
   ifch  `on` response $ onJsonImport ref redraw store ifch
@@ -213,6 +218,32 @@ treeSelection sel store =
     go iter =
         let idx = listStoreIterToIndex iter in
         fmap (\r -> (iter, r)) (listStoreGetValue store idx)
+
+selectTreeItem :: TreeSelection
+               -> ListStore Rect
+               -> IO ()
+               -> IORef Viewer
+               -> TreeIter -> IO ()
+selectTreeItem sel store redraw ref iter = do
+    treeSelectionSelectIter sel iter
+    r <- listStoreGetValue store (listStoreIterToIndex iter)
+    modifyIORef ref (viewerSetSelected r)
+    redraw
+
+updateRectStore :: ListStore Rect -> Rect -> TreeIter -> IO ()
+updateRectStore store r iter =
+    let idx = listStoreIterToIndex iter in
+    listStoreSetValue store idx r
+
+appendRectStore :: ListStore Rect -> Rect -> IO Int
+appendRectStore store r = listStoreAppend store r
+
+withRectStoreIter :: ListStore Rect -> (TreeIter -> IO r) -> Int -> IO ()
+withRectStoreIter store k i =
+    treeModelForeach store $ \iter ->
+        if listStoreIterToIndex iter == i
+        then True <$ k iter
+        else return False
 
 createPropView :: BoxClass b
                => Window

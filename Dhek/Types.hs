@@ -152,6 +152,9 @@ bool False _ y = y
 rectNew :: Double -> Double -> Double -> Double -> Rect
 rectNew x y h w = Rect 0 x y h w "field" "text"
 
+viewerSetSelected :: Rect -> Viewer -> Viewer
+viewerSetSelected r v = v & viewerBoards.boardsSelected ?~ (r ^. rectId)
+
 translateRect :: Double -> Double -> Rect -> Rect
 translateRect x y r = r & rectX +~ x & rectY +~ y
 

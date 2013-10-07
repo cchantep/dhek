@@ -321,14 +321,6 @@ onRelease onAreaCreate redraw ref = do
             writeIORef ref newV
             redraw
 
-onAreaCreation :: ListStore Rect -> TreeSelection -> Rect -> IO ()
-onAreaCreation store sel r = do
-    idx <- listStoreAppend store r
-    treeModelForeach store $ \iter ->
-        if listStoreIterToIndex iter ==  idx
-        then True <$ treeSelectionSelectIter sel iter
-        else return False
-
 rectDetection :: Viewer -> Double -> EventM EMotion (Maybe Int)
 rectDetection v ratio = do
   let page   = v ^. viewerCurrentPage
