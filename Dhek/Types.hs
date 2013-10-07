@@ -8,6 +8,7 @@ import Control.Lens hiding ((.=), get)
 import Control.Monad (mzero)
 import Control.Monad.State (execState, evalStateT, modify, get)
 import Control.Monad.Trans (lift)
+import Data.Array
 import Data.Aeson
 import Data.Aeson.Types (Parser)
 import Data.Aeson.TH
@@ -19,19 +20,17 @@ import Data.String (fromString)
 import qualified Data.Vector as V
 import Dhek.Version
 import Graphics.UI.Gtk hiding (get)
-import Graphics.UI.Gtk.Poppler.Document (Document)
+import Graphics.UI.Gtk.Poppler.Document (Document, Page)
 
 data Viewer = Viewer { _viewerDocument     :: Document
                      , _viewerCurrentPage  :: Int
                      , _viewerPageCount    :: Int
-                     , _viewerArea         :: DrawingArea
-                     , _viewerScrollWindow :: ScrolledWindow
                      , _viewerBaseWidth    :: Int
                      , _viewerZoom         :: Int
                      , _viewerThick        :: Double
                      , _viewerBoards       :: Boards }
 
-data Board = Board { _boardRects :: IntMap Rect } deriving Show
+data Board = Board { _boardRects :: !(IntMap Rect) } deriving Show
 
 data BoardEvent = None
                 | Hold Rect (Double, Double)
@@ -46,27 +45,28 @@ data Area = TOP_LEFT
           | BOTTOM_LEFT
           | LEFT deriving (Enum, Show, Eq)
 
-data Boards = Boards { _boardsState     :: Int
-                     , _boardsEvent     :: BoardEvent
-                     , _boardsSelection :: Maybe Rect
-                     , _boardsOvered    :: Maybe Int
-                     , _boardsSelected  :: Maybe Int
-                     , _boardsMap       :: IntMap Board }
+data Boards = Boards { _boardsState     :: {-# UNPACK #-} !Int
+                     , _boardsEvent     :: !BoardEvent
+                     , _boardsSelection :: !(Maybe Rect)
+                     , _boardsOvered    :: !(Maybe Int)
+                     , _boardsSelected  :: !(Maybe Int)
+                     , _boardsMap       :: !(IntMap Board) }
 
-data Rect = Rect { _rectId     :: Int
-                 , _rectX      :: Double
-                 , _rectY      :: Double
-                 , _rectHeight :: Double
-                 , _rectWidth  :: Double
-                 , _rectName   :: String
-                 , _rectType   :: String } deriving (Eq, Show)
+data Rect = Rect { _rectId     :: {-# UNPACK #-} !Int
+                 , _rectX      :: {-# UNPACK #-} !Double
+                 , _rectY      :: {-# UNPACK #-} !Double
+                 , _rectHeight :: {-# UNPACK #-} !Double
+                 , _rectWidth  :: {-# UNPACK #-} !Double
+                 , _rectName   :: !String
+                 , _rectType   :: !String } deriving (Eq, Show)
 
-data Save = Save { saveVersion :: String
-                 , saveAreas   :: [(Int, Maybe [Rect])] }
+data Save = Save { saveVersion :: !String
+                 , saveAreas   :: ![(Int, Maybe [Rect])] }
 
-data Field = Field { fieldRect  :: Rect
-                   , fieldType  :: String
-                   , fieldValue :: String }
+data PageItem = PageItem
+    { _pagePtr    :: !Page
+    , _pageWidth  :: {-# UNPACK #-} !Double
+    , _pageHeight :: {-# UNPACK #-} !Double }
 
 makeLenses ''Viewer
 makeLenses ''Board

@@ -25,6 +25,7 @@ onPrevious :: String -- pdf filename
            -> Button -- prev button
            -> Button -- next button
            -> ListStore Rect
+           -> IO ()
            -> IORef Viewer
            -> IO ()
 onPrevious name win = onNavCommon name win onPrevState
@@ -34,6 +35,7 @@ onNext :: String -- pdf filename
        -> Button -- next button
        -> Button -- prev button
        -> ListStore Rect
+       -> IO ()
        -> IORef Viewer
        -> IO ()
 onNext name win = onNavCommon name win onNextState
@@ -44,9 +46,10 @@ onNavCommon :: String
             -> Button
             -> Button
             -> ListStore Rect
+            -> IO ()
             -> IORef Viewer
             -> IO ()
-onNavCommon name win upd self other store ref =
+onNavCommon name win upd self other store redraw ref =
     readIORef ref >>= \v ->
         let nb = v ^. viewerPageCount
             (tSelf, tOther, v') = onNavButton upd v
@@ -60,7 +63,7 @@ onNavCommon name win upd self other store ref =
            when tOther (widgetSetSensitive other True)
            writeIORef ref v'
            windowSetTitle win title
-           askDrawingViewer v'
+           redraw
 
 onJsonSave :: IORef Viewer
            -> FileChooserDialog
@@ -83,12 +86,13 @@ onJsonSave ref jfch ResponseOk =
            widgetHide jfch
 
 onJsonImport :: IORef Viewer
+             -> IO ()
              -> ListStore Rect
              -> FileChooserDialog
              -> ResponseId
              -> IO ()
-onJsonImport _ _ ifch ResponseCancel = widgetHide ifch
-onJsonImport ref store ifch ResponseOk = do
+onJsonImport _ _ _ ifch ResponseCancel = widgetHide ifch
+onJsonImport ref redraw store ifch ResponseOk = do
   opt  <- fileChooserGetFilename ifch
   bOpt <- traverse go opt
   traverse_ (traverse_ updViewer) bOpt
@@ -114,14 +118,15 @@ onJsonImport ref store ifch ResponseOk = do
         listStoreClear store
         traverse_ (listStoreAppend store) rects
         widgetHide ifch
-        askDrawingViewer v'
+        redraw
 
 onCommonScale :: (Int -> Int)
               -> Button -- minus button
               -> Button -- plus button
+              -> IO ()
               -> IORef Viewer
               -> IO ()
-onCommonScale upd minus plus ref =
+onCommonScale upd minus plus redraw ref =
     readIORef ref >>= \v ->
         let z   = v ^. viewerZoom.to upd
             low = (z-1) < 0
@@ -130,19 +135,27 @@ onCommonScale upd minus plus ref =
         do widgetSetSensitive minus (not low)
            widgetSetSensitive plus (not up)
            writeIORef ref v'
-           askDrawingViewer v'
+           redraw
 
-onTreeSelection :: TreeSelection -> ListStore Rect -> IORef Viewer -> IO ()
-onTreeSelection sel store ref = do
+onTreeSelection :: TreeSelection
+                -> ListStore Rect
+                -> IO ()
+                -> IORef Viewer
+                -> IO ()
+onTreeSelection sel store redraw ref = do
   opt  <- treeSelectionGetSelected sel
   rOpt <- traverse (listStoreGetValue store . listStoreIterToIndex) opt
   v    <- readIORef ref
   let v' = v & viewerBoards.boardsSelected .~ (fmap _rectId rOpt)
   writeIORef ref v'
-  askDrawingViewer v'
+  redraw
 
-onRemoveArea :: TreeSelection -> ListStore Rect -> IORef Viewer -> IO ()
-onRemoveArea sel store ref = do
+onRemoveArea :: TreeSelection
+             -> ListStore Rect
+             -> IO ()
+             -> IORef Viewer
+             -> IO ()
+onRemoveArea sel store redraw ref = do
   v   <- readIORef ref
   opt <- treeSelectionGetSelected sel
   traverse_ (delete v) opt
@@ -156,7 +169,7 @@ onRemoveArea sel store ref = do
                  v' = v & board.at id .~ Nothing
              listStoreRemove store idx
              writeIORef ref v'
-             askDrawingViewer v'
+             redraw
 
 type PdfCallback = FileChooserDialog
                  -> MenuItem -- Import item
@@ -185,8 +198,8 @@ openPdfFileChooser k vbox dialog win mopen mimport msave = do
       widgetSetSensitive mopen False
       widgetShowAll avbox
 
-onMove :: IORef Viewer -> EventM EMotion ()
-onMove ref = do
+onMove :: IO () -> IORef Viewer -> EventM EMotion ()
+onMove redraw ref = do
   frame <- eventWindow
   v     <- liftIO $ readIORef ref
   ratio <- getPageRatio ref
@@ -223,7 +236,7 @@ onMove ref = do
   liftIO $ do
     when changed updateCursor
     when changed (writeIORef ref v3)
-    when changed (askDrawingViewer v3)
+    when changed redraw
 
 onPress :: IORef Viewer -> EventM EButton ()
 onPress ref = do
@@ -265,8 +278,8 @@ onPress ref = do
 
         liftIO $ writeIORef ref (execState action v)
 
-onRelease :: ListStore Rect -> IORef Viewer -> EventM EButton ()
-onRelease store ref = do
+onRelease :: ListStore Rect -> IO () -> IORef Viewer -> EventM EButton ()
+onRelease store redraw ref = do
   b <- eventButton
   when (b == LeftButton) go
     where
@@ -305,7 +318,7 @@ onRelease store ref = do
             newV <- execStateT action v
             putStrLn ("End in " ++ show (x,y))
             writeIORef ref newV
-            askDrawingViewer newV
+            redraw
 
 rectDetection :: Viewer -> Double -> EventM EMotion (Maybe Int)
 rectDetection v ratio = do
@@ -347,22 +360,6 @@ updateSelection v ratio = go
                           newR = r & rectHeight .~ newH & rectWidth .~ newW in
                       viewerBoards.boardsSelection ?= newR in
               return $ evalState action v
-
-registerViewerEvents :: ListStore Rect -> IORef Viewer -> IO ()
-registerViewerEvents store ref = do
-  v <- readIORef ref
-  let area = v ^. viewerArea
-  widgetAddEvents area [PointerMotionMask]
-  area `on` exposeEvent $ tryEvent $ drawViewer ref
-  area `on` motionNotifyEvent $ tryEvent $ onMove ref
-  area `on` buttonPressEvent $ tryEvent $ onPress ref
-  area `on` enterNotifyEvent $ tryEvent $ onEnter
-  void $ area `on` buttonReleaseEvent $ tryEvent $ onRelease store ref
-    where
-      onEnter = do
-        frame  <- eventWindow
-        cursor <- liftIO $ cursorNew Tcross
-        liftIO $ drawWindowSetCursor frame (Just cursor)
 
 onAreaSelection :: (Rect -> IO ())
                 -> TreeSelection

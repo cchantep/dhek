@@ -19,7 +19,7 @@ import Graphics.Rendering.Cairo
   (Render, setSourceRGB, scale, setLineWidth, rectangle, closePath, stroke, fill)
 import Graphics.UI.Gtk
 import Graphics.UI.Gtk.Poppler.Document
-  (Page, documentNewFromFile, documentGetNPages, documentGetPage)
+  (Document, Page, documentNewFromFile, documentGetNPages, documentGetPage)
 import Graphics.UI.Gtk.Poppler.Page
 
 zoomValues :: Array Int Double
@@ -36,12 +36,6 @@ zoomValues = array (0, 10) values
                ,(8,  6.0)   -- 600%
                ,(9,  7.0)   -- 700%
                ,(10, 8.0)]  -- 800%
-
-askDrawingViewer :: Viewer -> IO ()
-askDrawingViewer v =
-    let page = v ^. viewerCurrentPage
-        area = v ^. viewerArea in
-    widgetQueueDraw area
 
 onPrevState :: Int -> Int -> (Bool, Bool, Int)
 onPrevState cur count =
@@ -108,13 +102,19 @@ getPageRatio = liftIO . fmap (\(_,r,_,_) -> r) . getPageAndSize
 
 loadPdf :: FilePath -> IO Viewer
 loadPdf path = do
-  area <- drawingAreaNew
-  doc  <- fmap fromJust (documentNewFromFile path Nothing)
-  swin <- scrolledWindowNew Nothing Nothing
-  nb   <- documentGetNPages doc
-  scrolledWindowAddWithViewport swin area
-  scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
-  return (Viewer doc 1 nb area swin 777 3 1.0 (boardsNew nb))
+  doc <- fmap fromJust (documentNewFromFile path Nothing)
+  nb  <- documentGetNPages doc
+  return (Viewer doc 1 nb 777 3 1.0 (boardsNew nb))
+
+loadPages :: Document -> IO (Array Int PageItem)
+loadPages doc = do
+    nb <- documentGetNPages doc
+    fmap (array (1,nb)) (traverse go [1..nb])
+  where
+    go i = do
+        page  <- documentGetPage doc (i-1)
+        (w,h) <- pageGetSize page
+        return (i, PageItem page w h)
 
 getPageAndSize :: IORef Viewer -> IO (Page, Double, Double, Double)
 getPageAndSize ref = do
@@ -130,15 +130,14 @@ getPageAndSize ref = do
       ratio  = rWidth / width
   return (page, ratio, rWidth, ratio * height)
 
-drawViewer :: IORef Viewer -> EventM EExpose ()
-drawViewer = liftIO . go
+drawViewer :: DrawingArea -> IORef Viewer -> EventM EExpose ()
+drawViewer area = liftIO . go
     where
       go ref = do
         v <- readIORef ref
         (page, ratio, width, height) <- getPageAndSize ref
         let th      = v ^. viewerThick
             pageId  = v ^. viewerCurrentPage
-            area    = v ^. viewerArea
             rects'  = v ^. viewerBoards.boardsMap.at pageId.traverse.boardRects
             rects   = I.elems rects'
             sel' = v ^. viewerBoards.boardsSelected

@@ -2,6 +2,7 @@ module Dhek.Views where
 
 import Control.Lens
 import Control.Monad (void)
+import Control.Monad.Trans (liftIO)
 import Data.Foldable (traverse_)
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Maybe (fromJust)
@@ -89,34 +90,36 @@ createMenuBar win vbox fdialog = do
 createNavButtons :: String
                  -> Window
                  -> ListStore Rect
+                 -> IO ()
                  -> IORef Viewer
                  -> IO (Button, Button)
-createNavButtons name win store ref = do
+createNavButtons name win store redraw ref = do
   prev <- buttonNewWithLabel "Previous"
   next <- buttonNewWithLabel "Next"
-  prev `on` buttonActivated $ onPrevious name win prev next store ref
-  next `on` buttonActivated $ onNext name win next prev store ref
+  prev `on` buttonActivated $ onPrevious name win prev next store redraw ref
+  next `on` buttonActivated $ onNext name win next prev store redraw ref
   return (prev, next)
 
-createZoomButtons :: IORef Viewer -> IO (Button, Button)
-createZoomButtons ref = do
+createZoomButtons :: IO () -> IORef Viewer -> IO (Button, Button)
+createZoomButtons redraw ref = do
   minus <- buttonNewWithLabel "-"
   plus  <- buttonNewWithLabel "+"
-  minus `on` buttonActivated $ onCommonScale pred minus plus ref
-  plus  `on` buttonActivated $ onCommonScale succ minus plus ref
+  minus `on` buttonActivated $ onCommonScale pred minus plus redraw ref
+  plus  `on` buttonActivated $ onCommonScale succ minus plus redraw ref
   return (minus, plus)
 
 createRemoveAreaButton :: TreeSelection
                        -> ListStore Rect
+                       -> IO ()
                        -> IORef Viewer
                        -> IO Button
-createRemoveAreaButton sel store ref = do
+createRemoveAreaButton sel store redraw ref = do
   rem <- buttonNewWithLabel "Remove"
-  rem `on` buttonActivated $ onRemoveArea sel store ref
+  rem `on` buttonActivated $ onRemoveArea sel store redraw ref
   return rem
 
-createTreeView :: ListStore Rect -> IORef Viewer -> IO TreeView
-createTreeView store ref = do
+createTreeView :: ListStore Rect -> IO () -> IORef Viewer -> IO TreeView
+createTreeView store redraw ref = do
   treeV <- treeViewNewWithModel store
   col <- treeViewColumnNew
   treeViewColumnSetTitle col "Areas"
@@ -126,7 +129,7 @@ createTreeView store ref = do
   cellLayoutSetAttributes col trenderer store mapping
   treeViewAppendColumn treeV col
   sel <- treeViewGetSelection treeV
-  sel `on` treeSelectionSelectionChanged $ onTreeSelection sel store ref
+  sel `on` treeSelectionSelectionChanged $ onTreeSelection sel store redraw ref
   return treeV
 
 openPdf :: FileChooserDialog -> MenuItem -> MenuItem -> Window -> IO HBox
@@ -134,12 +137,13 @@ openPdf chooser mimport msave win = do
   uri    <- fmap fromJust (fileChooserGetURI chooser)
   name   <- fmap (takeFileName . fromJust) (fileChooserGetFilename chooser)
   store  <- listStoreNew ([] :: [Rect])
+  area   <- drawingAreaNew
+  swin   <- scrolledWindowNew Nothing Nothing
+  let redraw = widgetQueueDraw area
   ref    <- makeViewer uri store
-  treeV  <- createTreeView store ref
+  treeV  <- createTreeView store redraw ref
   v      <- readIORef ref
-  let nb   = v ^. viewerPageCount
-      swin = v ^. viewerScrollWindow
-      area = v ^. viewerArea
+  let nb  = v ^. viewerPageCount
   vbox    <- vBoxNew False 10
   hbox    <- hBoxNew False 10
   vleft   <- vBoxNew False 10
@@ -148,16 +152,25 @@ openPdf chooser mimport msave win = do
   arem    <- alignmentNew 0.5 0 0 0
   bbox    <- hButtonBoxNew
   scale   <- hScaleNewWithRange 100 200 1
-  (prev, next)  <- createNavButtons name win store ref
-  (minus, plus) <- createZoomButtons ref
+  (prev, next)  <- createNavButtons name win store redraw ref
+  (minus, plus) <- createZoomButtons redraw ref
   ifch    <- createJsonImportDialog win
   jfch    <- createJsonChooserDialog win
   sep     <- vSeparatorNew
   sel     <- treeViewGetSelection treeV
-  rem <- createRemoveAreaButton sel store ref
+  rem <- createRemoveAreaButton sel store redraw ref
+  scrolledWindowAddWithViewport swin area
+  scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
+  widgetAddEvents area [PointerMotionMask]
+  widgetAddEvents area [PointerMotionMask]
+  area `on` exposeEvent $ tryEvent $ drawViewer area ref
+  area `on` motionNotifyEvent $ tryEvent $ onMove redraw ref
+  area `on` buttonPressEvent $ tryEvent $ onPress ref
+  area `on` enterNotifyEvent $ tryEvent $ onEnter
+  area `on` buttonReleaseEvent $ tryEvent $ onRelease store redraw ref
   mimport `on` menuItemActivate $ void $ dialogRun ifch
   msave `on` menuItemActivate $ void $ dialogRun jfch
-  ifch  `on` response $ onJsonImport ref store ifch
+  ifch  `on` response $ onJsonImport ref redraw store ifch
   jfch  `on` response $ onJsonSave ref jfch
   windowSetTitle win (name ++ " (page 1 / " ++ show nb ++ ")")
   widgetSetSensitive prev False
@@ -184,6 +197,11 @@ openPdf chooser mimport msave win = do
   sel `on` treeSelectionSelectionChanged $ onAreaSelection onSel sel store
   rem `on` buttonActivated $ onRem
   return hbox
+  where
+    onEnter = do
+        frame  <- eventWindow
+        cursor <- liftIO $ cursorNew Tcross
+        liftIO $ drawWindowSetCursor frame (Just cursor)
 
 createPropView :: BoxClass b
                => Window
@@ -232,5 +250,5 @@ makeViewer :: String -> ListStore Rect -> IO (IORef Viewer)
 makeViewer filepath store = do
   viewer <- loadPdf filepath
   ref    <- newIORef viewer
-  registerViewerEvents store ref
+  --registerViewerEvents store ref
   return ref
