@@ -370,15 +370,6 @@ updateSelection v ratio = go
                       viewerBoards.boardsSelection ?= newR in
               return $ evalState action v
 
-onAreaSelection :: (Rect -> IO ())
-                -> TreeSelection
-                -> ListStore Rect
-                -> IO ()
-onAreaSelection handler sel store = do
-  opt  <- treeSelectionGetSelected sel
-  rOpt <- traverse (listStoreGetValue store . listStoreIterToIndex) opt
-  traverse_ handler rOpt
-
 onPropAreaSelection :: Entry -> ListStore String -> ComboBox -> Rect -> IO ()
 onPropAreaSelection entry store combo r = do
   entrySetText entry (r ^. rectName)

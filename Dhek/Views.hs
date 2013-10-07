@@ -158,6 +158,7 @@ openPdf chooser mimport msave win = do
   jfch    <- createJsonChooserDialog win
   sep     <- vSeparatorNew
   sel     <- treeViewGetSelection treeV
+  let selection = treeSelection sel store
   rem <- createRemoveAreaButton sel store redraw ref
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
@@ -195,7 +196,8 @@ openPdf chooser mimport msave win = do
   handlers <- createPropView win vleft store ref
   let onSel = hOnSelection handlers
       onRem = hOnClear handlers
-  sel `on` treeSelectionSelectionChanged $ onAreaSelection onSel sel store
+  sel `on` treeSelectionSelectionChanged $
+          (traverse_ (onSel . snd) =<< selection)
   rem `on` buttonActivated $ onRem
   return hbox
   where
@@ -203,6 +205,14 @@ openPdf chooser mimport msave win = do
         frame  <- eventWindow
         cursor <- liftIO $ cursorNew Tcross
         liftIO $ drawWindowSetCursor frame (Just cursor)
+
+treeSelection :: TreeSelection -> ListStore Rect -> IO (Maybe (TreeIter, Rect))
+treeSelection sel store =
+    traverse go =<< treeSelectionGetSelected sel
+  where
+    go iter =
+        let idx = listStoreIterToIndex iter in
+        fmap (\r -> (iter, r)) (listStoreGetValue store idx)
 
 createPropView :: BoxClass b
                => Window
