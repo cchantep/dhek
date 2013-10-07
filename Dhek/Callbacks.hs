@@ -10,6 +10,7 @@ import Data.Aeson (encode, eitherDecode)
 import Data.Char (isSpace)
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Foldable (traverse_, foldMap, foldr)
+import Data.Functor ((<$))
 import qualified Data.ByteString.Lazy as B
 import qualified Data.IntMap as I
 import Data.List (dropWhileEnd)
@@ -278,8 +279,8 @@ onPress ref = do
 
         liftIO $ writeIORef ref (execState action v)
 
-onRelease :: ListStore Rect -> IO () -> IORef Viewer -> EventM EButton ()
-onRelease store redraw ref = do
+onRelease :: (Rect -> IO ()) -> IO () -> IORef Viewer -> EventM EButton ()
+onRelease onAreaCreate redraw ref = do
   b <- eventButton
   when (b == LeftButton) go
     where
@@ -298,7 +299,7 @@ onRelease store redraw ref = do
                              id <- use $ viewerBoards.boardsState
                              let x'' =
                                      x' & rectId .~ id & rectName %~ (++ show id)
-                             liftIO $ listStoreAppend store x''
+                             liftIO $ onAreaCreate x''
                              board.boardRects.at id ?= x''
                   when (w*h >= 30) addIt
 
@@ -319,6 +320,14 @@ onRelease store redraw ref = do
             putStrLn ("End in " ++ show (x,y))
             writeIORef ref newV
             redraw
+
+onAreaCreation :: ListStore Rect -> TreeSelection -> Rect -> IO ()
+onAreaCreation store sel r = do
+    idx <- listStoreAppend store r
+    treeModelForeach store $ \iter ->
+        if listStoreIterToIndex iter ==  idx
+        then True <$ treeSelectionSelectIter sel iter
+        else return False
 
 rectDetection :: Viewer -> Double -> EventM EMotion (Maybe Int)
 rectDetection v ratio = do

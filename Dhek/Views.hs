@@ -167,7 +167,8 @@ openPdf chooser mimport msave win = do
   area `on` motionNotifyEvent $ tryEvent $ onMove redraw ref
   area `on` buttonPressEvent $ tryEvent $ onPress ref
   area `on` enterNotifyEvent $ tryEvent $ onEnter
-  area `on` buttonReleaseEvent $ tryEvent $ onRelease store redraw ref
+  area `on` buttonReleaseEvent $ tryEvent $ onRelease
+           (onAreaCreation store sel) redraw ref
   mimport `on` menuItemActivate $ void $ dialogRun ifch
   msave `on` menuItemActivate $ void $ dialogRun jfch
   ifch  `on` response $ onJsonImport ref redraw store ifch
