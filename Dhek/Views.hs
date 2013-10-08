@@ -3,6 +3,7 @@ module Dhek.Views where
 import Control.Lens
 import Control.Monad (void, (<=<))
 import Control.Monad.Trans (liftIO)
+import qualified Control.Monad.State as State
 import Data.Foldable (traverse_)
 import Data.Functor ((<$))
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
@@ -140,11 +141,14 @@ openPdf chooser mimport msave win = do
   store  <- listStoreNew ([] :: [Rect])
   area   <- drawingAreaNew
   swin   <- scrolledWindowNew Nothing Nothing
-  let redraw = widgetQueueDraw area
-      updateStore  = updateRectStore store
-      appendStore  = appendRectStore store
-      withRectIter = withRectStoreIter store
   ref    <- makeViewer uri store
+  let redraw          = widgetQueueDraw area
+      updateStore     = updateRectStore store
+      appendStore     = appendRectStore store ref
+      withRectIter    = withRectStoreIter store
+      viewerEvent     = viewerGetEvent ref
+      viewerSelection = viewerGetSelection ref
+      updateRect      = viewerUpdateRect ref
   treeV  <- createTreeView store redraw ref
   v      <- readIORef ref
   let nb  = v ^. viewerPageCount
@@ -174,7 +178,8 @@ openPdf chooser mimport msave win = do
   area `on` buttonPressEvent $ tryEvent $ onPress ref
   area `on` enterNotifyEvent $ tryEvent $ onEnter
   area `on` buttonReleaseEvent $ tryEvent $ onRelease
-           (withRectIter selectItem <=< appendStore) redraw ref
+           (withRectIter selectItem <=< appendStore)
+           updateRect redraw viewerSelection viewerEvent
   mimport `on` menuItemActivate $ void $ dialogRun ifch
   msave `on` menuItemActivate $ void $ dialogRun jfch
   ifch  `on` response $ onJsonImport ref redraw store ifch
@@ -223,7 +228,8 @@ selectTreeItem :: TreeSelection
                -> ListStore Rect
                -> IO ()
                -> IORef Viewer
-               -> TreeIter -> IO ()
+               -> TreeIter
+               -> IO ()
 selectTreeItem sel store redraw ref iter = do
     treeSelectionSelectIter sel iter
     r <- listStoreGetValue store (listStoreIterToIndex iter)
@@ -235,8 +241,32 @@ updateRectStore store r iter =
     let idx = listStoreIterToIndex iter in
     listStoreSetValue store idx r
 
-appendRectStore :: ListStore Rect -> Rect -> IO Int
-appendRectStore store r = listStoreAppend store r
+appendRectStore :: ListStore Rect -> IORef Viewer -> Rect -> IO Int
+appendRectStore store ref r = do
+    v  <- readIORef ref
+    r' <- State.evalStateT go v
+    listStoreAppend store r'
+  where
+    go = do
+        viewerBoards.boardsState += 1
+        page <- use viewerCurrentPage
+        id   <- use $ viewerBoards.boardsState
+        let r' = r & rectId .~ id & rectName %~ (++  show id)
+        viewerBoards.boardsMap.at page.traverse.boardRects.at id ?= r'
+        viewerBoards.boardsSelection .= Nothing
+        v <- State.get
+        liftIO $ writeIORef ref v
+        return r'
+
+viewerUpdateRect :: IORef Viewer -> Rect -> IO ()
+viewerUpdateRect ref r = do
+    writeIORef ref . State.execState go =<< readIORef ref
+  where
+    go = do
+        page <- use viewerCurrentPage
+        let id = r ^. rectId
+        viewerBoards.boardsMap.at page.traverse.boardRects.at id ?= r
+        viewerBoards.boardsEvent .= None
 
 withRectStoreIter :: ListStore Rect -> (TreeIter -> IO r) -> Int -> IO ()
 withRectStoreIter store k i =
@@ -244,6 +274,16 @@ withRectStoreIter store k i =
         if listStoreIterToIndex iter == i
         then True <$ k iter
         else return False
+
+viewerGetEvent :: IORef Viewer -> IO BoardEvent
+viewerGetEvent ref = fmap go (readIORef ref)
+  where
+    go v = v ^. viewerBoards.boardsEvent
+
+viewerGetSelection :: IORef Viewer -> IO (Maybe Rect)
+viewerGetSelection ref = fmap go (readIORef ref)
+  where
+    go v = v ^. viewerBoards.boardsSelection
 
 createPropView :: BoxClass b
                => Window

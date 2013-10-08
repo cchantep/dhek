@@ -279,47 +279,28 @@ onPress ref = do
 
         liftIO $ writeIORef ref (execState action v)
 
-onRelease :: (Rect -> IO ()) -> IO () -> IORef Viewer -> EventM EButton ()
-onRelease onAreaCreate redraw ref = do
-  b <- eventButton
-  when (b == LeftButton) go
-    where
-      go =
-        eventCoordinates >>= \(x,y) ->
-          liftIO $ do
-            v <- readIORef ref
-            let page = v ^. viewerCurrentPage
-                board = viewerBoards.boardsMap.at page.traverse
-                insert x = do
-                  let x' = normalize x
-                      w  = x' ^. rectWidth
-                      h  = x' ^. rectHeight
-                      addIt =
-                          do viewerBoards.boardsState += 1
-                             id <- use $ viewerBoards.boardsState
-                             let x'' =
-                                     x' & rectId .~ id & rectName %~ (++ show id)
-                             liftIO $ onAreaCreate x''
-                             board.boardRects.at id ?= x''
-                  when (w*h >= 30) addIt
+onRelease :: (Rect -> IO ())
+          -> (Rect -> IO ())
+          -> IO ()
+          -> IO (Maybe Rect)
+          -> IO BoardEvent
+          -> EventM EButton ()
+onRelease onAreaCreate onAreaUpdate redraw getSelection getEvent = do
+    b <- eventButton
+    when (b == LeftButton) (liftIO go)
+  where
+    go = do
+        evt <- getEvent
+        sel <- getSelection
+        traverse_ insert sel
+        traverse_ (onAreaUpdate . normalize) (eventGetRect evt)
+        redraw
 
-                onHold r = do
-                  board <- use (viewerBoards.boardsMap.at page.traverse)
-                  let rId = r ^. rectId
-                      r'  = normalize r
-                  viewerBoards.boardsMap.at page.traverse .= (board & boardRects.at rId .~ (Just r'))
-
-                action = do
-                  selection <- use (viewerBoards.boardsSelection)
-                  event     <- use (viewerBoards.boardsEvent)
-                  viewerBoards.boardsSelection .= Nothing
-                  viewerBoards.boardsEvent .= None
-                  traverse_ insert selection
-                  traverse_ onHold (eventGetRect event)
-            newV <- execStateT action v
-            putStrLn ("End in " ++ show (x,y))
-            writeIORef ref newV
-            redraw
+    insert x =
+        let x' = normalize x
+            w  = x' ^. rectWidth
+            h  = x' ^. rectHeight in
+        when (w*h >= 30) (onAreaCreate x')
 
 rectDetection :: Viewer -> Double -> EventM EMotion (Maybe Int)
 rectDetection v ratio = do
