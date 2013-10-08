@@ -102,9 +102,10 @@ getPageRatio = liftIO . fmap (\(_,r,_,_) -> r) . getPageAndSize
 
 loadPdf :: FilePath -> IO Viewer
 loadPdf path = do
-  doc <- fmap fromJust (documentNewFromFile path Nothing)
-  nb  <- documentGetNPages doc
-  return (Viewer doc 1 nb 777 3 1.0 (boardsNew nb))
+  doc   <- fmap fromJust (documentNewFromFile path Nothing)
+  nb    <- documentGetNPages doc
+  pages <- loadPages doc
+  return (Viewer doc pages 1 nb 777 3 1.0 (boardsNew nb))
 
 loadPages :: Document -> IO (Array Int PageItem)
 loadPages doc = do

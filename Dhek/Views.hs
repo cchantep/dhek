@@ -4,15 +4,19 @@ import Control.Lens
 import Control.Monad (void, (<=<))
 import Control.Monad.Trans (liftIO)
 import qualified Control.Monad.State as State
-import Data.Foldable (traverse_)
+import Data.Array
+import Data.Foldable (foldMap, traverse_)
 import Data.Functor ((<$))
+import qualified Data.IntMap as I
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Maybe (fromJust)
+import Data.Monoid (First(..))
 import Dhek.Action
 import Dhek.Callbacks
 import Dhek.Types
 import Dhek.Utils
 import Graphics.UI.Gtk
+import Debug.Trace
 
 data SelectionHandlers = SelectionHandlers
     { hOnSelection :: Rect -> IO ()
@@ -149,6 +153,10 @@ openPdf chooser mimport msave win = do
       viewerEvent     = viewerGetEvent ref
       viewerSelection = viewerGetSelection ref
       updateRect      = viewerUpdateRect ref
+      overedRect      = viewerGetOveredRect ref
+      overedArea      = viewerGetOveredArea ref
+      setSelection    = viewerSetSelection ref
+      viewerRatio     = viewerGetRatio ref
   treeV  <- createTreeView store redraw ref
   v      <- readIORef ref
   let nb  = v ^. viewerPageCount
@@ -168,6 +176,8 @@ openPdf chooser mimport msave win = do
   sel     <- treeViewGetSelection treeV
   let selection  = treeSelection sel store
       selectItem = selectTreeItem sel store redraw ref
+      selectRect = selectRectItem store selectItem
+      setEvent   = viewerSetEvent ref selectRect
   rem <- createRemoveAreaButton sel store redraw ref
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
@@ -175,7 +185,8 @@ openPdf chooser mimport msave win = do
   widgetAddEvents area [PointerMotionMask]
   area `on` exposeEvent $ tryEvent $ drawViewer area ref
   area `on` motionNotifyEvent $ tryEvent $ onMove redraw ref
-  area `on` buttonPressEvent $ tryEvent $ onPress ref
+  area `on` buttonPressEvent $ tryEvent $ onPress
+       overedRect overedArea setSelection setEvent viewerRatio
   area `on` enterNotifyEvent $ tryEvent $ onEnter
   area `on` buttonReleaseEvent $ tryEvent $ onRelease
            (withRectIter selectItem <=< appendStore)
@@ -236,6 +247,12 @@ selectTreeItem sel store redraw ref iter = do
     modifyIORef ref (viewerSetSelected r)
     redraw
 
+selectRectItem :: ListStore Rect -> (TreeIter -> IO ()) -> Rect -> IO ()
+selectRectItem store selectItem r = do
+    let p x = (x ^. rectId) == (r ^. rectId)
+    iOpt <- lookupStoreIter p store
+    traverse_ selectItem iOpt
+
 updateRectStore :: ListStore Rect -> Rect -> TreeIter -> IO ()
 updateRectStore store r iter =
     let idx = listStoreIterToIndex iter in
@@ -258,6 +275,53 @@ appendRectStore store ref r = do
         liftIO $ writeIORef ref v
         return r'
 
+viewerGetRatio :: IORef Viewer -> IO Double
+viewerGetRatio ref = fmap go (readIORef ref)
+  where
+    go v =
+        let pId   = v ^. viewerCurrentPage
+            pZ    = v ^. viewerZoom
+            pages = v ^. viewerPages
+            baseW = fromIntegral (v ^. viewerBaseWidth)
+            page  = pages ! pId
+            zoom  = zoomValues ! pZ
+            w     = pageWidth page
+        in (baseW * zoom) / w
+
+viewerGetPageRects :: IORef Viewer -> IO [Rect]
+viewerGetPageRects = fmap go . readIORef
+  where
+    go v =
+        let pId = v ^. viewerCurrentPage in
+        v ^. viewerBoards.boardsMap.at pId.traverse.boardRects.to I.elems
+
+viewerGetOveredRect :: IORef Viewer -> Double -> Double -> IO (Maybe Rect)
+viewerGetOveredRect ref x y = do
+    rs <- viewerGetPageRects ref
+    fmap (go rs) (readIORef ref)
+  where
+    go rs v =
+        let (First oOpt) = foldMap (First . overed) rs in oOpt
+
+    overed r
+        | isOver 1.0 x y r = Just r
+        | otherwise        = Nothing
+
+viewerGetOveredArea :: IORef Viewer
+                    -> Double
+                    -> Double
+                    -> IO (Rect -> Maybe Area)
+viewerGetOveredArea ref x y = return . go =<< viewerGetRatio ref
+  where
+    go ratio r =
+        let (First aOpt) =
+                foldMap (First . overed ratio r) (enumFrom TOP_LEFT) in
+        aOpt
+
+    overed ratio r a
+        | isOver 1.0 x y (rectArea (5/ratio) r a) = Just a
+        | otherwise                               = Nothing
+
 viewerUpdateRect :: IORef Viewer -> Rect -> IO ()
 viewerUpdateRect ref r = do
     writeIORef ref . State.execState go =<< readIORef ref
@@ -275,6 +339,15 @@ withRectStoreIter store k i =
         then True <$ k iter
         else return False
 
+withRatioCoord :: IORef Viewer
+               -> (Double -> Double -> IO a)
+               -> Double
+               -> Double
+               -> IO a
+withRatioCoord ref k x y = do
+    ratio <- viewerGetRatio ref
+    k (x/ratio) (y/ratio)
+
 viewerGetEvent :: IORef Viewer -> IO BoardEvent
 viewerGetEvent ref = fmap go (readIORef ref)
   where
@@ -284,6 +357,25 @@ viewerGetSelection :: IORef Viewer -> IO (Maybe Rect)
 viewerGetSelection ref = fmap go (readIORef ref)
   where
     go v = v ^. viewerBoards.boardsSelection
+
+viewerSetSelection :: IORef Viewer -> Rect -> IO ()
+viewerSetSelection ref r = modifyIORef ref go
+  where
+    go v = v & viewerBoards.boardsSelection ?~ r
+
+viewerSetEvent :: IORef Viewer -> (Rect -> IO ()) -> BoardEvent -> IO ()
+viewerSetEvent ref selectRect e = do
+    modifyIORef ref (State.execState go)
+    traverse_ selectRect (eventGetRect e)
+  where
+    go = do
+        viewerBoards.boardsEvent .= e
+        traverse_ upd (eventGetRect e)
+
+    upd r = do
+        page <- use viewerCurrentPage
+        let id = r ^. rectId
+        viewerBoards.boardsMap.at page.traverse.boardRects.at id .= Nothing
 
 createPropView :: BoxClass b
                => Window

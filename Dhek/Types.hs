@@ -9,7 +9,7 @@ import Control.Monad (mzero)
 import Control.Monad.State (execState, evalStateT, modify, get)
 import Control.Monad.Trans (lift)
 import Data.Array
-import Data.Aeson
+import Data.Aeson hiding (Array)
 import Data.Aeson.Types (Parser)
 import Data.Aeson.TH
 import Data.Char
@@ -23,6 +23,7 @@ import Graphics.UI.Gtk hiding (get)
 import Graphics.UI.Gtk.Poppler.Document (Document, Page)
 
 data Viewer = Viewer { _viewerDocument     :: Document
+                     , _viewerPages        :: Array Int PageItem
                      , _viewerCurrentPage  :: Int
                      , _viewerPageCount    :: Int
                      , _viewerBaseWidth    :: Int
@@ -64,9 +65,9 @@ data Save = Save { saveVersion :: !String
                  , saveAreas   :: ![(Int, Maybe [Rect])] }
 
 data PageItem = PageItem
-    { _pagePtr    :: !Page
-    , _pageWidth  :: {-# UNPACK #-} !Double
-    , _pageHeight :: {-# UNPACK #-} !Double }
+    { pagePtr    :: !Page
+    , pageWidth  :: {-# UNPACK #-} !Double
+    , pageHeight :: {-# UNPACK #-} !Double }
 
 makeLenses ''Viewer
 makeLenses ''Board
@@ -205,8 +206,8 @@ rectArea eps r area = go area
       go BOTTOM_LEFT  = rectNew x (y+h-eps) eps eps
       go LEFT         = rectNew x (y+eps) (h-2*eps) eps
 
-isOver :: Double -> Double -> Double -> Double -> Rect -> Bool
-isOver ratio thick x y r = go
+isOver :: Double -> Double -> Double -> Rect -> Bool
+isOver thick x y r = go
     where
       x0 = r ^. rectX
       y0 = r ^. rectY

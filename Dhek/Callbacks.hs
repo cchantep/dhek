@@ -2,6 +2,7 @@
 module Dhek.Callbacks where
 
 import Prelude hiding (foldr)
+import Control.Applicative (Applicative(..))
 import Control.Lens
 import Control.Monad (when, void)
 import Control.Monad.State (execState, evalState, execStateT)
@@ -239,45 +240,29 @@ onMove redraw ref = do
     when changed (writeIORef ref v3)
     when changed redraw
 
-onPress :: IORef Viewer -> EventM EButton ()
-onPress ref = do
-  b <- eventButton
-  when (b == LeftButton) go
-    where
-      go = do
-        (x, y) <- eventCoordinates
-        ratio  <- getPageRatio ref
-        v      <- liftIO $ readIORef ref
-        let xR = x / ratio
-            yR = y / ratio
-
-            onNoSel = viewerBoards.boardsSelection ?= rectNew xR yR 0 0
-
-            onHold board page sel h = do
-              viewerBoards.boardsEvent .= h
-              let board' = board & boardRects.at sel .~ Nothing
-              viewerBoards.boardsMap.at page.traverse .= board'
-
-            toEvent th r =
-              let areas  = enumFrom TOP_LEFT
-                  pred a = if isOver ratio th xR yR (rectArea (5 / ratio) r a)
-                           then Just a
-                           else Nothing
-                  (First aOpt) = foldMap (First . pred) areas in
-              maybe (Hold r (xR, yR)) (Resize r (xR, yR)) aOpt
-
-            action = do
-              sel'   <- use (viewerBoards.boardsOvered.traverse.to Sum)
-              page   <- use viewerCurrentPage
-              thick  <- use viewerThick
-              board  <- use (viewerBoards.boardsMap.at page.traverse)
-              select <- use (viewerBoards.boardsSelection)
-              let sel  = getSum sel'
-                  rOpt = board ^. boardRects.at sel
-                  hOpt = fmap (toEvent thick) rOpt
-              maybe onNoSel (onHold board page sel) hOpt
-
-        liftIO $ writeIORef ref (execState action v)
+onPress :: (Double -> Double -> IO (Maybe Rect))
+        -> (Double -> Double -> IO (Rect -> Maybe Area))
+        -> (Rect -> IO ())
+        -> (BoardEvent -> IO ())
+        -> IO Double
+        -> EventM EButton ()
+onPress overedRect overedArea setSelection setEvent getRatio = do
+    b <- eventButton
+    c <- eventClick
+    when (b == LeftButton && c == SingleClick) go
+  where
+    go = do
+        (x', y') <- eventCoordinates
+        liftIO $ do
+             ratio <- getRatio
+             let (x,y)   = (x'/ratio, y'/ratio)
+                 sel     = rectNew x y 0 0
+                 onEvt r = do
+                     aOpt <- overedArea x y <*> pure r
+                     let evt = maybe (Hold r (x,y)) (Resize r (x,y)) aOpt
+                     setEvent evt
+             oOpt  <- overedRect x y
+             maybe (setSelection sel) onEvt oOpt
 
 onRelease :: (Rect -> IO ())
           -> (Rect -> IO ())
