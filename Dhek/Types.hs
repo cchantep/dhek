@@ -31,6 +31,22 @@ data Viewer = Viewer { _viewerDocument     :: Document
                      , _viewerThick        :: Double
                      , _viewerBoards       :: Boards }
 
+data ViewerRef = ViewerRef
+    { viewerDraw           :: IO ()
+    , viewerInsertRect     :: Rect -> IO ()
+    , viewerAppendtore     :: Rect -> IO Int
+    , viewerGetEvent       :: IO BoardEvent
+    , viewerSetEvent       :: BoardEvent -> IO ()
+    , viewerGetSelection   :: IO (Maybe Rect)
+    , viewerSetSelection   :: Rect -> IO ()
+    , viewerClearSelection :: IO ()
+    , viewerSetRect        :: Rect -> IO ()
+    , viewerGetOveredRect  :: Double -> Double -> IO (Maybe Rect)
+    , viewerGetOveredArea  :: Double -> Double -> Rect -> IO (Maybe Area)
+    , viewerGetRatio       :: IO Double
+    , viewerGetPageRects   :: IO [Rect]
+    , viewerSelectRect     :: Rect -> IO () }
+
 data Board = Board { _boardRects :: !(IntMap Rect) } deriving Show
 
 data BoardEvent = None

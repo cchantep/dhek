@@ -2,7 +2,6 @@
 module Dhek.Callbacks where
 
 import Prelude hiding (foldr)
-import Control.Applicative (Applicative(..))
 import Control.Lens
 import Control.Monad (when, void)
 import Control.Monad.State (execState, evalState, execStateT)
@@ -240,13 +239,8 @@ onMove redraw ref = do
     when changed (writeIORef ref v3)
     when changed redraw
 
-onPress :: (Double -> Double -> IO (Maybe Rect))
-        -> (Double -> Double -> IO (Rect -> Maybe Area))
-        -> (Rect -> IO ())
-        -> (BoardEvent -> IO ())
-        -> IO Double
-        -> EventM EButton ()
-onPress overedRect overedArea setSelection setEvent getRatio = do
+onPress :: ViewerRef -> EventM EButton ()
+onPress ref = do
     b <- eventButton
     c <- eventClick
     when (b == LeftButton && c == SingleClick) go
@@ -254,38 +248,35 @@ onPress overedRect overedArea setSelection setEvent getRatio = do
     go = do
         (x', y') <- eventCoordinates
         liftIO $ do
-             ratio <- getRatio
+             ratio <- viewerGetRatio ref
              let (x,y)   = (x'/ratio, y'/ratio)
                  sel     = rectNew x y 0 0
                  onEvt r = do
-                     aOpt <- overedArea x y <*> pure r
+                     aOpt <- viewerGetOveredArea ref x y r
                      let evt = maybe (Hold r (x,y)) (Resize r (x,y)) aOpt
-                     setEvent evt
-             oOpt  <- overedRect x y
-             maybe (setSelection sel) onEvt oOpt
+                     viewerSetEvent ref evt
+             oOpt <- viewerGetOveredRect ref x y
+             maybe (viewerSetSelection ref sel) onEvt oOpt
 
-onRelease :: (Rect -> IO ())
-          -> (Rect -> IO ())
-          -> IO ()
-          -> IO (Maybe Rect)
-          -> IO BoardEvent
-          -> EventM EButton ()
-onRelease onAreaCreate onAreaUpdate redraw getSelection getEvent = do
+onRelease :: ViewerRef -> EventM EButton ()
+onRelease ref = do
     b <- eventButton
     when (b == LeftButton) (liftIO go)
   where
     go = do
-        evt <- getEvent
-        sel <- getSelection
+        evt <- viewerGetEvent ref
+        sel <- viewerGetSelection ref
         traverse_ insert sel
-        traverse_ (onAreaUpdate . normalize) (eventGetRect evt)
-        redraw
+        traverse_ (viewerSetRect ref . normalize) (eventGetRect evt)
+        viewerDraw ref
 
     insert x =
         let x' = normalize x
             w  = x' ^. rectWidth
             h  = x' ^. rectHeight in
-        when (w*h >= 30) (onAreaCreate x')
+        if (w*h >= 30)
+        then viewerInsertRect ref x'
+        else viewerClearSelection ref
 
 rectDetection :: Viewer -> Double -> EventM EMotion (Maybe Int)
 rectDetection v ratio = do
