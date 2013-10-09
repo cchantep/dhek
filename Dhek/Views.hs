@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 module Dhek.Views where
 
 import Control.Lens
@@ -176,21 +177,31 @@ openPdf chooser mimport msave win = do
   sep     <- vSeparatorNew
   sel     <- treeViewGetSelection treeV
   let selection      = treeSelection sel store
-      selectItem     = selectTreeItem sel store redraw ref
+      selectItem     = selectTreeItem sel ref
       selectRect     = _selectRectItem store selectItem
-      setEvent       = _viewerSetEvent ref selectRect
+      setEvent       = _viewerSetEvent ref
+      modifyEvent    = _viewerModifyEvent ref
       clearSelection = _viewerClearSelection ref
+      modifySelect   = _viewerModifySelection ref
+      lookupRect     = _viewerLookupIter ref
+      viewerSelected = _viewerGetSelected ref
+      viewerOvered   = _viewerGetOvered ref
+      setOvered      = _viewerSetOvered ref
+      viewerPageItem = _viewerPageItem ref
+      setSelected    = _viewerSetSelected ref
       vRef = ViewerRef redraw (withRectIter selectItem <=< appendStore)
-             appendStore viewerEvent setEvent
-             viewerSelection setSelection clearSelection updateRect overedRect
-             overedArea viewerRatio viewerRects selectRect
+             appendStore viewerEvent setEvent modifyEvent
+             viewerSelection setSelection modifySelect clearSelection
+             viewerSelected setSelected viewerOvered setOvered
+             updateRect overedRect overedArea viewerRatio viewerRects
+             selectRect lookupRect viewerPageItem win
   rem <- createRemoveAreaButton sel store redraw ref
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
   widgetAddEvents area [PointerMotionMask]
   widgetAddEvents area [PointerMotionMask]
-  area `on` exposeEvent $ tryEvent $ drawViewer area ref
-  area `on` motionNotifyEvent $ tryEvent $ onMove redraw ref
+  area `on` exposeEvent $ tryEvent $ drawViewer area vRef
+  area `on` motionNotifyEvent $ tryEvent $ onMove vRef
   area `on` buttonPressEvent $ tryEvent $ onPress vRef
   area `on` enterNotifyEvent $ tryEvent $ onEnter
   area `on` buttonReleaseEvent $ tryEvent $ onRelease vRef
@@ -239,16 +250,11 @@ treeSelection sel store =
         fmap (\r -> (iter, r)) (listStoreGetValue store idx)
 
 selectTreeItem :: TreeSelection
-               -> ListStore Rect
-               -> IO ()
                -> IORef Viewer
                -> TreeIter
                -> IO ()
-selectTreeItem sel store redraw ref iter = do
+selectTreeItem sel ref iter =
     treeSelectionSelectIter sel iter
-    r <- listStoreGetValue store (listStoreIterToIndex iter)
-    modifyIORef ref (viewerSetSelected r)
-    redraw
 
 _selectRectItem :: ListStore Rect -> (TreeIter -> IO ()) -> Rect -> IO ()
 _selectRectItem store selectItem r = do
@@ -357,6 +363,26 @@ _viewerGetEvent ref = fmap go (readIORef ref)
   where
     go v = v ^. viewerBoards.boardsEvent
 
+_viewerSetEvent :: IORef Viewer -> BoardEvent -> IO ()
+_viewerSetEvent ref e = modifyIORef ref (State.execState go)
+  where
+    go = do
+        viewerBoards.boardsEvent .= e
+        traverse_ upd (eventGetRect e)
+
+    upd r = do
+        page <- use viewerCurrentPage
+        let id = r ^. rectId
+        viewerBoards.boardsMap.at page.traverse.boardRects.at id .= Nothing
+
+_viewerModifyEvent :: IORef Viewer -> (BoardEvent -> BoardEvent) -> IO ()
+_viewerModifyEvent ref k = do
+    e <- _viewerGetEvent ref
+    let !e' = case e of
+                None -> e
+                _    -> k e
+    _viewerSetEvent ref e'
+
 _viewerGetSelection :: IORef Viewer -> IO (Maybe Rect)
 _viewerGetSelection ref = fmap go (readIORef ref)
   where
@@ -367,24 +393,52 @@ _viewerSetSelection ref r = modifyIORef ref go
   where
     go v = v & viewerBoards.boardsSelection ?~ r
 
+_viewerModifySelection :: IORef Viewer -> (Rect -> Rect) -> IO ()
+_viewerModifySelection ref k = do
+    sOpt <- _viewerGetSelection ref
+    traverse_ (_viewerSetSelection ref) (fmap k sOpt)
+
 _viewerClearSelection :: IORef Viewer -> IO ()
 _viewerClearSelection ref = modifyIORef ref go
   where
     go v = v & viewerBoards.boardsSelection .~ Nothing
 
-_viewerSetEvent :: IORef Viewer -> (Rect -> IO ()) -> BoardEvent -> IO ()
-_viewerSetEvent ref selectRect e = do
-    modifyIORef ref (State.execState go)
-    traverse_ selectRect (eventGetRect e)
+_viewerLookupIter :: IORef Viewer -> (Rect -> Bool) -> IO (Maybe Rect)
+_viewerLookupIter ref p = fmap go (_viewerGetPageRects ref)
   where
-    go = do
-        viewerBoards.boardsEvent .= e
-        traverse_ upd (eventGetRect e)
+    go = getFirst . foldMap (First . search)
 
-    upd r = do
-        page <- use viewerCurrentPage
-        let id = r ^. rectId
-        viewerBoards.boardsMap.at page.traverse.boardRects.at id .= Nothing
+    search r
+        | p r       = Just r
+        | otherwise = Nothing
+
+_viewerGetOvered :: IORef Viewer -> IO (Maybe Rect)
+_viewerGetOvered = fmap go . readIORef
+  where
+    go v = v ^. viewerBoards.boardsOvered
+
+_viewerSetOvered :: IORef Viewer -> Maybe Rect -> IO ()
+_viewerSetOvered ref rOpt = modifyIORef ref go
+  where
+    go v = v & viewerBoards.boardsOvered .~ rOpt
+
+_viewerPageItem :: IORef Viewer -> IO PageItem
+_viewerPageItem = fmap go . readIORef
+  where
+    go v =
+        let idx   = v ^. viewerCurrentPage
+            pages = v ^. viewerPages in
+        pages ! idx
+
+_viewerGetSelected :: IORef Viewer -> IO (Maybe Rect)
+_viewerGetSelected = fmap go . readIORef
+  where
+    go v = v ^. viewerBoards.boardsSelected
+
+_viewerSetSelected :: IORef Viewer -> Maybe Rect -> IO ()
+_viewerSetSelected ref rOpt = modifyIORef ref go
+  where
+    go v = v & viewerBoards.boardsSelected .~ rOpt
 
 createPropView :: BoxClass b
                => Window
@@ -421,13 +475,17 @@ createPropView win b rectStore ref = do
   boxPackStart tvbox ualign PackNatural 0
   boxPackStart b salign PackNatural 0
   containerAdd b tvbox
-  updbut `on` buttonActivated $ onPropUpdate win rectStore nentry tcombo ref
+  --updbut `on` buttonActivated $ onPropUpdate win rectStore nentry tcombo ref
   let hdls = SelectionHandlers
              (onPropAreaSelection nentry store tcombo)
              (onPropClear nentry tcombo)
   return hdls
     where
       model = ["text", "checkbox"]
+
+onEntryActivated :: EntryClass entry => (String -> IO ()) -> entry -> IO ()
+onEntryActivated k entry =
+    void $ on entry entryActivate $ entryGetText entry >>= k
 
 makeViewer :: String -> ListStore Rect -> IO (IORef Viewer)
 makeViewer filepath store = do

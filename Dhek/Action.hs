@@ -131,39 +131,31 @@ getPageAndSize ref = do
       ratio  = rWidth / width
   return (page, ratio, rWidth, ratio * height)
 
-drawViewer :: DrawingArea -> IORef Viewer -> EventM EExpose ()
+drawViewer :: DrawingArea -> ViewerRef -> EventM EExpose ()
 drawViewer area = liftIO . go
     where
       go ref = do
-        v <- readIORef ref
-        (page, ratio, width, height) <- getPageAndSize ref
-        let th      = v ^. viewerThick
-            pageId  = v ^. viewerCurrentPage
-            rects'  = v ^. viewerBoards.boardsMap.at pageId.traverse.boardRects
-            rects   = I.elems rects'
-            sel' = v ^. viewerBoards.boardsSelected
-            ove' = v ^. viewerBoards.boardsOvered
-            rmap = v ^. viewerBoards.boardsMap.at pageId.traverse.boardRects
-            sel  = (\i -> I.lookup i rmap) =<< sel'
-            ove  = (\i -> I.lookup i rmap) =<< ove'
-            event = v ^. viewerBoards.boardsEvent
-            evRect =
-                case event of
-                  (Hold r _)     -> Just r
-                  (Resize r _ _) -> Just r
-                  _          -> Nothing
-            rectSel = v ^. viewerBoards.boardsSelection
-        frame <- widgetGetDrawWindow area
+        ratio    <- viewerGetRatio ref
+        page     <- viewerGetPageItem ref
+        rects    <- viewerGetPageRects ref
+        ove      <- viewerGetOvered ref
+        sel      <- viewerGetSelected ref
+        rectSel  <- viewerGetSelection ref
+        evRect   <- fmap eventGetRect (viewerGetEvent ref)
+        frame    <- widgetGetDrawWindow area
         (fW, fH) <- drawableGetSize frame
+        let width  = ratio  * (pageWidth page)
+            height = ratio  * (pageHeight page)
         widgetSetSizeRequest area (truncate width) (truncate height)
-        renderWithDrawable frame (setSourceRGB 1.0 1.0 1.0 >>
-                                  rectangle 0 0 (fromIntegral fW) (fromIntegral fH) >>
-                                  fill                       >>
-                                  scale ratio ratio          >>
-                                  pageRender page            >>
-                                  drawRects th sel ove rects >>
-                                  drawingSel rectSel         >>
-                                  drawRects th Nothing evRect evRect)
+        renderWithDrawable frame $ do
+                   setSourceRGB 1.0 1.0 1.0
+                   rectangle 0 0 (fromIntegral fW) (fromIntegral fH)
+                   fill
+                   scale ratio ratio
+                   pageRender (pagePtr page)
+                   drawRects 1.0 sel ove rects
+                   drawingSel rectSel
+                   drawRects 1.0 Nothing evRect evRect
 
       drawRects th sel ove = mapM_ (drawing th sel ove)
 

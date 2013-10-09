@@ -32,20 +32,29 @@ data Viewer = Viewer { _viewerDocument     :: Document
                      , _viewerBoards       :: Boards }
 
 data ViewerRef = ViewerRef
-    { viewerDraw           :: IO ()
-    , viewerInsertRect     :: Rect -> IO ()
-    , viewerAppendtore     :: Rect -> IO Int
-    , viewerGetEvent       :: IO BoardEvent
-    , viewerSetEvent       :: BoardEvent -> IO ()
-    , viewerGetSelection   :: IO (Maybe Rect)
-    , viewerSetSelection   :: Rect -> IO ()
-    , viewerClearSelection :: IO ()
-    , viewerSetRect        :: Rect -> IO ()
-    , viewerGetOveredRect  :: Double -> Double -> IO (Maybe Rect)
-    , viewerGetOveredArea  :: Double -> Double -> Rect -> IO (Maybe Area)
-    , viewerGetRatio       :: IO Double
-    , viewerGetPageRects   :: IO [Rect]
-    , viewerSelectRect     :: Rect -> IO () }
+    { viewerDraw            :: IO ()
+    , viewerInsertRect      :: Rect -> IO ()
+    , viewerAppendtore      :: Rect -> IO Int
+    , viewerGetEvent        :: IO BoardEvent
+    , viewerSetEvent        :: BoardEvent -> IO ()
+    , viewerModifyEvent     :: (BoardEvent -> BoardEvent) -> IO ()
+    , viewerGetSelection    :: IO (Maybe Rect)
+    , viewerSetSelection    :: Rect -> IO ()
+    , viewerModifySelection :: (Rect -> Rect) -> IO ()
+    , viewerClearSelection  :: IO ()
+    , viewerGetSelected     :: IO (Maybe Rect)
+    , viewerSetSelected     :: Maybe Rect -> IO ()
+    , viewerGetOvered       :: IO (Maybe Rect)
+    , viewerSetOvered       :: Maybe Rect -> IO ()
+    , viewerSetRect         :: Rect -> IO ()
+    , viewerGetOveredRect   :: Double -> Double -> IO (Maybe Rect)
+    , viewerGetOveredArea   :: Double -> Double -> Rect -> IO (Maybe Area)
+    , viewerGetRatio        :: IO Double
+    , viewerGetPageRects    :: IO [Rect]
+    , viewerSelectRect      :: Rect -> IO ()
+    , viewerLookupIter      :: (Rect -> Bool) -> IO (Maybe Rect)
+    , viewerGetPageItem     :: IO PageItem
+    , viewerWindow          :: Window }
 
 data Board = Board { _boardRects :: !(IntMap Rect) } deriving Show
 
@@ -65,8 +74,8 @@ data Area = TOP_LEFT
 data Boards = Boards { _boardsState     :: {-# UNPACK #-} !Int
                      , _boardsEvent     :: !BoardEvent
                      , _boardsSelection :: !(Maybe Rect)
-                     , _boardsOvered    :: !(Maybe Int)
-                     , _boardsSelected  :: !(Maybe Int)
+                     , _boardsOvered    :: !(Maybe Rect)
+                     , _boardsSelected  :: !(Maybe Rect)
                      , _boardsMap       :: !(IntMap Board) }
 
 data Rect = Rect { _rectId     :: {-# UNPACK #-} !Int
@@ -168,9 +177,6 @@ bool False _ y = y
 
 rectNew :: Double -> Double -> Double -> Double -> Rect
 rectNew x y h w = Rect 0 x y h w "field" "text"
-
-viewerSetSelected :: Rect -> Viewer -> Viewer
-viewerSetSelected r v = v & viewerBoards.boardsSelected ?~ (r ^. rectId)
 
 translateRect :: Double -> Double -> Rect -> Rect
 translateRect x y r = r & rectX +~ x & rectY +~ y

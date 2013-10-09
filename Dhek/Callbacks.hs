@@ -147,7 +147,7 @@ onTreeSelection sel store redraw ref = do
   opt  <- treeSelectionGetSelected sel
   rOpt <- traverse (listStoreGetValue store . listStoreIterToIndex) opt
   v    <- readIORef ref
-  let v' = v & viewerBoards.boardsSelected .~ (fmap _rectId rOpt)
+  let v' = v & viewerBoards.boardsSelected .~ rOpt
   writeIORef ref v'
   redraw
 
@@ -199,45 +199,30 @@ openPdfFileChooser k vbox dialog win mopen mimport msave = do
       widgetSetSensitive mopen False
       widgetShowAll avbox
 
-onMove :: IO () -> IORef Viewer -> EventM EMotion ()
-onMove redraw ref = do
-  frame <- eventWindow
-  v     <- liftIO $ readIORef ref
-  ratio <- getPageRatio ref
-  dopt  <- rectDetection v ratio
-  sopt  <- updateSelection v ratio
-  (x, y) <- eventCoordinates
-  let page = v ^. viewerCurrentPage
-      detL  = viewerBoards.boardsOvered
-      selL  = viewerBoards.boardsSelection
-      v1 = v & detL .~ dopt
-      v2 = foldr (\r v -> v & selL ?~ r) v1 sopt
-      event = v ^. viewerBoards.boardsEvent
-      (xR, yR) = (x/ratio, y/ratio)
-      newE =
-        case event of
-          (Hold rect (x0, y0)) ->
-            Hold (translateRect (xR-x0) (yR-y0) rect) (xR,yR)
-          (Resize rect  (x0, y0) area) ->
-            Resize (resizeRect (xR-x0) (yR-y0) area rect) (xR, yR) area
-          e -> e
-      v3 = v2 & viewerBoards.boardsEvent .~ newE
-
-      changed = (v ^. viewerBoards.boardsSelection) /= (v3 ^. viewerBoards.boardsSelection) ||
-                (v ^. viewerBoards.boardsOvered) /= (v3 ^. viewerBoards.boardsOvered) ||
-                (v ^. viewerBoards.boardsEvent) /= (v3 ^. viewerBoards.boardsEvent)
-
-      cursor
-          | isJust dopt && isNothing sopt = Hand1
-          | otherwise                     = Tcross
-
-      updateCursor =
-        drawWindowSetCursor frame . Just =<< cursorNew cursor
-
-  liftIO $ do
-    when changed updateCursor
-    when changed (writeIORef ref v3)
-    when changed redraw
+onMove :: ViewerRef -> EventM EMotion ()
+onMove ref = do
+    frame   <- eventWindow
+    (x',y') <- eventCoordinates
+    liftIO $ do
+        ratio <- viewerGetRatio ref
+        let (x,y) = (x'/ratio, y'/ratio)
+        oOpt <- viewerGetOvered ref
+        dOpt <- viewerGetOveredRect ref x y
+        viewerSetOvered ref dOpt
+        viewerModifySelection ref (updateSelection x y)
+        viewerModifyEvent ref (updateEvent x y)
+        sOpt <- viewerGetSelection ref
+        evt  <- viewerGetEvent ref
+        let onEvent     = isJust $ eventGetRect evt
+            onSelection = isJust sOpt
+            changed     = (oOpt /= dOpt) || onEvent || onSelection
+            cursor      = if isJust dOpt && not onSelection
+                          then Hand1
+                          else Tcross
+        when changed $ do
+                        c <- cursorNew cursor
+                        drawWindowSetCursor frame (Just c)
+                        viewerDraw ref
 
 onPress :: ViewerRef -> EventM EButton ()
 onPress ref = do
@@ -255,6 +240,8 @@ onPress ref = do
                      aOpt <- viewerGetOveredArea ref x y r
                      let evt = maybe (Hold r (x,y)) (Resize r (x,y)) aOpt
                      viewerSetEvent ref evt
+                     viewerSelectRect ref r
+                     viewerSetSelected ref (Just r)
              oOpt <- viewerGetOveredRect ref x y
              maybe (viewerSetSelection ref sel) onEvt oOpt
 
@@ -267,8 +254,12 @@ onRelease ref = do
         evt <- viewerGetEvent ref
         sel <- viewerGetSelection ref
         traverse_ insert sel
-        traverse_ (viewerSetRect ref . normalize) (eventGetRect evt)
+        traverse_ (upd . normalize) (eventGetRect evt)
         viewerDraw ref
+
+    upd r = do
+        viewerSetRect ref r
+        viewerSelectRect ref r
 
     insert x =
         let x' = normalize x
@@ -278,46 +269,20 @@ onRelease ref = do
         then viewerInsertRect ref x'
         else viewerClearSelection ref
 
-rectDetection :: Viewer -> Double -> EventM EMotion (Maybe Int)
-rectDetection v ratio = do
-  let page   = v ^. viewerCurrentPage
-      board  = viewerBoards.boardsMap.at page.traverse
-      rects' =  v ^. board.boardRects
-      rects  = I.elems rects'
-      thick  = v ^. viewerThick
-  go (thick / 2) rects
-    where
-      overRect thick x y r@(Rect _ rX rY height width _ _) =
-          let adjustX = (rX + width  + thick) * ratio
-              adjustY = (rY + height + thick) * ratio in
+updateSelection :: Double -> Double -> Rect -> Rect
+updateSelection x y = execState go
+  where
+    go = do
+        x0 <- use rectX
+        y0 <- use rectY
+        rectWidth  .= x - x0
+        rectHeight .= y - y0
 
-          x >= ((rX - thick) * ratio) && x <= adjustX &&
-          y >= ((rY - thick) * ratio) && y <= adjustY
-
-      go thick rects =
-          eventCoordinates >>= \(x,y) ->
-              let f r | overRect thick x y r = First (Just (r ^. rectId))
-                      | otherwise            = First Nothing
-                  (First res) = foldMap f rects in
-              return res
-
-updateSelection :: Viewer -> Double -> EventM EMotion (Maybe Rect)
-updateSelection v ratio = go
-    where
-      go =
-          eventCoordinates >>= \(x,y) ->
-              let action = do
-                    opt <- use (viewerBoards.boardsSelection)
-                    traverse_ upd opt
-                    use (viewerBoards.boardsSelection)
-                  upd r =
-                      let x0   = r ^. rectX
-                          y0   = r ^. rectY
-                          newH = (y/ratio) - y0
-                          newW = (x/ratio) - x0
-                          newR = r & rectHeight .~ newH & rectWidth .~ newW in
-                      viewerBoards.boardsSelection ?= newR in
-              return $ evalState action v
+updateEvent :: Double -> Double -> BoardEvent -> BoardEvent
+updateEvent x y e =
+    case e of
+      Hold r (x0,y0)     -> Hold (translateRect (x-x0) (y-y0) r) (x,y)
+      Resize r (x0,y0) a -> Resize (resizeRect (x-x0) (y-y0) a r) (x,y) a
 
 onPropAreaSelection :: Entry -> ListStore String -> ComboBox -> Rect -> IO ()
 onPropAreaSelection entry store combo r = do
@@ -331,48 +296,53 @@ onPropClear entry combo = do
   entrySetText entry ""
   comboBoxSetActive combo (negate 1)
 
-onPropUpdate :: Window
-             -> ListStore Rect
-             -> Entry
-             -> ComboBox
-             -> IORef Viewer
-             -> IO ()
-onPropUpdate win rectStore entry combo ref = do
-  v <- readIORef ref
-  let page     = v ^. viewerCurrentPage
-      selOpt   = v ^. viewerBoards.boardsSelected
-      board    = v ^. viewerBoards.boardsMap.at page.traverse
-      toRect i = board ^. boardRects.at i
-      rectOpt  = selOpt >>= toRect
-  traverse_ (go page v) rectOpt
-    where
-      go page v r = do
-          name' <- entryGetText entry
-          let name     = trimStr name'
-              emptyStr = null name
-          when (not emptyStr) (onValidStr page v r name)
+-- onPropUpdate :: Window
+--              -> ListStore Rect
+--              -> Entry
+--              -> ComboBox
+--              -> IORef Viewer
+--              -> IO ()
+-- onPropUpdate win rectStore entry combo ref = do
+--   v <- readIORef ref
+--   let page     = v ^. viewerCurrentPage
+--       selOpt   = v ^. viewerBoards.boardsSelected
+--       board    = v ^. viewerBoards.boardsMap.at page.traverse
+--       toRect i = board ^. boardRects.at i
+--       rectOpt  = selOpt >>= toRect
+--   traverse_ (go page v) rectOpt
+--     where
+--       go page v r = do
+--           name' <- entryGetText entry
+--           let name     = trimStr name'
+--               emptyStr = null name
+--           when (not emptyStr) (onValidStr page v r name)
 
-      onValidStr page v r name = do
-          nOpt  <- lookupStoreIter ((== name) . _rectName) rectStore
-          let exist = isJust nOpt
-          typeOpt <- comboBoxGetActiveText combo
-          when exist (showError ("\"" ++ name ++ "\" is used"))
-          when (not exist) (traverse_ (upd page v r name) typeOpt)
+--       onValidStr page v r name = do
+--           nOpt  <- lookupStoreIter ((== name) . _rectName) rectStore
+--           let exist = isJust nOpt
+--           typeOpt <- comboBoxGetActiveText combo
+--           when exist (showError ("\"" ++ name ++ "\" is used"))
+--           when (not exist) (traverse_ (upd page v r name) typeOpt)
 
-      showError e = do
-          m <- messageDialogNew (Just win) [DialogModal] MessageError ButtonsOk e
-          dialogRun m
-          widgetHide m
+--       showError e = do
+--           m <- messageDialogNew (Just win) [DialogModal] MessageError ButtonsOk e
+--           dialogRun m
+--           widgetHide m
 
-      upd page v r name typ =
-          let id = r ^. rectId
-              r' = r & rectName .~ name & rectType .~ typ
-              b  = v ^. viewerBoards.boardsMap.at page.traverse
-              b' = b & boardRects.at id ?~ r'
-              v' = v & viewerBoards.boardsMap.at page ?~ b' in
-          do writeIORef ref v'
-             listStoreClear rectStore
-             traverse_ (listStoreAppend rectStore) (b' ^. boardRects.to I.elems)
+--       upd page v r name typ =
+--           let id = r ^. rectId
+--               r' = r & rectName .~ name & rectType .~ typ
+--               b  = v ^. viewerBoards.boardsMap.at page.traverse
+--               b' = b & boardRects.at id ?~ r'
+--               v' = v & viewerBoards.boardsMap.at page ?~ b' in
+--           do writeIORef ref v'
+--              listStoreClear rectStore
+--              traverse_ (listStoreAppend rectStore) (b' ^. boardRects.to I.elems)
+
+-- onPropEntryActivated :: ViewerRef -> String -> IO ()
+-- onPropEntryActivated ref name = do
+--     rOpt <- viewerLookupIter ((== name) . _rectName)
+--     let exist = isJust rOpt
 
 trimStr :: String -> String
 trimStr = dropWhileEnd isSpace . dropWhile isSpace
