@@ -1,8 +1,9 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns    #-}
+{-# LANGUAGE DoAndIfThenElse #-}
 module Dhek.Views where
 
 import Control.Lens
-import Control.Monad (void, (<=<))
+import Control.Monad (void, when, (<=<))
 import Control.Monad.Trans (liftIO)
 import qualified Control.Monad.State as State
 import Data.Array
@@ -17,7 +18,6 @@ import Dhek.Callbacks
 import Dhek.Types
 import Dhek.Utils
 import Graphics.UI.Gtk
-import Debug.Trace
 
 data SelectionHandlers = SelectionHandlers
     { hOnSelection :: Rect -> IO ()
@@ -153,7 +153,7 @@ openPdf chooser mimport msave win = do
       withRectIter    = withRectStoreIter store
       viewerEvent     = _viewerGetEvent ref
       viewerSelection = _viewerGetSelection ref
-      updateRect      = _viewerUpdateRect ref
+      updateRect      = _viewerUpdateRect store ref
       overedRect      = _viewerGetOveredRect ref
       overedArea      = _viewerGetOveredArea ref
       setSelection    = _viewerSetSelection ref
@@ -176,6 +176,8 @@ openPdf chooser mimport msave win = do
   jfch    <- createJsonChooserDialog win
   sep     <- vSeparatorNew
   sel     <- treeViewGetSelection treeV
+  propNameEntry <- entryNew
+  propTypeCombo <- comboBoxNew
   let selection      = treeSelection sel store
       selectItem     = selectTreeItem sel ref
       selectRect     = _selectRectItem store selectItem
@@ -209,6 +211,8 @@ openPdf chooser mimport msave win = do
   msave `on` menuItemActivate $ void $ dialogRun jfch
   ifch  `on` response $ onJsonImport ref redraw store ifch
   jfch  `on` response $ onJsonSave ref jfch
+  onEntryActivated (onPropEntryActivated vRef) propNameEntry
+  onComboChanged (onPropComboChanged vRef) propTypeCombo
   windowSetTitle win (name ++ " (page 1 / " ++ show nb ++ ")")
   widgetSetSensitive prev False
   widgetSetSensitive next (nb /= 1)
@@ -228,7 +232,7 @@ openPdf chooser mimport msave win = do
   boxPackStart vbox aswin PackGrow 0
   boxPackStart hbox vbox PackGrow 0
   boxPackStart hbox vleft PackNatural 0
-  handlers <- createPropView win vleft store ref
+  handlers <- createPropView win vleft propNameEntry propTypeCombo store ref
   let onSel = hOnSelection handlers
       onRem = hOnClear handlers
   sel `on` treeSelectionSelectionChanged $
@@ -332,9 +336,11 @@ _viewerGetOveredArea ref x y r = return . go =<< _viewerGetRatio ref
         | isOver 1.0 x y (rectArea (5/ratio) r a) = Just a
         | otherwise                               = Nothing
 
-_viewerUpdateRect :: IORef Viewer -> Rect -> IO ()
-_viewerUpdateRect ref r = do
+_viewerUpdateRect :: ListStore Rect -> IORef Viewer -> Rect -> IO ()
+_viewerUpdateRect store ref r = do
     writeIORef ref . State.execState go =<< readIORef ref
+    iOpt <- lookupStoreIter ((== (r ^. rectId)) . _rectId) store
+    traverse_ (_updateRectStore store r) iOpt
   where
     go = do
         page <- use viewerCurrentPage
@@ -443,19 +449,18 @@ _viewerSetSelected ref rOpt = modifyIORef ref go
 createPropView :: BoxClass b
                => Window
                -> b
+               -> Entry
+               -> ComboBox
                -> ListStore Rect
                -> IORef Viewer
                -> IO SelectionHandlers
-createPropView win b rectStore ref = do
+createPropView win b nentry tcombo rectStore ref = do
   nlabel <- labelNew (Just "Name")
   tlabel <- labelNew (Just "Type")
-  updbut <- buttonNewWithLabel "Update"
-  nentry <- entryNew
   salign <- alignmentNew 0 0 1 0
   ualign <- alignmentNew 0.5 0 0 0
   nalign <- alignmentNew 0 0.5 0 0
   talign <- alignmentNew 0 0.5 0 0
-  tcombo <- comboBoxNew
   store  <- comboBoxSetModelText tcombo
   table  <- tableNew 2 2 False
   tvbox  <- vBoxNew False 10
@@ -470,12 +475,9 @@ createPropView win b rectStore ref = do
   tableSetColSpacings table 10
   traverse_ (listStoreAppend store) model
   containerAdd salign sep
-  containerAdd ualign updbut
   boxPackStart tvbox table PackNatural 0
-  boxPackStart tvbox ualign PackNatural 0
   boxPackStart b salign PackNatural 0
   containerAdd b tvbox
-  --updbut `on` buttonActivated $ onPropUpdate win rectStore nentry tcombo ref
   let hdls = SelectionHandlers
              (onPropAreaSelection nentry store tcombo)
              (onPropClear nentry tcombo)
@@ -485,7 +487,16 @@ createPropView win b rectStore ref = do
 
 onEntryActivated :: EntryClass entry => (String -> IO ()) -> entry -> IO ()
 onEntryActivated k entry =
-    void $ on entry entryActivate $ entryGetText entry >>= k
+    void $ on entry entryActivate $ do
+        text' <- entryGetText entry
+        let text     = trimString text'
+            notEmpty = not $ null text
+        when notEmpty (k text)
+
+onComboChanged :: ComboBoxClass combo => (String -> IO ()) -> combo -> IO ()
+onComboChanged k combo =
+    void $ on combo changed $
+         traverse_ k =<< comboBoxGetActiveText combo
 
 makeViewer :: String -> ListStore Rect -> IO (IORef Viewer)
 makeViewer filepath store = do
@@ -493,3 +504,13 @@ makeViewer filepath store = do
   ref    <- newIORef viewer
   --registerViewerEvents store ref
   return ref
+
+lookupStoreIter :: (a -> Bool) -> ListStore a -> IO (Maybe TreeIter)
+lookupStoreIter pred store = treeModelGetIterFirst store >>= go
+    where
+      go (Just it) = do
+        a <- listStoreGetValue store (listStoreIterToIndex it)
+        if pred a
+        then return (Just it)
+        else treeModelIterNext store it >>= go
+      go _ = return Nothing

@@ -1,5 +1,8 @@
 {-# LANGUAGE CPP #-}
-module Dhek.Utils (takeFileName, takeExtension)  where
+module Dhek.Utils (takeFileName, takeExtension, trimString)  where
+
+import Data.Char (isSpace)
+import Data.List (dropWhileEnd)
 
 #include "../config.h"
 
@@ -8,3 +11,6 @@ import System.FilePath.Windows
 #else
 import System.FilePath.Posix
 #endif
+
+trimString :: String -> String
+trimString = dropWhileEnd isSpace . dropWhile isSpace

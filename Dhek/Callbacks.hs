@@ -7,7 +7,6 @@ import Control.Monad (when, void)
 import Control.Monad.State (execState, evalState, execStateT)
 import Control.Monad.Trans (liftIO)
 import Data.Aeson (encode, eitherDecode)
-import Data.Char (isSpace)
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef, writeIORef)
 import Data.Foldable (traverse_, foldMap, foldr)
 import Data.Functor ((<$))
@@ -288,7 +287,7 @@ onPropAreaSelection :: Entry -> ListStore String -> ComboBox -> Rect -> IO ()
 onPropAreaSelection entry store combo r = do
   entrySetText entry (r ^. rectName)
   let pred x = x == (r ^. rectType)
-  opt <- lookupStoreIter pred store
+  opt <- _lookupStoreIter pred store
   traverse_ (comboBoxSetActiveIter combo) opt
 
 onPropClear :: Entry -> ComboBox -> IO ()
@@ -296,59 +295,33 @@ onPropClear entry combo = do
   entrySetText entry ""
   comboBoxSetActive combo (negate 1)
 
--- onPropUpdate :: Window
---              -> ListStore Rect
---              -> Entry
---              -> ComboBox
---              -> IORef Viewer
---              -> IO ()
--- onPropUpdate win rectStore entry combo ref = do
---   v <- readIORef ref
---   let page     = v ^. viewerCurrentPage
---       selOpt   = v ^. viewerBoards.boardsSelected
---       board    = v ^. viewerBoards.boardsMap.at page.traverse
---       toRect i = board ^. boardRects.at i
---       rectOpt  = selOpt >>= toRect
---   traverse_ (go page v) rectOpt
---     where
---       go page v r = do
---           name' <- entryGetText entry
---           let name     = trimStr name'
---               emptyStr = null name
---           when (not emptyStr) (onValidStr page v r name)
+onPropEntryActivated :: ViewerRef -> String -> IO ()
+onPropEntryActivated ref name =
+    traverse_ go =<< viewerGetSelected ref
+  where
+    go r = do
+        rOpt <- viewerLookupIter ref ((== name) . _rectName)
+        sOpt <- viewerGetSelected ref
+        let exist = isJust rOpt
+            r'    = r & rectName .~ name
+        when (not exist) (viewerSetRect ref r')
+        when exist (showError ("\"" ++ name ++ "\" is already used"))
 
---       onValidStr page v r name = do
---           nOpt  <- lookupStoreIter ((== name) . _rectName) rectStore
---           let exist = isJust nOpt
---           typeOpt <- comboBoxGetActiveText combo
---           when exist (showError ("\"" ++ name ++ "\" is used"))
---           when (not exist) (traverse_ (upd page v r name) typeOpt)
+    showError e = do
+        let win = viewerWindow ref
+        m <- messageDialogNew (Just win) [DialogModal] MessageError ButtonsOk e
+        dialogRun m
+        widgetHide m
 
---       showError e = do
---           m <- messageDialogNew (Just win) [DialogModal] MessageError ButtonsOk e
---           dialogRun m
---           widgetHide m
+onPropComboChanged :: ViewerRef -> String -> IO ()
+onPropComboChanged ref typ = traverse_ go =<< viewerGetSelected ref
+  where
+    go r =
+        let r' = r & rectType .~ typ in
+        viewerSetRect ref r'
 
---       upd page v r name typ =
---           let id = r ^. rectId
---               r' = r & rectName .~ name & rectType .~ typ
---               b  = v ^. viewerBoards.boardsMap.at page.traverse
---               b' = b & boardRects.at id ?~ r'
---               v' = v & viewerBoards.boardsMap.at page ?~ b' in
---           do writeIORef ref v'
---              listStoreClear rectStore
---              traverse_ (listStoreAppend rectStore) (b' ^. boardRects.to I.elems)
-
--- onPropEntryActivated :: ViewerRef -> String -> IO ()
--- onPropEntryActivated ref name = do
---     rOpt <- viewerLookupIter ((== name) . _rectName)
---     let exist = isJust rOpt
-
-trimStr :: String -> String
-trimStr = dropWhileEnd isSpace . dropWhile isSpace
-
-lookupStoreIter :: (a -> Bool) -> ListStore a -> IO (Maybe TreeIter)
-lookupStoreIter pred store = treeModelGetIterFirst store >>= go
+_lookupStoreIter :: (a -> Bool) -> ListStore a -> IO (Maybe TreeIter)
+_lookupStoreIter pred store = treeModelGetIterFirst store >>= go
     where
       go (Just it) = do
         a <- listStoreGetValue store (listStoreIterToIndex it)
