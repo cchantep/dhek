@@ -3,7 +3,7 @@ module Dhek.Callbacks where
 
 import Prelude hiding (foldr)
 import Control.Lens
-import Control.Monad (when, void)
+import Control.Monad (when, void, join)
 import Control.Monad.State (execState, evalState, execStateT)
 import Control.Monad.Trans (liftIO)
 import Data.Aeson (encode, eitherDecode)
@@ -200,6 +200,7 @@ onMove ref = do
         let (x,y) = (x'/ratio, y'/ratio)
         oOpt <- viewerGetOvered ref
         dOpt <- viewerGetOveredRect ref x y
+        aOpt <- fmap join (traverse (viewerGetOveredArea ref x y) dOpt)
         viewerSetOvered ref dOpt
         viewerModifySelection ref (updateSelection x y)
         viewerModifyEvent ref (updateEvent x y)
@@ -208,13 +209,32 @@ onMove ref = do
         let onEvent     = isJust $ eventGetRect evt
             onSelection = isJust sOpt
             changed     = (oOpt /= dOpt) || onEvent || onSelection
-            cursor      = if isJust dOpt && not onSelection
-                          then Hand1
-                          else Tcross
-        when changed $ do
-                        c <- cursorNew cursor
-                        drawWindowSetCursor frame (Just c)
-                        viewerDraw ref
+
+            areaCursor TOP_LEFT     = TopLeftCorner
+            areaCursor TOP          = TopSide
+            areaCursor TOP_RIGHT    = TopRightCorner
+            areaCursor RIGHT        = RightSide
+            areaCursor BOTTOM_RIGHT = BottomRightCorner
+            areaCursor BOTTOM       = BottomSide
+            areaCursor BOTTOM_LEFT  = BottomLeftCorner
+            areaCursor LEFT         = LeftSide
+
+            eventCursor (Hold _ _)     = Hand1
+            eventCursor (Resize _ _ a) = areaCursor a
+            eventCursor _              = Tcross
+
+            onArea      = isJust aOpt
+            noSelection = not onSelection
+            cursor =
+                case () of
+                  _ | onArea && noSelection      -> areaCursor $ fromJust aOpt
+                    | onEvent                    -> eventCursor evt
+                    | isJust dOpt && noSelection -> Hand1
+                    | otherwise                  -> Tcross
+
+        c <- cursorNew cursor
+        drawWindowSetCursor frame (Just c)
+        when changed $ viewerDraw ref
 
 onPress :: ViewerRef -> EventM EButton ()
 onPress ref = do
