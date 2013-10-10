@@ -137,18 +137,11 @@ onCommonScale upd minus plus redraw ref =
            writeIORef ref v'
            redraw
 
-onTreeSelection :: TreeSelection
-                -> ListStore Rect
-                -> IO ()
-                -> IORef Viewer
-                -> IO ()
-onTreeSelection sel store redraw ref = do
-  opt  <- treeSelectionGetSelected sel
-  rOpt <- traverse (listStoreGetValue store . listStoreIterToIndex) opt
-  v    <- readIORef ref
-  let v' = v & viewerBoards.boardsSelected .~ rOpt
-  writeIORef ref v'
-  redraw
+onTreeSelection :: ViewerRef -> IO ()
+onTreeSelection ref = do
+    rOpt <- fmap (fmap snd) (viewerGetTreeSelection ref)
+    viewerSetSelected ref rOpt
+    viewerDraw ref
 
 onRemoveArea :: TreeSelection
              -> ListStore Rect
@@ -239,8 +232,6 @@ onPress ref = do
                      aOpt <- viewerGetOveredArea ref x y r
                      let evt = maybe (Hold r (x,y)) (Resize r (x,y)) aOpt
                      viewerSetEvent ref evt
-                     viewerSelectRect ref r
-                     viewerSetSelected ref (Just r)
              oOpt <- viewerGetOveredRect ref x y
              maybe (viewerSetSelection ref sel) onEvt oOpt
 
@@ -252,20 +243,18 @@ onRelease ref = do
     go = do
         evt <- viewerGetEvent ref
         sel <- viewerGetSelection ref
-        traverse_ insert sel
+        traverse_ (insert . normalize) sel
         traverse_ (upd . normalize) (eventGetRect evt)
-        viewerDraw ref
 
     upd r = do
         viewerSetRect ref r
         viewerSelectRect ref r
 
     insert x =
-        let x' = normalize x
-            w  = x' ^. rectWidth
-            h  = x' ^. rectHeight in
+        let w  = x ^. rectWidth
+            h  = x ^. rectHeight in
         if (w*h >= 30)
-        then viewerInsertRect ref x'
+        then viewerInsertRect ref x
         else viewerClearSelection ref
 
 updateSelection :: Double -> Double -> Rect -> Rect

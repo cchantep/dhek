@@ -32,29 +32,30 @@ data Viewer = Viewer { _viewerDocument     :: Document
                      , _viewerBoards       :: Boards }
 
 data ViewerRef = ViewerRef
-    { viewerDraw            :: IO ()
-    , viewerInsertRect      :: Rect -> IO ()
-    , viewerAppendtore      :: Rect -> IO Int
-    , viewerGetEvent        :: IO BoardEvent
-    , viewerSetEvent        :: BoardEvent -> IO ()
-    , viewerModifyEvent     :: (BoardEvent -> BoardEvent) -> IO ()
-    , viewerGetSelection    :: IO (Maybe Rect)
-    , viewerSetSelection    :: Rect -> IO ()
-    , viewerModifySelection :: (Rect -> Rect) -> IO ()
-    , viewerClearSelection  :: IO ()
-    , viewerGetSelected     :: IO (Maybe Rect)
-    , viewerSetSelected     :: Maybe Rect -> IO ()
-    , viewerGetOvered       :: IO (Maybe Rect)
-    , viewerSetOvered       :: Maybe Rect -> IO ()
-    , viewerSetRect         :: Rect -> IO ()
-    , viewerGetOveredRect   :: Double -> Double -> IO (Maybe Rect)
-    , viewerGetOveredArea   :: Double -> Double -> Rect -> IO (Maybe Area)
-    , viewerGetRatio        :: IO Double
-    , viewerGetPageRects    :: IO [Rect]
-    , viewerSelectRect      :: Rect -> IO ()
-    , viewerLookupIter      :: (Rect -> Bool) -> IO (Maybe Rect)
-    , viewerGetPageItem     :: IO PageItem
-    , viewerWindow          :: Window }
+    { viewerDraw             :: IO ()
+    , viewerGetTreeSelection :: IO (Maybe (TreeIter, Rect))
+    , viewerInsertRect       :: Rect -> IO ()
+    , viewerAppendtore       :: Rect -> IO Int
+    , viewerGetEvent         :: IO BoardEvent
+    , viewerSetEvent         :: BoardEvent -> IO ()
+    , viewerModifyEvent      :: (BoardEvent -> BoardEvent) -> IO ()
+    , viewerGetSelection     :: IO (Maybe Rect)
+    , viewerSetSelection     :: Rect -> IO ()
+    , viewerModifySelection  :: (Rect -> Rect) -> IO ()
+    , viewerClearSelection   :: IO ()
+    , viewerGetSelected      :: IO (Maybe Rect)
+    , viewerSetSelected      :: Maybe Rect -> IO ()
+    , viewerGetOvered        :: IO (Maybe Rect)
+    , viewerSetOvered        :: Maybe Rect -> IO ()
+    , viewerSetRect          :: Rect -> IO ()
+    , viewerGetOveredRect    :: Double -> Double -> IO (Maybe Rect)
+    , viewerGetOveredArea    :: Double -> Double -> Rect -> IO (Maybe Area)
+    , viewerGetRatio         :: IO Double
+    , viewerGetPageRects     :: IO [Rect]
+    , viewerSelectRect       :: Rect -> IO ()
+    , viewerLookupIter       :: (Rect -> Bool) -> IO (Maybe Rect)
+    , viewerGetPageItem      :: IO PageItem
+    , viewerWindow           :: Window }
 
 data Board = Board { _boardRects :: !(IntMap Rect) } deriving Show
 
