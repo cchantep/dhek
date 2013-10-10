@@ -142,6 +142,7 @@ openPdf chooser mimport msave win = do
   store  <- listStoreNew ([] :: [Rect])
   area   <- drawingAreaNew
   swin   <- scrolledWindowNew Nothing Nothing
+  tswin  <- scrolledWindowNew Nothing Nothing
   ref    <- makeViewer uri store
   treeV  <- treeViewNewWithModel store
   sel    <- treeViewGetSelection treeV
@@ -184,6 +185,7 @@ openPdf chooser mimport msave win = do
   vleft   <- vBoxNew False 10
   align   <- alignmentNew 0 0 0 0
   aswin   <- alignmentNew 0 0 1 1
+  atswin  <- alignmentNew 0 0 1 1
   arem    <- alignmentNew 0.5 0 0 0
   bbox    <- hButtonBoxNew
   scale   <- hScaleNewWithRange 100 200 1
@@ -198,7 +200,8 @@ openPdf chooser mimport msave win = do
   rem <- createRemoveAreaButton sel store redraw ref
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
-  widgetAddEvents area [PointerMotionMask]
+  scrolledWindowAddWithViewport tswin treeV
+  scrolledWindowSetPolicy tswin PolicyAutomatic PolicyAutomatic
   widgetAddEvents area [PointerMotionMask]
   area `on` exposeEvent $ tryEvent $ drawViewer area vRef
   area `on` motionNotifyEvent $ tryEvent $ onMove vRef
@@ -226,7 +229,8 @@ openPdf chooser mimport msave win = do
   containerAdd bbox plus
   boxPackStart vbox align PackNatural 0
   containerAdd aswin swin
-  boxPackStart vleft treeV PackGrow 0
+  containerAdd atswin tswin
+  boxPackStart vleft atswin PackGrow 0
   boxPackStart vleft arem PackNatural 0
   boxPackStart vbox aswin PackGrow 0
   boxPackStart hbox vbox PackGrow 0
