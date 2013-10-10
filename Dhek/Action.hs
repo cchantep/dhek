@@ -97,9 +97,6 @@ resizeRect dx dy area r = execState (go area) r
         rectX += dx
         rectWidth -= dx
 
-getPageRatio :: MonadIO m => IORef Viewer -> m Double
-getPageRatio = liftIO . fmap (\(_,r,_,_) -> r) . getPageAndSize
-
 loadPdf :: FilePath -> IO Viewer
 loadPdf path = do
   doc   <- fmap fromJust (documentNewFromFile path Nothing)
@@ -116,20 +113,6 @@ loadPages doc = do
         page  <- documentGetPage doc (i-1)
         (w,h) <- pageGetSize page
         return (i, PageItem page w h)
-
-getPageAndSize :: IORef Viewer -> IO (Page, Double, Double, Double)
-getPageAndSize ref = do
-  v <- readIORef ref
-  let doc   = v ^. viewerDocument
-      cur   = v ^. viewerCurrentPage
-      baseW = v ^. viewerBaseWidth
-      idx   = v ^. viewerZoom
-      zoom  = zoomValues ! idx
-  page <- documentGetPage doc (cur - 1)
-  (width, height) <- pageGetSize page
-  let rWidth = (fromIntegral baseW) * zoom
-      ratio  = rWidth / width
-  return (page, ratio, rWidth, ratio * height)
 
 drawViewer :: DrawingArea -> ViewerRef -> EventM EExpose ()
 drawViewer area = liftIO . go
