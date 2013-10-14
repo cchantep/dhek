@@ -2,7 +2,7 @@
 {-# LANGUAGE DoAndIfThenElse #-}
 module Dhek.Views where
 
-import Control.Lens
+import Control.Lens hiding (set)
 import Control.Monad (void, when, (<=<))
 import Control.Monad.Trans (liftIO)
 import qualified Control.Monad.State as State
@@ -198,8 +198,6 @@ openPdf chooser mimport msave win = do
   propTypeCombo <- comboBoxNew
   createTreeView store treeV
   rem <- createRemoveAreaButton sel store redraw ref
-  scrolledWindowAddWithViewport swin area
-  scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
   scrolledWindowAddWithViewport tswin treeV
   scrolledWindowSetPolicy tswin PolicyAutomatic PolicyAutomatic
   widgetAddEvents area [PointerMotionMask]
@@ -220,6 +218,21 @@ openPdf chooser mimport msave win = do
   widgetSetSensitive next (nb /= 1)
   widgetSetSensitive mimport True
   widgetSetSensitive msave True
+  vruler <- vRulerNew
+  hruler <- hRulerNew
+  set vruler [rulerMetric := Pixels, rulerRange := (0,1000,0,1000)]
+  set hruler [rulerMetric := Pixels, rulerRange := (0,1000,0,1000)]
+  atable <- tableNew 2 2 False
+  scrolledWindowAddWithViewport swin area
+  scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
+  --containerAdd aswin swin
+  halign   <- alignmentNew 0 0 1 1
+  valign   <- alignmentNew 0 0 0 1
+  containerAdd halign hruler
+  containerAdd valign vruler
+  tableAttach atable halign 1 2 0 1 [Expand,Fill] [Fill] 0 0
+  tableAttach atable valign 0 1 1 2 [Shrink,Fill] [Fill] 0 0
+  tableAttach atable swin 1 2 1 2 [Expand,Fill] [Fill, Expand] 0 0
   containerAdd arem rem
   containerAdd align bbox
   containerAdd bbox prev
@@ -228,11 +241,10 @@ openPdf chooser mimport msave win = do
   containerAdd bbox minus
   containerAdd bbox plus
   boxPackStart vbox align PackNatural 0
-  containerAdd aswin swin
   containerAdd atswin tswin
   boxPackStart vleft atswin PackGrow 0
   boxPackStart vleft arem PackNatural 0
-  boxPackStart vbox aswin PackGrow 0
+  boxPackStart vbox atable PackGrow 0
   boxPackStart hbox vbox PackGrow 0
   boxPackStart hbox vleft PackNatural 0
   handlers <- createPropView win vleft propNameEntry propTypeCombo store ref
