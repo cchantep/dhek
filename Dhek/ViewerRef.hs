@@ -26,6 +26,8 @@ module Dhek.ViewerRef
     , viewerGetOveredRect
     , viewerGetOveredArea
     , viewerLookupIter
+    , viewerReportPosition
+    , viewerUpdateRulers
     ) where
 
 import Control.Lens
@@ -40,6 +42,7 @@ import Data.Monoid (First(..))
 import Data.Foldable (foldMap, traverse_)
 import Data.Traversable (traverse)
 
+import Graphics.UI.Gtk (AttrOp( (:=) ))
 import qualified Graphics.UI.Gtk as Gtk
 
 import Dhek.Types
@@ -49,12 +52,16 @@ data ViewerRef = ViewerRef
     , _viewerRefArea      :: Gtk.DrawingArea
     , _viewerRefStore     :: Gtk.ListStore Rect
     , _viewerRefSelection :: Gtk.TreeSelection
+    , _viewerRefHRuler    :: Gtk.HRuler
+    , _viewerRefVRuler    :: Gtk.VRuler
     , viewerRefWindow     :: Gtk.Window }
 
 viewerRef :: IORef Viewer
           -> Gtk.DrawingArea
           -> Gtk.ListStore Rect
           -> Gtk.TreeSelection
+          -> Gtk.HRuler
+          -> Gtk.VRuler
           -> Gtk.Window
           -> ViewerRef
 viewerRef = ViewerRef
@@ -291,6 +298,28 @@ viewerLookupIter v p = fmap go (viewerGetPageRects v)
     search r
         | p r       = Just r
         | otherwise = Nothing
+
+viewerReportPosition :: ViewerRef -> Double -> Double -> IO ()
+viewerReportPosition v x y = do
+    Gtk.set hruler [Gtk.rulerPosition := x]
+    Gtk.set vruler [Gtk.rulerPosition := y]
+  where
+    hruler = _viewerRefHRuler v
+    vruler = _viewerRefVRuler v
+
+viewerUpdateRulers :: ViewerRef -> IO ()
+viewerUpdateRulers v = do
+    ratio <- viewerGetRatio v
+    page  <- viewerGetPageItem v
+    let w' = pageWidth page
+        h' = pageHeight page
+        w  = w' -- * ratio
+        h  = h' -- * ratio
+    Gtk.set hruler [Gtk.rulerRange := (0, w, 0, 1000)]
+    Gtk.set vruler [Gtk.rulerRange := (0, h, 0, 1000)]
+  where
+    hruler = _viewerRefHRuler v
+    vruler = _viewerRefVRuler v
 
 lookupStoreIter :: (a -> Bool) -> Gtk.ListStore a -> IO (Maybe Gtk.TreeIter)
 lookupStoreIter pred store = Gtk.treeModelGetIterFirst store >>= go

@@ -144,10 +144,23 @@ openPdf chooser mimport msave win = do
   treeV  <- treeViewNewWithModel store
   sel    <- treeViewGetSelection treeV
   v      <- readIORef ref
-  let vRef      = viewerRef ref area store sel win
+  vruler <- vRulerNew
+  hruler <- hRulerNew
+  halign <- alignmentNew 0 0 1 1
+  valign <- alignmentNew 0 0 0 1
+  hscroll <- scrolledWindowNew Nothing Nothing
+  vscroll <- scrolledWindowNew Nothing Nothing
+  scrolledWindowSetPolicy hscroll PolicyNever PolicyNever
+  scrolledWindowSetPolicy vscroll PolicyNever PolicyNever
+  containerAdd hscroll hruler
+  containerAdd vscroll vruler
+  let vRef      = viewerRef ref area store sel hruler vruler win
       redraw    = viewerDraw vRef
       selection = viewerGetTreeSelection vRef
       nb        = v ^. viewerPageCount
+  set vruler [rulerMetric := Pixels]
+  set hruler [rulerMetric := Pixels]
+  viewerUpdateRulers vRef
   vbox    <- vBoxNew False 10
   hbox    <- hBoxNew False 10
   vleft   <- vBoxNew False 10
@@ -186,21 +199,15 @@ openPdf chooser mimport msave win = do
   widgetSetSensitive next (nb /= 1)
   widgetSetSensitive mimport True
   widgetSetSensitive msave True
-  vruler <- vRulerNew
-  hruler <- hRulerNew
-  set vruler [rulerMetric := Pixels, rulerRange := (0,1000,0,1000)]
-  set hruler [rulerMetric := Pixels, rulerRange := (0,1000,0,1000)]
   atable <- tableNew 2 2 False
   scrolledWindowAddWithViewport swin area
   scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
   --containerAdd aswin swin
-  halign   <- alignmentNew 0 0 1 1
-  valign   <- alignmentNew 0 0 0 1
-  containerAdd halign hruler
-  containerAdd valign vruler
-  tableAttach atable halign 1 2 0 1 [Expand,Fill] [Fill] 0 0
-  tableAttach atable valign 0 1 1 2 [Shrink,Fill] [Fill] 0 0
-  tableAttach atable swin 1 2 1 2 [Expand,Fill] [Fill, Expand] 0 0
+  --containerAdd halign hruler
+  --containerAdd valign vruler
+  tableAttach atable hscroll 1 2 0 1 [Expand, Fill] [Fill] 0 0
+  tableAttach atable vscroll 0 1 1 2 [Fill] [Expand, Fill] 0 0
+  tableAttachDefaults atable swin 1 2 1 2    --[Expand,Fill] [Fill, Expand] 0 0
   containerAdd arem rem
   containerAdd align bbox
   containerAdd bbox prev
