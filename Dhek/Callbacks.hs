@@ -14,8 +14,9 @@ import qualified Data.ByteString.Lazy as B
 import qualified Data.IntMap as I
 import Data.List (dropWhileEnd)
 import Dhek.Action
-import Dhek.Types
+import Dhek.Types hiding (ViewerRef(..))
 import Dhek.Utils
+import Dhek.ViewerRef
 import Data.Maybe (fromJust, isJust, isNothing)
 import Data.Monoid (First(..), Sum(..))
 import Graphics.UI.Gtk
@@ -317,7 +318,7 @@ onPropEntryActivated ref name =
         when exist (showError ("\"" ++ name ++ "\" is already used"))
 
     showError e = do
-        let win = viewerWindow ref
+        let win = viewerRefWindow ref
         m <- messageDialogNew (Just win) [DialogModal] MessageError ButtonsOk e
         dialogRun m
         widgetHide m

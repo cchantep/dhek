@@ -18,6 +18,7 @@ executable dhek
                  Dhek.Types
                  Dhek.Utils
                  Dhek.Views
+                 Dhek.ViewerRef
   build-depends:       base          == 4.6.*
                        , gtk         >= 0.12.4
                        , poppler     == 0.12.2.2

@@ -1,22 +1,19 @@
-{-# LANGUAGE BangPatterns    #-}
-{-# LANGUAGE DoAndIfThenElse #-}
 module Dhek.Views where
 
 import Control.Lens hiding (set)
-import Control.Monad (void, when, (<=<))
+import Control.Monad (void, when)
 import Control.Monad.Trans (liftIO)
-import qualified Control.Monad.State as State
-import Data.Array
-import Data.Foldable (foldMap, traverse_)
-import Data.Functor ((<$))
-import qualified Data.IntMap as I
-import Data.IORef (IORef, newIORef, readIORef, modifyIORef', writeIORef)
+
+import Data.Foldable (traverse_)
+import Data.IORef (IORef, newIORef, readIORef)
 import Data.Maybe (fromJust)
-import Data.Monoid (First(..))
+
 import Dhek.Action
 import Dhek.Callbacks
 import Dhek.Types
-import Dhek.Utils
+import Dhek.Utils (takeFileName, trimString)
+import Dhek.ViewerRef
+
 import Graphics.UI.Gtk
 
 data SelectionHandlers = SelectionHandlers
@@ -146,40 +143,11 @@ openPdf chooser mimport msave win = do
   ref    <- makeViewer uri store
   treeV  <- treeViewNewWithModel store
   sel    <- treeViewGetSelection treeV
-  let redraw          = widgetQueueDraw area
-      updateStore     = _updateRectStore store
-      appendStore     = _appendRectStore store ref
-      withRectIter    = withRectStoreIter store
-      viewerEvent     = _viewerGetEvent ref
-      viewerSelection = _viewerGetSelection ref
-      updateRect      = _viewerUpdateRect store ref
-      overedRect      = _viewerGetOveredRect ref
-      overedArea      = _viewerGetOveredArea ref
-      setSelection    = _viewerSetSelection ref
-      viewerRatio     = _viewerGetRatio ref
-      viewerRects     = _viewerGetPageRects ref
-      selection       = treeSelection sel store
-      selectItem      = selectTreeItem sel ref
-      selectRect      = _selectRectItem store selectItem
-      setEvent        = _viewerSetEvent ref
-      modifyEvent     = _viewerModifyEvent ref
-      clearSelection  = _viewerClearSelection ref
-      modifySelect    = _viewerModifySelection ref
-      lookupRect      = _viewerLookupIter ref
-      viewerSelected  = _viewerGetSelected ref
-      viewerOvered    = _viewerGetOvered ref
-      setOvered       = _viewerSetOvered ref
-      viewerPageItem  = _viewerPageItem ref
-      setSelected     = _viewerSetSelected ref
-      insertRect      = _viewerInsertRect sel store ref
-      vRef = ViewerRef redraw selection insertRect
-             appendStore viewerEvent setEvent modifyEvent
-             viewerSelection setSelection modifySelect clearSelection
-             viewerSelected setSelected viewerOvered setOvered
-             updateRect overedRect overedArea viewerRatio viewerRects
-             selectRect lookupRect viewerPageItem win
   v      <- readIORef ref
-  let nb  = v ^. viewerPageCount
+  let vRef      = viewerRef ref area store sel win
+      redraw    = viewerDraw vRef
+      selection = viewerGetTreeSelection vRef
+      nb        = v ^. viewerPageCount
   vbox    <- vBoxNew False 10
   hbox    <- hBoxNew False 10
   vleft   <- vBoxNew False 10
@@ -260,217 +228,6 @@ openPdf chooser mimport msave win = do
         cursor <- liftIO $ cursorNew Tcross
         liftIO $ drawWindowSetCursor frame (Just cursor)
 
-treeSelection :: TreeSelection -> ListStore Rect -> IO (Maybe (TreeIter, Rect))
-treeSelection sel store =
-    traverse go =<< treeSelectionGetSelected sel
-  where
-    go iter =
-        let idx = listStoreIterToIndex iter in
-        fmap (\r -> (iter, r)) (listStoreGetValue store idx)
-
-selectTreeItem :: TreeSelection
-               -> IORef Viewer
-               -> TreeIter
-               -> IO ()
-selectTreeItem sel ref iter =
-    treeSelectionSelectIter sel iter
-
-_selectRectItem :: ListStore Rect -> (TreeIter -> IO ()) -> Rect -> IO ()
-_selectRectItem store selectItem r = do
-    let p x = (x ^. rectId) == (r ^. rectId)
-    iOpt <- lookupStoreIter p store
-    traverse_ selectItem iOpt
-
-_updateRectStore :: ListStore Rect -> Rect -> TreeIter -> IO ()
-_updateRectStore store r iter =
-    let idx = listStoreIterToIndex iter in
-    listStoreSetValue store idx r
-
-_appendRectStore :: ListStore Rect -> IORef Viewer -> Rect -> IO Int
-_appendRectStore store ref r = do
-    v  <- readIORef ref
-    r' <- State.evalStateT go v
-    listStoreAppend store r'
-  where
-    go = do
-        viewerBoards.boardsState += 1
-        page <- use viewerCurrentPage
-        id   <- use $ viewerBoards.boardsState
-        let r' = r & rectId .~ id & rectName %~ (++  show id)
-        viewerBoards.boardsMap.at page.traverse.boardRects.at id ?= r'
-        viewerBoards.boardsSelection .= Nothing
-        v <- State.get
-        liftIO $ writeIORef ref v
-        return r'
-
-_viewerInsertRect :: TreeSelection
-                  -> ListStore Rect
-                  -> IORef Viewer
-                  -> Rect
-                  -> IO ()
-_viewerInsertRect sel store ref r = do
-    i <- _appendRectStore store ref r
-    withRectStoreIter store (selectTreeItem sel ref) i
-
-_viewerGetRatio :: IORef Viewer -> IO Double
-_viewerGetRatio ref = fmap go (readIORef ref)
-  where
-    go v =
-        let pId   = v ^. viewerCurrentPage
-            pZ    = v ^. viewerZoom
-            pages = v ^. viewerPages
-            baseW = fromIntegral (v ^. viewerBaseWidth)
-            page  = pages ! pId
-            zoom  = zoomValues ! pZ
-            w     = pageWidth page
-        in (baseW * zoom) / w
-
-_viewerGetPageRects :: IORef Viewer -> IO [Rect]
-_viewerGetPageRects = fmap go . readIORef
-  where
-    go v =
-        let pId = v ^. viewerCurrentPage in
-        v ^. viewerBoards.boardsMap.at pId.traverse.boardRects.to I.elems
-
-_viewerGetOveredRect :: IORef Viewer -> Double -> Double -> IO (Maybe Rect)
-_viewerGetOveredRect ref x y = do
-    rs <- _viewerGetPageRects ref
-    fmap (go rs) (readIORef ref)
-  where
-    go rs v =
-        let (First oOpt) = foldMap (First . overed) rs in oOpt
-
-    overed r
-        | isOver 1.0 x y r = Just r
-        | otherwise        = Nothing
-
-_viewerGetOveredArea :: IORef Viewer
-                    -> Double
-                    -> Double
-                    -> Rect
-                    -> IO (Maybe Area)
-_viewerGetOveredArea ref x y r = return . go =<< _viewerGetRatio ref
-  where
-    go ratio =
-        let (First aOpt) =
-                foldMap (First . overed ratio) (enumFrom TOP_LEFT) in
-        aOpt
-
-    overed ratio a
-        | isOver 1.0 x y (rectArea (5/ratio) r a) = Just a
-        | otherwise                               = Nothing
-
-_viewerUpdateRect :: ListStore Rect -> IORef Viewer -> Rect -> IO ()
-_viewerUpdateRect store ref r = do
-    writeIORef ref . State.execState go =<< readIORef ref
-    iOpt <- lookupStoreIter ((== (r ^. rectId)) . _rectId) store
-    traverse_ (_updateRectStore store r) iOpt
-  where
-    go = do
-        page <- use viewerCurrentPage
-        let id = r ^. rectId
-        viewerBoards.boardsMap.at page.traverse.boardRects.at id ?= r
-        viewerBoards.boardsEvent    .= None
-        viewerBoards.boardsSelected ?= r
-
-withRectStoreIter :: ListStore Rect -> (TreeIter -> IO r) -> Int -> IO ()
-withRectStoreIter store k i =
-    treeModelForeach store $ \iter ->
-        if listStoreIterToIndex iter == i
-        then True <$ k iter
-        else return False
-
-withRatioCoord :: IORef Viewer
-               -> (Double -> Double -> IO a)
-               -> Double
-               -> Double
-               -> IO a
-withRatioCoord ref k x y = do
-    ratio <- _viewerGetRatio ref
-    k (x/ratio) (y/ratio)
-
-_viewerGetEvent :: IORef Viewer -> IO BoardEvent
-_viewerGetEvent ref = fmap go (readIORef ref)
-  where
-    go v = v ^. viewerBoards.boardsEvent
-
-_viewerSetEvent :: IORef Viewer -> BoardEvent -> IO ()
-_viewerSetEvent ref e = modifyIORef' ref (State.execState go)
-  where
-    go = do
-        viewerBoards.boardsEvent .= e
-        traverse_ upd (eventGetRect e)
-
-    upd r = do
-        page <- use viewerCurrentPage
-        let id = r ^. rectId
-        viewerBoards.boardsMap.at page.traverse.boardRects.at id .= Nothing
-
-_viewerModifyEvent :: IORef Viewer -> (BoardEvent -> BoardEvent) -> IO ()
-_viewerModifyEvent ref k = do
-    e <- _viewerGetEvent ref
-    let !e' = case e of
-                None -> e
-                _    -> k e
-    _viewerSetEvent ref e'
-
-_viewerGetSelection :: IORef Viewer -> IO (Maybe Rect)
-_viewerGetSelection ref = fmap go (readIORef ref)
-  where
-    go v = v ^. viewerBoards.boardsSelection
-
-_viewerSetSelection :: IORef Viewer -> Rect -> IO ()
-_viewerSetSelection ref r = modifyIORef' ref go
-  where
-    go v = v & viewerBoards.boardsSelection ?~ r
-
-_viewerModifySelection :: IORef Viewer -> (Rect -> Rect) -> IO ()
-_viewerModifySelection ref k = do
-    sOpt <- _viewerGetSelection ref
-    traverse_ (_viewerSetSelection ref) (fmap k sOpt)
-
-_viewerClearSelection :: IORef Viewer -> IO ()
-_viewerClearSelection ref = modifyIORef' ref go
-  where
-    go v = v & viewerBoards.boardsSelection .~ Nothing
-
-_viewerLookupIter :: IORef Viewer -> (Rect -> Bool) -> IO (Maybe Rect)
-_viewerLookupIter ref p = fmap go (_viewerGetPageRects ref)
-  where
-    go = getFirst . foldMap (First . search)
-
-    search r
-        | p r       = Just r
-        | otherwise = Nothing
-
-_viewerGetOvered :: IORef Viewer -> IO (Maybe Rect)
-_viewerGetOvered = fmap go . readIORef
-  where
-    go v = v ^. viewerBoards.boardsOvered
-
-_viewerSetOvered :: IORef Viewer -> Maybe Rect -> IO ()
-_viewerSetOvered ref rOpt = modifyIORef' ref go
-  where
-    go v = v & viewerBoards.boardsOvered .~ rOpt
-
-_viewerPageItem :: IORef Viewer -> IO PageItem
-_viewerPageItem = fmap go . readIORef
-  where
-    go v =
-        let idx   = v ^. viewerCurrentPage
-            pages = v ^. viewerPages in
-        pages ! idx
-
-_viewerGetSelected :: IORef Viewer -> IO (Maybe Rect)
-_viewerGetSelected = fmap go . readIORef
-  where
-    go v = v ^. viewerBoards.boardsSelected
-
-_viewerSetSelected :: IORef Viewer -> Maybe Rect -> IO ()
-_viewerSetSelected ref rOpt = modifyIORef' ref go
-  where
-    go v = v & viewerBoards.boardsSelected .~ rOpt
-
 createPropView :: BoxClass b
                => Window
                -> b
@@ -527,15 +284,4 @@ makeViewer :: String -> ListStore Rect -> IO (IORef Viewer)
 makeViewer filepath store = do
   viewer <- loadPdf filepath
   ref    <- newIORef viewer
-  --registerViewerEvents store ref
   return ref
-
-lookupStoreIter :: (a -> Bool) -> ListStore a -> IO (Maybe TreeIter)
-lookupStoreIter pred store = treeModelGetIterFirst store >>= go
-    where
-      go (Just it) = do
-        a <- listStoreGetValue store (listStoreIterToIndex it)
-        if pred a
-        then return (Just it)
-        else treeModelIterNext store it >>= go
-      go _ = return Nothing

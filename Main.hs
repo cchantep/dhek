@@ -2,6 +2,7 @@ module Main where
 
 import Graphics.UI.Gtk
 import Dhek.Views (createPdfChooserDialog, windowParams, createMenuBar)
+import Dhek.ViewerRef
 
 main :: IO ()
 main = do
