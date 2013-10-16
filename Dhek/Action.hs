@@ -111,6 +111,7 @@ drawViewer area = liftIO . go
         (fW, fH) <- Gtk.drawableGetSize frame
         let width  = ratio  * (pageWidth page)
             height = ratio  * (pageHeight page)
+        viewerUpdateRulers ref
         Gtk.widgetSetSizeRequest area (truncate width) (truncate height)
         Gtk.renderWithDrawable frame $ do
                    Cairo.setSourceRGB 1.0 1.0 1.0

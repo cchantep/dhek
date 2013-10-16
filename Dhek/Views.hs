@@ -148,19 +148,18 @@ openPdf chooser mimport msave win = do
   hruler <- hRulerNew
   halign <- alignmentNew 0 0 1 1
   valign <- alignmentNew 0 0 0 1
-  hscroll <- scrolledWindowNew Nothing Nothing
-  vscroll <- scrolledWindowNew Nothing Nothing
-  scrolledWindowSetPolicy hscroll PolicyNever PolicyNever
-  scrolledWindowSetPolicy vscroll PolicyNever PolicyNever
-  containerAdd hscroll hruler
-  containerAdd vscroll vruler
-  let vRef      = viewerRef ref area store sel hruler vruler win
+  --hscroll <- scrolledWindowNew Nothing Nothing
+  --vscroll <- scrolledWindowNew Nothing Nothing
+  --scrolledWindowSetPolicy hscroll PolicyNever PolicyNever
+  --scrolledWindowSetPolicy vscroll PolicyNever PolicyNever
+  --scrolledWindowAddWithViewport hscroll hruler
+  --scrolledWindowAddWithViewport vscroll vruler
+  let vRef      = viewerRef ref area swin store sel hruler vruler win
       redraw    = viewerDraw vRef
       selection = viewerGetTreeSelection vRef
       nb        = v ^. viewerPageCount
   set vruler [rulerMetric := Pixels]
   set hruler [rulerMetric := Pixels]
-  viewerUpdateRulers vRef
   vbox    <- vBoxNew False 10
   hbox    <- hBoxNew False 10
   vleft   <- vBoxNew False 10
@@ -192,6 +191,7 @@ openPdf chooser mimport msave win = do
   ifch  `on` response $ onJsonImport ref redraw store ifch
   jfch  `on` response $ onJsonSave ref jfch
   sel `on` treeSelectionSelectionChanged $ onTreeSelection vRef
+  --area `after` showSignal $ viewerUpdateRulers vRef
   onEntryActivated (onPropEntryActivated vRef) propNameEntry
   onComboChanged (onPropComboChanged vRef) propTypeCombo
   windowSetTitle win (name ++ " (page 1 / " ++ show nb ++ ")")
@@ -205,9 +205,11 @@ openPdf chooser mimport msave win = do
   --containerAdd aswin swin
   --containerAdd halign hruler
   --containerAdd valign vruler
-  tableAttach atable hscroll 1 2 0 1 [Expand, Fill] [Fill] 0 0
-  tableAttach atable vscroll 0 1 1 2 [Fill] [Expand, Fill] 0 0
-  tableAttachDefaults atable swin 1 2 1 2    --[Expand,Fill] [Fill, Expand] 0 0
+  tableSetRowSpacing atable 0 0
+  tableSetColSpacing atable 0 0
+  tableAttach atable hruler 1 2 0 1 [Expand, Shrink, Fill] [Fill] 0 0
+  tableAttach atable vruler 0 1 1 2 [Fill] [Expand, Shrink, Fill] 0 0
+  tableAttach atable swin 1 2 1 2   [Expand,Shrink, Fill] [Fill, Shrink, Expand] 0 0
   containerAdd arem rem
   containerAdd align bbox
   containerAdd bbox prev

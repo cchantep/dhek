@@ -199,14 +199,9 @@ onMove ref = do
     liftIO $ do
         ratio <- viewerGetRatio ref
         let (x,y) = (x'/ratio, y'/ratio)
-        putStr "raw: "
-        print (x',y')
-        putStr "ratio-ed: "
-        print (x,y)
-        print "------------"
         viewerReportPosition ref x y
         oOpt <- viewerGetOvered ref
-        dOpt <- viewerGetOveredRect ref (x'*ratio) (y'*ratio)
+        dOpt <- viewerGetOveredRect ref x y
         aOpt <- fmap join (traverse (viewerGetOveredArea ref x y) dOpt)
         viewerSetOvered ref dOpt
         viewerModifySelection ref (updateSelection x y)
