@@ -183,8 +183,16 @@ for ($i = 0; $i < $pagecount; $i++) {
 
       } else {
         // 'Free' text
+        $pdf->SetLineWidth(1.0); // border
+        
+        $iw = $w - 2/* 2 x 1 */;
+        $v = utf8_decode($area->name);
+        $overflow = ($pdf->GetStringWidth($v) > $iw);
+        while ($pdf->GetStringWidth($v) > $iw) { $v = substr($v, 0, -1); }
+        if ($overflow) { $v = substr($v, 0, -1) . "\\"; }
+        
         $pdf->SetXY($x, $y);
-        $pdf->MultiCell($w, intval($h), $area->name, true);
+        $pdf->MultiCell($w, intval($h), $v, true);
       }
     }
   } 
