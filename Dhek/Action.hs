@@ -84,7 +84,7 @@ loadPdf path = do
   doc   <- fmap fromJust (Poppler.documentNewFromFile path Nothing)
   nb    <- Poppler.documentGetNPages doc
   pages <- loadPages doc
-  return (Viewer doc pages 1 nb 777 3 1.0 (boardsNew nb))
+  return (Viewer doc pages 1 nb 100 3 1.0 (boardsNew nb))
 
 loadPages :: Poppler.Document -> IO (Array Int PageItem)
 loadPages doc = do
@@ -109,8 +109,8 @@ drawViewer area = liftIO . go
         evRect   <- fmap eventGetRect (viewerGetEvent ref)
         frame    <- Gtk.widgetGetDrawWindow area
         (fW, fH) <- Gtk.drawableGetSize frame
-        let width  = ratio  * (pageWidth page)
-            height = ratio  * (pageHeight page)
+        let width  = ratio * (pageWidth page)
+            height = ratio * (pageHeight page)
         viewerUpdateRulers ref
         Gtk.widgetSetSizeRequest area (truncate width) (truncate height)
         Gtk.renderWithDrawable frame $ do

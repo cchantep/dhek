@@ -138,7 +138,12 @@ openPdf chooser mimport msave win = do
   name   <- fmap (takeFileName . fromJust) (fileChooserGetFilename chooser)
   store  <- listStoreNew ([] :: [Rect])
   area   <- drawingAreaNew
-  swin   <- scrolledWindowNew Nothing Nothing
+  hadj   <- adjustmentNew 0 0 0 0 0 0
+  vadj   <- adjustmentNew 0 0 0 0 0 0
+  viewport <- viewportNew hadj vadj
+  containerAdd viewport area
+  hscroll <- hScrollbarNew hadj
+  vscroll <- vScrollbarNew vadj
   tswin  <- scrolledWindowNew Nothing Nothing
   ref    <- makeViewer uri store
   treeV  <- treeViewNewWithModel store
@@ -148,13 +153,7 @@ openPdf chooser mimport msave win = do
   hruler <- hRulerNew
   halign <- alignmentNew 0 0 1 1
   valign <- alignmentNew 0 0 0 1
-  --hscroll <- scrolledWindowNew Nothing Nothing
-  --vscroll <- scrolledWindowNew Nothing Nothing
-  --scrolledWindowSetPolicy hscroll PolicyNever PolicyNever
-  --scrolledWindowSetPolicy vscroll PolicyNever PolicyNever
-  --scrolledWindowAddWithViewport hscroll hruler
-  --scrolledWindowAddWithViewport vscroll vruler
-  let vRef      = viewerRef ref area swin store sel hruler vruler win
+  let vRef      = viewerRef ref area hscroll vscroll hadj vadj store sel hruler vruler win
       redraw    = viewerDraw vRef
       selection = viewerGetTreeSelection vRef
       nb        = v ^. viewerPageCount
@@ -181,6 +180,22 @@ openPdf chooser mimport msave win = do
   scrolledWindowAddWithViewport tswin treeV
   scrolledWindowSetPolicy tswin PolicyAutomatic PolicyAutomatic
   widgetAddEvents area [PointerMotionMask]
+  widgetSetSizeRequest viewport 200 200
+  area `on` scrollEvent $ tryEvent $ do
+      dir <- eventScrollDirection
+      liftIO $ do
+          pageSize <- adjustmentGetPageSize vadj
+          lower    <- adjustmentGetLower vadj
+          upper    <- adjustmentGetUpper vadj
+          step     <- adjustmentGetStepIncrement vadj
+          oldValue <- adjustmentGetValue vadj
+          let delta' = step * 2
+              delta  = case dir of
+                  ScrollUp -> negate delta'
+                  _        -> delta'
+              newValue = min (upper - pageSize) (max 0 (oldValue + delta))
+          adjustmentSetValue vadj newValue
+
   area `on` exposeEvent $ tryEvent $ drawViewer area vRef
   area `on` motionNotifyEvent $ tryEvent $ onMove vRef
   area `on` buttonPressEvent $ tryEvent $ onPress vRef
@@ -191,7 +206,6 @@ openPdf chooser mimport msave win = do
   ifch  `on` response $ onJsonImport ref redraw store ifch
   jfch  `on` response $ onJsonSave ref jfch
   sel `on` treeSelectionSelectionChanged $ onTreeSelection vRef
-  --area `after` showSignal $ viewerUpdateRulers vRef
   onEntryActivated (onPropEntryActivated vRef) propNameEntry
   onComboChanged (onPropComboChanged vRef) propTypeCombo
   windowSetTitle win (name ++ " (page 1 / " ++ show nb ++ ")")
@@ -199,17 +213,14 @@ openPdf chooser mimport msave win = do
   widgetSetSensitive next (nb /= 1)
   widgetSetSensitive mimport True
   widgetSetSensitive msave True
-  atable <- tableNew 2 2 False
-  scrolledWindowAddWithViewport swin area
-  scrolledWindowSetPolicy swin PolicyAutomatic PolicyAutomatic
-  --containerAdd aswin swin
-  --containerAdd halign hruler
-  --containerAdd valign vruler
+  atable <- tableNew 3 3 False
   tableSetRowSpacing atable 0 0
   tableSetColSpacing atable 0 0
   tableAttach atable hruler 1 2 0 1 [Expand, Shrink, Fill] [Fill] 0 0
+  tableAttach atable hscroll 1 2 2 3 [Expand, Shrink, Fill] [Fill] 0 0
   tableAttach atable vruler 0 1 1 2 [Fill] [Expand, Shrink, Fill] 0 0
-  tableAttach atable swin 1 2 1 2   [Expand,Shrink, Fill] [Fill, Shrink, Expand] 0 0
+  tableAttach atable vscroll 2 3 1 2 [Fill] [Expand, Shrink, Fill] 0 0
+  tableAttach atable viewport 1 2 1 2 [Expand, Fill] [Fill, Expand] 0 0
   containerAdd arem rem
   containerAdd align bbox
   containerAdd bbox prev

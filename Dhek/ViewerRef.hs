@@ -50,7 +50,10 @@ import Dhek.Types
 data ViewerRef = ViewerRef
     { _viewerRef          :: IORef Viewer
     , _viewerRefArea      :: Gtk.DrawingArea
-    , _viewerRefScroll    :: Gtk.ScrolledWindow
+    , _viewerRefHScroll   :: Gtk.HScrollbar
+    , _viewerRefVScroll   :: Gtk.VScrollbar
+    , _viewerRefHadj      :: Gtk.Adjustment
+    , _viewerRefVadj      :: Gtk.Adjustment
     , _viewerRefStore     :: Gtk.ListStore Rect
     , _viewerRefSelection :: Gtk.TreeSelection
     , _viewerRefHRuler    :: Gtk.HRuler
@@ -59,7 +62,10 @@ data ViewerRef = ViewerRef
 
 viewerRef :: IORef Viewer
           -> Gtk.DrawingArea
-          -> Gtk.ScrolledWindow
+          -> Gtk.HScrollbar
+          -> Gtk.VScrollbar
+          -> Gtk.Adjustment
+          -> Gtk.Adjustment
           -> Gtk.ListStore Rect
           -> Gtk.TreeSelection
           -> Gtk.HRuler
@@ -231,18 +237,19 @@ viewerSetSelected v rOpt = modifyIORef' ref go
     go v = v & viewerBoards.boardsSelected .~ rOpt
 
 viewerGetRatio :: ViewerRef -> IO Double
-viewerGetRatio v = fmap go (readIORef ref)
+viewerGetRatio v =
+    fmap go (readIORef ref)
   where
-    ref  = _viewerRef v
-    go v =
+    ref       = _viewerRef v
+    baseWidth = 777 -- choosed ramdomly
+    go v      =
         let pId   = v ^. viewerCurrentPage
             pZ    = v ^. viewerZoom
             pages = v ^. viewerPages
-            baseW = fromIntegral (v ^. viewerBaseWidth)
             page  = pages ! pId
             zoom  = zoomValues ! pZ
             w     = pageWidth page
-        in (baseW * zoom) / w
+        in (baseWidth * zoom) / w
 
 viewerGetPageRects :: ViewerRef -> IO [Rect]
 viewerGetPageRects = fmap go . readIORef . _viewerRef
@@ -312,24 +319,28 @@ viewerReportPosition v x y = do
 viewerUpdateRulers :: ViewerRef -> IO ()
 viewerUpdateRulers v = do
     ratio <- viewerGetRatio v
-    hadj  <- Gtk.scrolledWindowGetHAdjustment swin
-    vadj  <- Gtk.scrolledWindowGetVAdjustment swin
+    page  <- viewerGetPageItem v
     hsize <- Gtk.adjustmentGetPageSize hadj
     vsize <- Gtk.adjustmentGetPageSize vadj
+    hlower <- Gtk.adjustmentGetLower hadj
+    hupper <- Gtk.adjustmentGetUpper hadj
     hincr <- Gtk.adjustmentGetPageIncrement hadj
+    sincr <- Gtk.adjustmentGetStepIncrement hadj
     vincr <- Gtk.adjustmentGetPageIncrement vadj
     hvalue <- Gtk.adjustmentGetValue hadj
     vvalue <- Gtk.adjustmentGetValue vadj
-    let w  = (hsize+hvalue) / ratio
-        h  = (vsize+vvalue) / ratio
+    let w  = (hsize/ratio) + hl
+        h  = (vsize/ratio) + vl
         hl = hvalue / ratio
         vl = vvalue / ratio
     Gtk.set hruler [Gtk.rulerLower := hl, Gtk.rulerUpper := w, Gtk.rulerMaxSize := w]
     Gtk.set vruler [Gtk.rulerLower := vl, Gtk.rulerUpper := h, Gtk.rulerMaxSize := h]
   where
+    area   = _viewerRefArea v
+    hadj   = _viewerRefHadj v
+    vadj   = _viewerRefVadj v
     hruler = _viewerRefHRuler v
     vruler = _viewerRefVRuler v
-    swin   = _viewerRefScroll v
 
 lookupStoreIter :: (a -> Bool) -> Gtk.ListStore a -> IO (Maybe Gtk.TreeIter)
 lookupStoreIter pred store = Gtk.treeModelGetIterFirst store >>= go
