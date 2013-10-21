@@ -47,6 +47,8 @@ data Boards = Boards { _boardsState     :: {-# UNPACK #-} !Int
                      , _boardsSelection :: !(Maybe Rect)
                      , _boardsOvered    :: !(Maybe Rect)
                      , _boardsSelected  :: !(Maybe Rect)
+                     , _boardsCurGuide  :: !(Maybe Guide)
+                     , _boardsGuides    :: ![Guide]
                      , _boardsMap       :: !(IntMap Board) }
 
 data Rect = Rect { _rectId     :: {-# UNPACK #-} !Int
@@ -56,6 +58,11 @@ data Rect = Rect { _rectId     :: {-# UNPACK #-} !Int
                  , _rectWidth  :: {-# UNPACK #-} !Double
                  , _rectName   :: !String
                  , _rectType   :: !String } deriving (Eq, Show)
+
+data GuideType = GuideVertical | GuideHorizontal
+
+data Guide = Guide { _guideValue :: {-# UNPACK #-} !Double
+                   , _guideType  :: !GuideType }
 
 data Save = Save { saveVersion :: !String
                  , saveAreas   :: ![(Int, Maybe [Rect])] }
@@ -69,6 +76,7 @@ makeLenses ''Viewer
 makeLenses ''Board
 makeLenses ''Boards
 makeLenses ''Rect
+makeLenses ''Guide
 
 instance Monoid Board where
     mempty = Board empty
@@ -129,7 +137,7 @@ saveNew :: [(Int, Maybe [Rect])] -> Save
 saveNew = Save dhekFullVersion
 
 boardsNew :: Int -> Boards
-boardsNew n = Boards 0 None Nothing Nothing Nothing maps
+boardsNew n = Boards 0 None Nothing Nothing Nothing Nothing [] maps
   where
     maps = fromList $ fmap (\i -> (i, Board empty)) [1..n]
 

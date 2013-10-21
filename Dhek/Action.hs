@@ -107,21 +107,40 @@ drawViewer area = liftIO . go
         sel      <- viewerGetSelected ref
         rectSel  <- viewerGetSelection ref
         evRect   <- fmap eventGetRect (viewerGetEvent ref)
+        curGuide <- viewerGuideGet ref
+        guides   <- viewerGuides ref
         frame    <- Gtk.widgetGetDrawWindow area
-        (fW, fH) <- Gtk.drawableGetSize frame
+        (fW', fH') <- Gtk.drawableGetSize frame
         let width  = ratio * (pageWidth page)
             height = ratio * (pageHeight page)
+            fW     = fromIntegral fW'
+            fH     = fromIntegral fH'
         viewerUpdateRulers ref
         Gtk.widgetSetSizeRequest area (truncate width) (truncate height)
         Gtk.renderWithDrawable frame $ do
                    Cairo.setSourceRGB 1.0 1.0 1.0
-                   Cairo.rectangle 0 0 (fromIntegral fW) (fromIntegral fH)
+                   Cairo.rectangle 0 0 fW fH
                    Cairo.fill
                    Cairo.scale ratio ratio
                    Poppler.pageRender (pagePtr page)
+                   mapM_ (drawGuide fW fH) guides
+                   mapM_ (drawGuide fW fH) curGuide
+                   Cairo.closePath
+                   Cairo.stroke
                    drawRects 1.0 sel ove rects
                    drawingSel rectSel
                    drawRects 1.0 Nothing evRect evRect
+
+      drawGuide w h (Guide x typ) = do
+          Cairo.setSourceRGB 0.16 0.26 0.87
+          Cairo.setLineWidth 0.5
+          case typ of
+              GuideVertical   -> do
+                  Cairo.moveTo x 0.0
+                  Cairo.lineTo x h
+              GuideHorizontal -> do
+                  Cairo.moveTo 0.0 x
+                  Cairo.lineTo w x
 
       drawRects th sel ove = mapM_ (drawing th sel ove)
 

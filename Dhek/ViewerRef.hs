@@ -28,7 +28,14 @@ module Dhek.ViewerRef
     , viewerLookupIter
     , viewerReportPosition
     , viewerUpdateRulers
+    , viewerGuideNew
+    , viewerGuideUpdate
+    , viewerGuideAdd
+    , viewerGuideGet
+    , viewerGuides
     ) where
+
+import Prelude hiding (foldr)
 
 import Control.Lens
 import qualified Control.Monad.State as State
@@ -39,7 +46,7 @@ import Data.Functor ((<$))
 import qualified Data.IntMap as I
 import Data.IORef
 import Data.Monoid (First(..))
-import Data.Foldable (foldMap, traverse_)
+import Data.Foldable (foldMap, traverse_, foldr)
 import Data.Traversable (traverse)
 
 import Graphics.UI.Gtk (AttrOp( (:=) ))
@@ -341,6 +348,55 @@ viewerUpdateRulers v = do
     vadj   = _viewerRefVadj v
     hruler = _viewerRefHRuler v
     vruler = _viewerRefVRuler v
+
+viewerGuideNew :: ViewerRef -> GuideType -> IO ()
+viewerGuideNew v typ =
+    modifyIORef' ref go
+  where
+    ref  = _viewerRef v
+    go v = v & viewerBoards.boardsCurGuide ?~ Guide 0 typ
+
+viewerGuideUpdate :: ViewerRef -> IO ()
+viewerGuideUpdate v = do
+    x <- Gtk.get hruler Gtk.rulerPosition
+    y <- Gtk.get vruler Gtk.rulerPosition
+    ratio <- viewerGetRatio v
+    modifyIORef' ref (go x y)
+  where
+    ref      = _viewerRef v
+    hruler   = _viewerRefHRuler v
+    vruler   = _viewerRefVRuler v
+    go x y v = v & viewerBoards.boardsCurGuide %~
+               (fmap $ \g ->
+                 let r = case g ^. guideType of
+                         GuideVertical   -> x
+                         GuideHorizontal -> y in
+                 set guideValue r g)
+
+viewerGuideAdd :: ViewerRef -> IO ()
+viewerGuideAdd v =
+    modifyIORef' ref (State.execState go)
+  where
+    ref = _viewerRef v
+    go  = do
+        gOpt <- use $ viewerBoards.boardsCurGuide
+        gs'  <- use $ viewerBoards.boardsGuides
+        let gs = foldr (:) gs' gOpt
+        viewerBoards.boardsCurGuide .= Nothing
+        viewerBoards.boardsGuides   .= gs
+
+
+viewerGuideGet :: ViewerRef -> IO (Maybe Guide)
+viewerGuideGet v = fmap go (readIORef ref)
+  where
+    ref  = _viewerRef v
+    go v = v ^. viewerBoards.boardsCurGuide
+
+viewerGuides :: ViewerRef -> IO [Guide]
+viewerGuides v = fmap go (readIORef ref)
+  where
+    ref  = _viewerRef v
+    go v = v ^. viewerBoards.boardsGuides
 
 lookupStoreIter :: (a -> Bool) -> Gtk.ListStore a -> IO (Maybe Gtk.TreeIter)
 lookupStoreIter pred store = Gtk.treeModelGetIterFirst store >>= go

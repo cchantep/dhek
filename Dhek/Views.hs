@@ -181,6 +181,8 @@ openPdf chooser mimport msave win = do
   scrolledWindowSetPolicy tswin PolicyAutomatic PolicyAutomatic
   widgetAddEvents area [PointerMotionMask]
   widgetSetSizeRequest viewport 200 200
+  widgetSetSizeRequest hruler 25 25
+  widgetSetSizeRequest vruler 25 25
   area `on` scrollEvent $ tryEvent $ do
       dir <- eventScrollDirection
       liftIO $ do
@@ -195,6 +197,36 @@ openPdf chooser mimport msave win = do
                   _        -> delta'
               newValue = min (upper - pageSize) (max 0 (oldValue + delta))
           adjustmentSetValue vadj newValue
+
+  vruler `on` buttonPressEvent $ tryEvent $ do
+      liftIO $ viewerGuideNew vRef GuideVertical
+  vruler `on` motionNotifyEvent $ tryEvent $ do
+      (x',y') <- eventCoordinates
+      liftIO $ do
+          ratio <- viewerGetRatio vRef
+          v     <- adjustmentGetValue hadj
+          let (x,y) = ((x'-25+v)/ratio, y'/ratio)
+          viewerReportPosition vRef x y
+          viewerGuideUpdate vRef
+          viewerDraw vRef
+  vruler `on` buttonReleaseEvent $ tryEvent $ liftIO $ do
+      viewerGuideAdd vRef
+      viewerDraw vRef
+
+  hruler `on` buttonPressEvent $ tryEvent $ do
+      liftIO $ viewerGuideNew vRef GuideHorizontal
+  hruler `on` motionNotifyEvent $ tryEvent $ do
+      (x',y') <- eventCoordinates
+      liftIO $ do
+          ratio <- viewerGetRatio vRef
+          v     <- adjustmentGetValue vadj
+          let (x,y) = (x'/ratio, (y'+v-25)/ratio)
+          viewerReportPosition vRef x y
+          viewerGuideUpdate vRef
+          viewerDraw vRef
+  hruler `on` buttonReleaseEvent $ tryEvent $ liftIO $ do
+      viewerGuideAdd vRef
+      viewerDraw vRef
 
   area `on` exposeEvent $ tryEvent $ drawViewer area vRef
   area `on` motionNotifyEvent $ tryEvent $ onMove vRef
