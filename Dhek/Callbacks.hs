@@ -21,50 +21,23 @@ import Data.Maybe (fromJust, isJust, isNothing)
 import Data.Monoid (First(..), Sum(..))
 import Graphics.UI.Gtk
 
-onPrevious :: String -- pdf filename
-           -> Window
-           -> Button -- prev button
-           -> Button -- next button
-           -> ListStore Rect
-           -> IO ()
-           -> IORef Viewer
-           -> IO ()
-onPrevious name win = onNavCommon name win onPrevState
-
-onNext :: String -- pdf filename
-       -> Window
-       -> Button -- next button
-       -> Button -- prev button
-       -> ListStore Rect
-       -> IO ()
-       -> IORef Viewer
-       -> IO ()
-onNext name win = onNavCommon name win onNextState
-
 onNavCommon :: String
-            -> Window
-            -> (Int -> Int -> (Bool, Bool, Int))
+            -> (Int -> Int)
             -> Button
             -> Button
-            -> ListStore Rect
+            -> ViewerRef
             -> IO ()
-            -> IORef Viewer
-            -> IO ()
-onNavCommon name win upd self other store redraw ref =
-    readIORef ref >>= \v ->
-        let nb = v ^. viewerPageCount
-            (tSelf, tOther, v') = onNavButton upd v
-            cur = v' ^. viewerCurrentPage
-            title = name ++ " (page " ++ show cur ++" / " ++ show nb ++ ")"
-            board = viewerBoards.boardsMap.at cur.traverse.boardRects
-            rects = v ^. board.to I.elems in
-        do listStoreClear store
-           traverse_ (listStoreAppend store) rects
-           widgetSetSensitive self (not tSelf)
-           when tOther (widgetSetSensitive other True)
-           writeIORef ref v'
-           windowSetTitle win title
-           redraw
+onNavCommon name k prev next v=
+    viewerModifyCurPage v $ \cur -> do
+        rects <- viewerGetPageRects v
+        nb    <- viewerPageNb v
+        viewerSetRects v rects
+        let new   = k cur
+            title = name ++ " (page " ++ show new ++" / " ++ show nb ++ ")"
+        windowSetTitle (viewerRefWindow v) title
+        widgetSetSensitive prev (new /= 1)
+        widgetSetSensitive next (new /= nb)
+        return new
 
 onJsonSave :: IORef Viewer
            -> FileChooserDialog
@@ -124,19 +97,14 @@ onJsonImport ref redraw store ifch ResponseOk = do
 onCommonScale :: (Int -> Int)
               -> Button -- minus button
               -> Button -- plus button
+              -> ViewerRef
               -> IO ()
-              -> IORef Viewer
-              -> IO ()
-onCommonScale upd minus plus redraw ref =
-    readIORef ref >>= \v ->
-        let z   = v ^. viewerZoom.to upd
-            low = (z-1) < 0
-            up  = (z+1) > 10
-            v'  = v & viewerZoom .~ z in
-        do widgetSetSensitive minus (not low)
-           widgetSetSensitive plus (not up)
-           writeIORef ref v'
-           redraw
+onCommonScale k minus plus ref =
+    viewerModifyCurZoom ref $ \cur ->
+        let new = k cur in
+        do widgetSetSensitive minus (new /= 0)
+           widgetSetSensitive plus (new /= 10)
+           return new
 
 onTreeSelection :: ViewerRef -> IO ()
 onTreeSelection ref = do

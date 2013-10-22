@@ -91,25 +91,20 @@ createMenuBar win vbox fdialog = do
   void $ oitem `on` menuItemActivate $
         openPdfFileChooser openPdf vbox fdialog win oitem iitem sitem
 
-createNavButtons :: String
-                 -> Window
-                 -> ListStore Rect
-                 -> IO ()
-                 -> IORef Viewer
-                 -> IO (Button, Button)
-createNavButtons name win store redraw ref = do
+createNavButtons :: String -> ViewerRef -> IO (Button, Button)
+createNavButtons name ref = do
   prev <- buttonNewWithLabel "Previous"
   next <- buttonNewWithLabel "Next"
-  prev `on` buttonActivated $ onPrevious name win prev next store redraw ref
-  next `on` buttonActivated $ onNext name win next prev store redraw ref
+  prev `on` buttonActivated $ onNavCommon name pred prev next ref
+  next `on` buttonActivated $ onNavCommon name succ prev next ref
   return (prev, next)
 
-createZoomButtons :: IO () -> IORef Viewer -> IO (Button, Button)
-createZoomButtons redraw ref = do
+createZoomButtons :: ViewerRef -> IO (Button, Button)
+createZoomButtons ref = do
   minus <- buttonNewWithLabel "-"
   plus  <- buttonNewWithLabel "+"
-  minus `on` buttonActivated $ onCommonScale pred minus plus redraw ref
-  plus  `on` buttonActivated $ onCommonScale succ minus plus redraw ref
+  minus `on` buttonActivated $ onCommonScale pred minus plus ref
+  plus  `on` buttonActivated $ onCommonScale succ minus plus ref
   return (minus, plus)
 
 createRemoveAreaButton :: TreeSelection
@@ -168,8 +163,8 @@ openPdf chooser mimport msave win = do
   arem    <- alignmentNew 0.5 0 0 0
   bbox    <- hButtonBoxNew
   scale   <- hScaleNewWithRange 100 200 1
-  (prev, next)  <- createNavButtons name win store redraw ref
-  (minus, plus) <- createZoomButtons redraw ref
+  (prev, next)  <- createNavButtons name vRef
+  (minus, plus) <- createZoomButtons vRef
   ifch    <- createJsonImportDialog win
   jfch    <- createJsonChooserDialog win
   sep     <- vSeparatorNew

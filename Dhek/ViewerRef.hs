@@ -9,6 +9,7 @@ module Dhek.ViewerRef
     , viewerInsertRect
     , viewerSelectRect
     , viewerSetRect
+    , viewerSetRects
     , viewerGetEvent
     , viewerSetEvent
     , viewerModifyEvent
@@ -33,6 +34,9 @@ module Dhek.ViewerRef
     , viewerGuideAdd
     , viewerGuideGet
     , viewerGuides
+    , viewerPageNb
+    , viewerModifyCurPage
+    , viewerModifyCurZoom
     ) where
 
 import Prelude hiding (foldr)
@@ -142,6 +146,13 @@ viewerSetRect v r = do
     upd it =
         let idx = Gtk.listStoreIterToIndex it in
         Gtk.listStoreSetValue store idx r
+
+viewerSetRects :: ViewerRef -> [Rect] -> IO ()
+viewerSetRects v xs = do
+    Gtk.listStoreClear store
+    traverse_ (Gtk.listStoreAppend store) xs
+  where
+    store = _viewerRefStore v
 
 viewerAppendStore :: ViewerRef -> Rect -> IO Int
 viewerAppendStore v r = do
@@ -385,7 +396,6 @@ viewerGuideAdd v =
         viewerBoards.boardsCurGuide .= Nothing
         viewerBoards.boardsGuides   .= gs
 
-
 viewerGuideGet :: ViewerRef -> IO (Maybe Guide)
 viewerGuideGet v = fmap go (readIORef ref)
   where
@@ -397,6 +407,29 @@ viewerGuides v = fmap go (readIORef ref)
   where
     ref  = _viewerRef v
     go v = v ^. viewerBoards.boardsGuides
+
+viewerPageNb :: ViewerRef -> IO Int
+viewerPageNb v = fmap (\vw -> vw ^. viewerPageCount) (readIORef ref)
+  where
+    ref = _viewerRef v
+
+viewerModifyCurPage :: ViewerRef -> (Int -> IO Int) -> IO ()
+viewerModifyCurPage v k = do
+    vw <- readIORef ref
+    i  <- k (vw ^. viewerCurrentPage)
+    writeIORef ref (set viewerCurrentPage i vw)
+    viewerDraw v
+  where
+    ref = _viewerRef v
+
+viewerModifyCurZoom :: ViewerRef -> (Int -> IO Int) -> IO ()
+viewerModifyCurZoom v k = do
+    vw <- readIORef ref
+    i  <- k (vw ^. viewerZoom)
+    writeIORef ref (set viewerZoom i vw)
+    viewerDraw v
+  where
+    ref = _viewerRef v
 
 lookupStoreIter :: (a -> Bool) -> Gtk.ListStore a -> IO (Maybe Gtk.TreeIter)
 lookupStoreIter pred store = Gtk.treeModelGetIterFirst store >>= go
