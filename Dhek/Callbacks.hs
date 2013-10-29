@@ -2,6 +2,7 @@
 module Dhek.Callbacks where
 
 import Prelude hiding (foldr)
+import Control.Arrow ((&&&))
 import Control.Lens
 import Control.Monad (when, void, join)
 import Control.Monad.State (execState, evalState, execStateT)

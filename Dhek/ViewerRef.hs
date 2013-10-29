@@ -43,14 +43,17 @@ import Prelude hiding (foldr)
 
 import Control.Lens
 import qualified Control.Monad.State as State
+import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 
 import Data.Array (Array, array, (!))
 import Data.Functor ((<$))
 import qualified Data.IntMap as I
 import Data.IORef
+import Data.Maybe (isJust, isNothing)
 import Data.Monoid (First(..))
 import Data.Foldable (foldMap, traverse_, foldr)
+import Data.List (find)
 import Data.Traversable (traverse)
 
 import Graphics.UI.Gtk (AttrOp( (:=) ))
@@ -195,10 +198,15 @@ viewerSetEvent v e = modifyIORef' ref (State.execState go)
 
 viewerModifyEvent :: ViewerRef -> (BoardEvent -> BoardEvent) -> IO ()
 viewerModifyEvent v k = do
-    e <- viewerGetEvent v
+    e     <- viewerGetEvent v
+    rects <- viewerGetPageRects v
+    ratio <- viewerGetRatio v
     let !e' = case e of
                 None -> e
-                _    -> k e
+                _    ->
+                    let (Just r) = eventGetRect e
+                        iOpt     = intersection ratio r rects in
+                    maybe (k e) (\r2 -> eventSetRect r2 e) iOpt
     viewerSetEvent v e'
 
 viewerGetSelection :: ViewerRef -> IO (Maybe Rect)
@@ -215,8 +223,14 @@ viewerSetSelection v r = modifyIORef' ref go
 
 viewerModifySelection :: ViewerRef -> (Rect -> Rect) -> IO ()
 viewerModifySelection v k = do
-    sOpt <- viewerGetSelection v
-    traverse_ (viewerSetSelection v) (fmap k sOpt)
+    sOpt  <- viewerGetSelection v
+    ratio <- viewerGetRatio v
+    traverse_ (go ratio) sOpt
+  where
+    go ratio r = do
+        rects <- viewerGetPageRects v
+        let iOpt = intersection ratio r rects
+        maybe (viewerSetSelection v $ k r) (const $ return ()) iOpt
 
 viewerClearSelection :: ViewerRef -> IO ()
 viewerClearSelection v = modifyIORef' ref go
@@ -430,6 +444,21 @@ viewerModifyCurZoom v k = do
     viewerDraw v
   where
     ref = _viewerRef v
+
+intersection :: Double -> Rect -> [Rect] -> Maybe Rect
+intersection ratio l = getFirst . foldMap (First . go)
+  where
+    go r = fmap (action r) (rectIntersect l r)
+
+    lx = l ^. rectX
+    ly = l ^. rectY
+    lw = l ^. rectWidth
+    lh = l ^. rectHeight
+
+    action r NORTH = l & rectY -~ (ly+lh) - (r ^. rectY) + ratio
+    action r EAST  = l & rectX .~ (r ^. rectX) + (r ^. rectWidth)  + ratio
+    action r SOUTH = l & rectY .~ (r ^. rectY) + (r ^. rectHeight) + ratio
+    action r WEST  = l & rectX -~ (lx+lw) - (r ^. rectX) + ratio
 
 lookupStoreIter :: (a -> Bool) -> Gtk.ListStore a -> IO (Maybe Gtk.TreeIter)
 lookupStoreIter pred store = Gtk.treeModelGetIterFirst store >>= go

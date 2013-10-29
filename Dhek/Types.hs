@@ -42,6 +42,11 @@ data Area = TOP_LEFT
           | BOTTOM_LEFT
           | LEFT deriving (Enum, Show, Eq)
 
+data Direction = NORTH
+               | EAST
+               | SOUTH
+               | WEST deriving Eq
+
 data Boards = Boards { _boardsState     :: {-# UNPACK #-} !Int
                      , _boardsEvent     :: !BoardEvent
                      , _boardsSelection :: !(Maybe Rect)
@@ -165,6 +170,11 @@ eventGetRect (Hold r _)     = Just r
 eventGetRect (Resize r _ _) = Just r
 eventGetRect _              = Nothing
 
+eventSetRect :: Rect -> BoardEvent -> BoardEvent
+eventSetRect r (Hold _ x)     = Hold r x
+eventSetRect r (Resize _ x y) = Resize r x y
+eventSetRect _ e              = e
+
 normalize :: Rect -> Rect
 normalize r = newRectY newRectX
   where
@@ -206,6 +216,35 @@ rectArea eps r area = go area
     go BOTTOM       = rectNew (x+eps) (y+h-eps) eps (w-2*eps)
     go BOTTOM_LEFT  = rectNew x (y+h-eps) eps eps
     go LEFT         = rectNew x (y+eps) (h-2*eps) eps
+
+rectIntersect :: Rect -> Rect -> Maybe Direction
+rectIntersect l r =
+    case () of
+        _ | not intersected -> Nothing
+          | otherwise ->
+              case () of
+                  _ | north -> Just NORTH
+                    | east  -> Just EAST
+                    | south -> Just SOUTH
+                    | west  -> Just WEST
+  where
+    lx = l ^. rectX
+    ly = l ^. rectY
+    lw = l ^. rectWidth
+    lh = l ^. rectHeight
+
+    rx = r ^. rectX
+    ry = r ^. rectY
+    rw = r ^. rectWidth
+    rh = r ^. rectHeight
+
+    intersected =
+        (lx+lw) >= rx && (rx+rw) >= lx && (ly+lh) >= ry && (ry+rh) >= ly
+
+    north = ly <= ry && ry <= (ly+lh)
+    east  = lx <= rx && rx <= (lx+lw)
+    south = ry <= ly && ly <= (ry+rh)
+    west  = rx <= lx && lx <= (rx+rw)
 
 isOver :: Double -> Double -> Double -> Rect -> Bool
 isOver thick x y r = go
