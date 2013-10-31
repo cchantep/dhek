@@ -15,6 +15,7 @@ executable dhek
   other-modules:
                  Dhek.Action
                  Dhek.Callbacks
+                 Dhek.Engine
                  Dhek.Types
                  Dhek.Utils
                  Dhek.Views
