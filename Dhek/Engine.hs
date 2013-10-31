@@ -10,7 +10,7 @@ import Control.Monad.Reader
 import Control.Monad.RWS.Strict
 import Control.Monad.State
 
-import Data.Array (Array, array)
+import Data.Array (Array, array, (!))
 import Data.Foldable (traverse_)
 import Data.IORef
 import Data.Maybe (fromJust)
@@ -26,16 +26,21 @@ import Dhek.Types
 type EngineCallback a = a -> RWST EngineEnv () EngineState IO ()
 
 data Engine = Engine
-    { _engineState       :: IORef EngineState
-    , _engineEnv         :: IORef EngineEnv
-    , _enginePdfSel   :: EngineCallback PdfSelection
-    , _engineJsonLoad :: EngineCallback JsonLoad
-    , _engineNextPage  :: EngineCallback NextPage
-    , _enginePrevPage :: EngineCallback PrevPage
-    , _engineNextZoom :: EngineCallback NextZoom
-    , _enginePrevZoom :: EngineCallback PrevZoom
-    , _engineRemoveRect :: EngineCallback RemoveRect
-    , _engineRectSelected :: EngineCallback RectSelected }
+    { _engineState        :: IORef EngineState
+    , _engineEnv          :: IORef EngineEnv
+    , _enginePdfSel       :: EngineCallback PdfSelection
+    , _engineJsonLoad     :: EngineCallback JsonLoad
+    , _engineNextPage     :: EngineCallback NextPage
+    , _enginePrevPage     :: EngineCallback PrevPage
+    , _engineNextZoom     :: EngineCallback NextZoom
+    , _enginePrevZoom     :: EngineCallback PrevZoom
+    , _engineRemoveRect   :: EngineCallback RemoveRect
+    , _engineRectSelected :: EngineCallback RectSelected
+    , _engineDrawing      :: EngineCallback Drawing
+    , _engineMove         :: EngineCallback Move
+    , _enginePress        :: EngineCallback Press
+    , _engineRelease      :: EngineCallback Release
+    , _engineEnter        :: EngineCallback Enter }
 
 data EngineInternal = EngineInternal
     { engineRef :: IORef Viewer
@@ -53,9 +58,17 @@ data PrevPage = PrevPage
 data NextZoom = NextZoom
 data PrevZoom = PrevZoom
 
-data RemoveRect = RemoveRect Rect
+data RemoveRect = RemoveRect !Rect
 
-data RectSelected = RectSelected Rect
+data RectSelected = RectSelected !Rect
+
+data Drawing = Drawing
+
+data Move = Move !Double !Double
+data Press = Press !Double !Double
+data Release = Release
+
+data Enter = Enter
 
 data EngineState = EngineState
     { _engineCurPage   :: {-# UNPACK #-} !Int
@@ -65,9 +78,7 @@ data EngineState = EngineState
     }
 
 data EngineEnv = EngineEnv
-    { _engineX        :: {-# UNPACK #-} !Double
-    , _engineY        :: {-# UNPACK #-} !Double
-    , _enginePrevX    :: {-# UNPACK #-} !Double
+    { _enginePrevX    :: {-# UNPACK #-} !Double
     , _enginePrevY    :: {-# UNPACK #-} !Double
     , _engineOverRect :: !(Maybe Rect)
     , _engineOverArea :: !(Maybe Area)
@@ -89,10 +100,15 @@ gtkEngineNew = do
         (\_ -> return ())
         (\_ -> return ())
         (\_ -> return ())
+        (\_ -> return ())
+        (\_ -> return ())
+        (\_ -> return ())
+        (\_ -> return ())
+        (\_ -> return ())
   where
     envNew =
         let neg1 = negate 1 in
-        EngineEnv neg1 neg1 neg1 neg1 Nothing Nothing Nothing
+        EngineEnv neg1 neg1 Nothing Nothing Nothing
 
     sNew = EngineState 1 3 True Nothing
 
@@ -101,7 +117,7 @@ engineStart eng = do
     Gtk.initGUI
     iRef <- newIORef (error "impossible situation")
     window  <- Gtk.windowNew
-    vbox    <- Gtk.vBoxNew False 10
+    wvbox    <- Gtk.vBoxNew False 10
     fdialog <- createPdfChooserDialog window
     jdialog <- createJsonChooserDialog window
     mbar    <- Gtk.menuBarNew
@@ -119,6 +135,41 @@ engineStart eng = do
     treeV   <- Gtk.treeViewNewWithModel store
     sel     <- Gtk.treeViewGetSelection treeV
     fmenu   <- Gtk.menuNew
+    area    <- Gtk.drawingAreaNew
+    hruler  <- Gtk.hRulerNew
+    halign  <- Gtk.alignmentNew 0 0 1 1
+    valign  <- Gtk.alignmentNew 0 0 0 1
+    hadj    <- Gtk.adjustmentNew 0 0 0 0 0 0
+    vadj    <- Gtk.adjustmentNew 0 0 0 0 0 0
+    viewport <- Gtk.viewportNew hadj vadj
+    hscroll  <- Gtk.hScrollbarNew hadj
+    vscroll  <- Gtk.vScrollbarNew vadj
+    tswin    <- Gtk.scrolledWindowNew Nothing Nothing
+    vbox     <- Gtk.vBoxNew False 10
+    hbox     <- Gtk.hBoxNew False 10
+    vleft    <- Gtk.vBoxNew False 10
+    align    <- Gtk.alignmentNew 0 0 0 0
+    aswin    <- Gtk.alignmentNew 0 0 1 1
+    atswin   <- Gtk.alignmentNew 0 0 1 1
+    arem     <- Gtk.alignmentNew 0.5 0 0 0
+    bbox     <- Gtk.hButtonBoxNew
+    vruler <- Gtk.vRulerNew
+    hruler <- Gtk.hRulerNew
+    propNameEntry <- Gtk.entryNew
+    propTypeCombo <- Gtk.comboBoxNew
+    atable <- Gtk.tableNew 3 3 False
+    nlabel <- Gtk.labelNew (Just "Name")
+    tlabel <- Gtk.labelNew (Just "Type")
+    salign <- Gtk.alignmentNew 0 0 1 0
+    ualign <- Gtk.alignmentNew 0.5 0 0 0
+    nalign <- Gtk.alignmentNew 0 0.5 0 0
+    talign <- Gtk.alignmentNew 0 0.5 0 0
+    cstore  <- Gtk.comboBoxSetModelText propTypeCombo
+    table  <- Gtk.tableNew 2 2 False
+    tvbox  <- Gtk.vBoxNew False 10
+    sep    <- Gtk.hSeparatorNew
+    Gtk.set vruler [Gtk.rulerMetric := Gtk.Pixels]
+    Gtk.set hruler [Gtk.rulerMetric := Gtk.Pixels]
     Gtk.menuShellAppend fmenu oitem
     Gtk.menuShellAppend fmenu iitem
     Gtk.menuShellAppend fmenu sitem
@@ -127,7 +178,34 @@ engineStart eng = do
     Gtk.containerAdd malign mbar
     Gtk.widgetSetSensitive iitem False
     Gtk.widgetSetSensitive sitem False
-    Gtk.boxPackStart vbox malign Gtk.PackNatural 0
+    Gtk.boxPackStart wvbox malign Gtk.PackNatural 0
+    Gtk.widgetAddEvents area [Gtk.PointerMotionMask]
+    Gtk.widgetSetSizeRequest viewport 200 200
+    Gtk.widgetSetSizeRequest hruler 25 25
+    Gtk.widgetSetSizeRequest vruler 25 25
+    Gtk.tableSetRowSpacing atable 0 0
+    Gtk.tableSetColSpacing atable 0 0
+    let gtkTabAll  = [Gtk.Expand, Gtk.Shrink, Gtk.Fill]
+        gtkTabView = [Gtk.Expand, Gtk.Fill]
+    Gtk.tableAttach atable hruler 1 2 0 1 gtkTabAll [Gtk.Fill] 0 0
+    Gtk.tableAttach atable hscroll 1 2 2 3 gtkTabAll [Gtk.Fill] 0 0
+    Gtk.tableAttach atable vruler 0 1 1 2 [Gtk.Fill] gtkTabAll 0 0
+    Gtk.tableAttach atable vscroll 2 3 1 2 [Gtk.Fill] gtkTabAll 0 0
+    Gtk.tableAttach atable viewport 1 2 1 2 gtkTabView gtkTabView 0 0
+    Gtk.containerAdd arem rem
+    Gtk.containerAdd align bbox
+    Gtk.containerAdd bbox prev
+    Gtk.containerAdd bbox next
+    Gtk.containerAdd bbox sep
+    Gtk.containerAdd bbox minus
+    Gtk.containerAdd bbox plus
+    Gtk.boxPackStart vbox align Gtk.PackNatural 0
+    Gtk.containerAdd atswin tswin
+    Gtk.boxPackStart vleft atswin Gtk.PackGrow 0
+    Gtk.boxPackStart vleft arem Gtk.PackNatural 0
+    Gtk.boxPackStart vbox atable Gtk.PackGrow 0
+    Gtk.boxPackStart hbox vbox Gtk.PackGrow 0
+    Gtk.boxPackStart hbox vleft Gtk.PackNatural 0
     let envRef   = _engineEnv eng
         stateRef = _engineState eng
         fPdf     = _enginePdfSel eng
@@ -138,6 +216,11 @@ engineStart eng = do
         plusPF   = _engineNextZoom eng
         remF     = _engineRemoveRect eng
         selF     = _engineRectSelected eng
+        drawingF = _engineDrawing eng
+        moveF    = _engineMove eng
+        pressF   = _enginePress eng
+        releaseF = _engineRelease eng
+        enterF   = _engineEnter eng
 
     Gtk.on oitem Gtk.menuItemActivate $ do
         resp <- Gtk.dialogRun fdialog
@@ -154,7 +237,11 @@ engineStart eng = do
                 let evtOpt = PdfSelection <$> uriOpt <*> nameOpt
                 (s', _) <- execRWST (traverse_ fPdf evtOpt) env s
                 writeIORef stateRef s'
+                ahbox <- Gtk.alignmentNew 0 0 1 1
+                Gtk.containerAdd ahbox hbox
+                Gtk.boxPackStart vbox ahbox Gtk.PackGrow 0
                 Gtk.widgetSetSensitive oitem False
+                Gtk.widgetShowAll ahbox
     Gtk.on iitem Gtk.menuItemActivate $ do
         resp <- Gtk.dialogRun jdialog
         Gtk.widgetHide jdialog
@@ -198,16 +285,57 @@ engineStart eng = do
         (s', _) <- execRWST
                    (traverse_ (selF <=< liftIO . retrieveRect store) sOpt) env s
         writeIORef stateRef s'
-    Gtk.containerAdd window vbox
+    Gtk.on area Gtk.exposeEvent $ Gtk.tryEvent $ liftIO $ do
+        env     <- readIORef envRef
+        s       <- readIORef stateRef
+        (s', _) <- execRWST (drawingF Drawing) env s
+        writeIORef stateRef s'
+    Gtk.on area Gtk.motionNotifyEvent $ Gtk.tryEvent $ do
+        (x',y') <- Gtk.eventCoordinates
+        liftIO $ do
+            env <- readIORef envRef
+            s   <- readIORef stateRef
+            v   <- readIORef iRef
+            let ratio = getRatio s v
+                (x,y) = (x'/ratio, y'/ratio)
+                move  = Move x y
+            (s', _) <- execRWST (moveF move) env s
+            let env1 = env { _enginePrevX = x, _enginePrevY = y }
+            writeIORef envRef env1
+            writeIORef stateRef s'
+    Gtk.on area Gtk.buttonPressEvent $ Gtk.tryEvent $ do
+        (x',y') <- Gtk.eventCoordinates
+        liftIO $ do
+            env <- readIORef envRef
+            s   <- readIORef stateRef
+            v   <- readIORef iRef
+            let ratio = getRatio s v
+                (x,y) = (x'/ratio, y'/ratio)
+                press = Press x y
+            (s', _) <- execRWST (pressF press) env s
+            let env1 = env { _enginePrevX = x, _enginePrevY = y }
+            writeIORef envRef env1
+            writeIORef stateRef s'
+    Gtk.on area Gtk.buttonReleaseEvent $ Gtk.tryEvent $ liftIO $ do
+        env     <- readIORef envRef
+        s       <- readIORef stateRef
+        (s', _) <- execRWST (releaseF Release) env s
+        writeIORef stateRef s'
+    Gtk.on area Gtk.enterNotifyEvent $ Gtk.tryEvent $ liftIO $ do
+        env     <- readIORef envRef
+        s       <- readIORef stateRef
+        (s', _) <- execRWST (enterF Enter) env s
+        writeIORef stateRef s'
+
+    Gtk.containerAdd window wvbox
     Gtk.set window windowParams
     Gtk.onDestroy window Gtk.mainQuit
     Gtk.widgetShowAll window
     Gtk.mainGUI
   where
     makeInternal uri = do
-        v    <- loadPdf uri
-        vRef <- newIORef v
-        return $ EngineInternal vRef
+        v <- loadPdf uri
+        return v
     retrieveRect store it =
         let idx = Gtk.listStoreIterToIndex it in
         fmap RectSelected (Gtk.listStoreGetValue store idx)
@@ -265,3 +393,28 @@ loadPages doc = do
         page  <- Poppler.documentGetPage doc (i-1)
         (w,h) <- Poppler.pageGetSize page
         return (i, PageItem page w h)
+
+getRatio :: EngineState -> Viewer -> Double
+getRatio s v = (base * zoom) / width
+  where
+    pIdx  = _engineCurPage s
+    zIdx  = _engineCurZoom s
+    pages = _viewerPages v
+    base  = 777
+    width = pageWidth (pages ! pIdx)
+    zoom  = zoomValues ! zIdx
+
+zoomValues :: Array Int Double
+zoomValues = array (0, 10) values
+  where
+    values = [(0,  0.125) -- 12.5%
+             ,(1,  0.25)  -- 25%
+             ,(2,  0.5)   -- 50%
+             ,(3,  1.0)   -- 100%
+             ,(4,  2.0)   -- 200%
+             ,(5,  3.0)   -- 300%
+             ,(6,  4.0)   -- 400%
+             ,(7,  5.0)   -- 500%
+             ,(8,  6.0)   -- 600%
+             ,(9,  7.0)   -- 700%
+             ,(10, 8.0)]  -- 800%
