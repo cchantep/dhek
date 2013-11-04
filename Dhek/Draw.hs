@@ -5,6 +5,7 @@ import Prelude hiding (mapM_)
 import Control.Lens ((^.), use)
 import Control.Monad.RWS hiding (mapM_)
 
+import System.CPUTime
 import Data.Foldable (mapM_)
 
 import qualified Graphics.Rendering.Cairo     as Cairo
@@ -21,6 +22,8 @@ gtkDraw d = do
     selection <- use engineSelection
     event     <- use engineEvent
     liftIO $ do
+        cpu <- getCPUTime
+        print ("Drawing: " ++ show cpu)
         frame     <- Gtk.widgetGetDrawWindow area
         (fw',fh') <- Gtk.drawableGetSize frame
         let width  = ratio * (pageWidth page)

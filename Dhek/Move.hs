@@ -1,5 +1,6 @@
 module Dhek.Move where
 
+import Control.Applicative ((<|>), (<$))
 import Control.Lens (use, (.=), (%=), (?=), (+=), (-=), (<%=), (^.))
 import Control.Monad ((<=<), when)
 import Control.Monad.Reader (ask)
@@ -12,8 +13,6 @@ import Data.Traversable (traverse)
 import Dhek.Engine
 import Dhek.Types
 
-import Graphics.UI.Gtk.Gdk.Cursor (CursorType (..))
-
 onMove :: EngineCallback Move
 onMove (Move x y) = do
     env <- ask
@@ -21,7 +20,7 @@ onMove (Move x y) = do
         aOpt = _engineOverArea env
     sOpt <- engineSelection <%= fmap (execState selection)
     eOpt <- engineEvent     <%= fmap event
-    cursor eOpt
+    cursor eOpt aOpt oOpt
     engineDraw .= (isJust sOpt || isJust eOpt)
   where
     selection = do
@@ -33,8 +32,11 @@ onMove (Move x y) = do
     event (Hold r (x0,y0))     = Hold (translateRect (x-x0) (y-y0) r) (x,y)
     event (Resize r (x0,y0) a) = Resize (resizeRect (x-x0) (y-y0) a r) (x,y) a
 
-    cursor eOpt =
-        let cOpt = fmap eventCursor eOpt in
+    cursor eOpt aOpt oOpt =
+        let cOpt = fmap eventCursor eOpt <|>
+                   fmap areaCursor aOpt  <|>
+                   handCursor <$ oOpt
+        in
         engineCursor .= cOpt
 
 onPress :: EngineCallback Press
@@ -44,10 +46,12 @@ onPress (Press x y) = do
         aOpt   = _engineOverArea env
         newSel = rectNew x y 0 0
     maybe (engineSelection ?= newSel) (onEvent aOpt) oOpt
+    engineDraw .= True
   where
-    onEvent aOpt r =
-        let evt = maybe (Hold r (x,y)) (Resize r (x,y)) aOpt in
-        engineEvent ?= evt
+    onEvent aOpt r = do
+        let evt = maybe (Hold r (x,y)) (Resize r (x,y)) aOpt
+        engineEvent   ?= evt
+        engineRemRect ?= r
 
 onRelease :: EngineCallback Release
 onRelease _ = do
@@ -55,6 +59,7 @@ onRelease _ = do
     sOpt <- use engineSelection
     traverse_ update eOpt
     traverse_ insert sOpt
+    engineDraw .= (isJust eOpt || isJust sOpt)
   where
     update e =
         let action = case e of
@@ -98,17 +103,3 @@ resizeRect dx dy area r = execState (go area) r
     go LEFT = do
         rectX += dx
         rectWidth -= dx
-
-areaCursor :: Area -> CursorType
-areaCursor TOP_LEFT     = TopLeftCorner
-areaCursor TOP          = TopSide
-areaCursor TOP_RIGHT    = TopRightCorner
-areaCursor RIGHT        = RightSide
-areaCursor BOTTOM_RIGHT = BottomRightCorner
-areaCursor BOTTOM       = BottomSide
-areaCursor BOTTOM_LEFT  = BottomLeftCorner
-areaCursor LEFT         = LeftSide
-
-eventCursor :: BoardEvent -> CursorType
-eventCursor (Hold _ _)     = Hand1
-eventCursor (Resize _ _ a) = areaCursor a
