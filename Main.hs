@@ -18,6 +18,8 @@ main = do
     conf = do
         engineDrawing .= gtkDraw
         engineMove    .= onMove
+        enginePress   .= onPress
+        engineRelease .= onRelease
 
 -- main = do
 --   initGUI

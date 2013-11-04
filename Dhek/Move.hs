@@ -1,7 +1,7 @@
 module Dhek.Move where
 
-import Control.Lens (use, (.=), (%=), (^.), (+=), (-=), (<%=))
-import Control.Monad ((<=<))
+import Control.Lens (use, (.=), (%=), (?=), (+=), (-=), (<%=), (^.))
+import Control.Monad ((<=<), when)
 import Control.Monad.Reader (ask)
 import Control.Monad.State (execState)
 
@@ -36,6 +36,38 @@ onMove (Move x y) = do
     cursor eOpt =
         let cOpt = fmap eventCursor eOpt in
         engineCursor .= cOpt
+
+onPress :: EngineCallback Press
+onPress (Press x y) = do
+    env <- ask
+    let oOpt   = _engineOverRect env
+        aOpt   = _engineOverArea env
+        newSel = rectNew x y 0 0
+    maybe (engineSelection ?= newSel) (onEvent aOpt) oOpt
+  where
+    onEvent aOpt r =
+        let evt = maybe (Hold r (x,y)) (Resize r (x,y)) aOpt in
+        engineEvent ?= evt
+
+onRelease :: EngineCallback Release
+onRelease _ = do
+    eOpt <- use engineEvent
+    sOpt <- use engineSelection
+    traverse_ update eOpt
+    traverse_ insert sOpt
+  where
+    update e =
+        let action = case e of
+                Hold r _     -> engineAddedRect ?= normalize r
+                Resize r _ _ -> engineAddedRect ?= normalize r in
+        do action
+           engineEvent .= Nothing
+
+    insert r =
+        let w = r ^. rectWidth
+            h = r ^. rectHeight in
+        do when (w*h >= 30) (engineAddedRect ?= normalize r)
+           engineSelection .= Nothing
 
 resizeRect :: Double -> Double -> Area -> Rect -> Rect
 resizeRect dx dy area r = execState (go area) r

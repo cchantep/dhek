@@ -85,6 +85,7 @@ data EngineState = EngineState
     , _engineSelection :: !(Maybe Rect)
     , _engineSelected  :: !(Maybe Rect)
     , _engineCursor    :: !(Maybe Gtk.CursorType)
+    , _engineAddedRect :: !(Maybe Rect)
     }
 
 data EngineEnv = EngineEnv
@@ -131,6 +132,7 @@ gtkEngineNew = do
            3
            True
            False
+           Nothing
            Nothing
            Nothing
            Nothing
@@ -538,6 +540,7 @@ initState v s = EngineState
                 3
                 False
                 (s ^. engineCollision)
+                Nothing
                 Nothing
                 Nothing
                 Nothing
