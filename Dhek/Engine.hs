@@ -76,7 +76,7 @@ data PrevZoom = PrevZoom
 
 data RemoveRect = RemoveRect !Rect
 
-data RectSelected = RectSelected !Rect
+data RectSelected = RectSelected
 
 data Drawing = Drawing
     { drawingArea  :: !Gtk.DrawingArea
@@ -93,6 +93,7 @@ data Enter = Enter
 data EngineState = EngineState
     { _engineCurPage   :: {-# UNPACK #-} !Int
     , _engineCurZoom   :: {-# UNPACK #-} !Int
+    , _engineRectId    :: {-# UNPACK #-} !Int
     , _engineCollision :: !Bool
     , _engineDraw      :: !Bool
     , _engineEvent     :: !(Maybe BoardEvent)
@@ -145,6 +146,7 @@ gtkEngineNew = do
     sNew = EngineState
            1
            3
+           0
            True
            False
            Nothing
@@ -325,7 +327,7 @@ engineStart eng = do
             evalReq v env2 s s1
 
         evalReq v env s0 s1 = do
-            traverse_ onRect rOpt
+            traverse_ update rOpt
             traverse_ onRem rmOpt
             frame  <- Gtk.widgetGetDrawWindow area
             curOpt <- traverse Gtk.cursorNew ctOpt
@@ -344,11 +346,6 @@ engineStart eng = do
             ctOpt = s1 ^. engineCursor
             rmOpt = s1 ^. engineRemRect
 
-            onRect r =
-                if (r ^. rectId) /= 0
-                    then update r
-                    else insert r
-
             onRem r =
                 let id = r ^. rectId
                     v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id .~ Nothing in
@@ -358,23 +355,16 @@ engineStart eng = do
 
             update r = do
                 iOpt <- lookupStoreIter (p r) store
-                traverse_ (Gtk.treeSelectionSelectIter sel) iOpt
+                maybe (insert r) (Gtk.treeSelectionSelectIter sel) iOpt
                 let id = r ^. rectId
                     v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id ?~ r
                     env1 = env { _engineRects = getRects s1 v1 }
                 writeIORef envRef env1
                 writeIORef iRef v1
             insert r = do
-                let action = do
-                        id <- viewerBoards.boardsState <+= 1
-                        let r1 = r & rectId .~ id & rectName %~ (++ show id)
-                        viewerBoards.boardsMap.at pId.traverse.boardRects.at id ?= r1
-                        return r1
-                    (r1,v1) = runState action v
-                    env1 = env { _engineRects = getRects s1 v1 }
-                i <- Gtk.listStoreAppend store r1
-                writeIORef envRef env1
-                writeIORef iRef v1
+                Gtk.listStoreAppend store r
+                iOpt <- lookupStoreIter (p r) store
+                traverse_ (Gtk.treeSelectionSelectIter sel) iOpt
 
             p r x = (x ^. rectId) == (r ^. rectId)
 
@@ -482,13 +472,22 @@ engineStart eng = do
         s       <- readIORef stateRef
         (s', _) <- execRWST (remF (RemoveRect $ error "not now")) env s
         writeIORef stateRef s'
+    --- Selection ---
     Gtk.on sel Gtk.treeSelectionSelectionChanged $ do
-        env     <- readIORef envRef
-        s       <- readIORef stateRef
-        sOpt    <- Gtk.treeSelectionGetSelected sel
-        (s', _) <- execRWST
-                   (traverse_ (selF <=< liftIO . retrieveRect store) sOpt) env s
-        writeIORef stateRef s'
+        env  <- readIORef envRef
+        s    <- readIORef stateRef
+        sOpt <- Gtk.treeSelectionGetSelected sel
+        let callback it = do
+                let idx = Gtk.listStoreIterToIndex it
+                r <- Gtk.listStoreGetValue store idx
+                let action = do
+                        engineSelected ?= r
+                        selF RectSelected
+                        engineDraw .= False
+                (s',_) <- execRWST action env s
+                writeIORef stateRef s'
+                Gtk.widgetQueueDraw area
+        traverse_ callback sOpt
     Gtk.on area Gtk.exposeEvent $ Gtk.tryEvent $ liftIO $ do
         env     <- readIORef envRef
         s       <- readIORef stateRef
@@ -537,9 +536,6 @@ engineStart eng = do
     makeInternal uri = do
         v <- loadPdf uri
         return v
-    retrieveRect store it =
-        let idx = Gtk.listStoreIterToIndex it in
-        fmap RectSelected (Gtk.listStoreGetValue store idx)
 
 createPdfChooserDialog :: Gtk.Window -> IO Gtk.FileChooserDialog
 createPdfChooserDialog win = do
@@ -583,6 +579,9 @@ loadPdf path = do
   nb    <- Poppler.documentGetNPages doc
   pages <- loadPages doc
   return (Viewer doc pages 1 nb 100 3 1.0 (boardsNew nb))
+
+freshId :: RWST EngineEnv () EngineState IO Int
+freshId = engineRectId <+= 1
 
 lookupStoreIter :: (a -> Bool) -> Gtk.ListStore a -> IO (Maybe Gtk.TreeIter)
 lookupStoreIter pred store = Gtk.treeModelGetIterFirst store >>= go
@@ -658,6 +657,7 @@ initState :: Viewer -> EngineState -> EngineState
 initState v s = EngineState
                 1
                 3
+                0
                 False
                 (s ^. engineCollision)
                 Nothing

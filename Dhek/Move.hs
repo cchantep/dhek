@@ -1,7 +1,7 @@
 module Dhek.Move where
 
 import Control.Applicative ((<|>), (<$))
-import Control.Lens (use, (.=), (%=), (?=), (+=), (-=), (<%=), (^.))
+import Control.Lens (use, (.=), (%=), (?=), (+=), (-=), (<%=), (^.), (&), (.~), (%~))
 import Control.Monad ((<=<), when)
 import Control.Monad.Reader (ask)
 import Control.Monad.State (execState)
@@ -62,16 +62,25 @@ onRelease _ = do
     engineDraw .= (isJust eOpt || isJust sOpt)
   where
     update e =
-        let action = case e of
-                Hold r _     -> engineAddedRect ?= normalize r
-                Resize r _ _ -> engineAddedRect ?= normalize r in
-        do action
-           engineEvent .= Nothing
+        let r0 = case e of
+                Hold x _     -> x
+                Resize x _ _ -> x
+            r  = normalize r0 in
+        do engineAddedRect ?= r
+           engineSelected  ?= r
+           engineEvent     .= Nothing
 
-    insert r =
-        let w = r ^. rectWidth
-            h = r ^. rectHeight in
-        do when (w*h >= 30) (engineAddedRect ?= normalize r)
+
+    insert r0 =
+        let w  = r0 ^. rectWidth
+            h  = r0 ^. rectHeight
+            r1 = normalize r0 in
+        do when (w*h >= 30) $ do
+               id <- freshId
+               let r2 =  r1 & rectId   .~ id
+                            & rectName %~ (++ show id)
+               engineAddedRect ?= r2
+               engineSelected  ?= r2
            engineSelection .= Nothing
 
 resizeRect :: Double -> Double -> Area -> Rect -> Rect
