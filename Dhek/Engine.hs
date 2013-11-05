@@ -25,7 +25,7 @@ import Control.Monad.RWS.Strict
 import Control.Monad.State
 
 import Data.Array (Array, array, (!))
-import Data.Foldable (foldMap, traverse_)
+import Data.Foldable (find, foldMap, traverse_)
 import qualified Data.IntMap as I
 import Data.IORef
 import Data.Maybe (fromJust, isNothing, isJust)
@@ -37,7 +37,7 @@ import qualified Graphics.UI.Gtk.Poppler.Document as Poppler
 import qualified Graphics.UI.Gtk.Poppler.Page     as Poppler
 
 import Dhek.Types
-import Dhek.Utils (takeFileName)
+import Dhek.Utils (takeFileName, trimString)
 
 type EngineCallback a = a -> RWST EngineEnv () EngineState IO ()
 
@@ -288,6 +288,9 @@ engineStart eng = do
     Gtk.boxPackStart tvbox table Gtk.PackNatural 0
     Gtk.boxPackStart vleft salign Gtk.PackNatural 0
     Gtk.containerAdd vleft tvbox
+    Gtk.widgetSetSensitive rem False
+    Gtk.widgetSetSensitive pEntry False
+    Gtk.widgetSetSensitive pCombo False
     let envRef   = _engineEnv eng
         stateRef = _engineState eng
         fPdf     = _enginePdfSel eng
@@ -339,7 +342,10 @@ engineStart eng = do
             frame  <- Gtk.widgetGetDrawWindow area
             curOpt <- traverse Gtk.cursorNew ctOpt
             Gtk.drawWindowSetCursor frame curOpt
-            Gtk.widgetSetSensitive rem (isJust s1Opt)
+            let hasSel = isJust s1Opt
+            Gtk.widgetSetSensitive rem hasSel
+            Gtk.widgetSetSensitive pEntry hasSel
+            Gtk.widgetSetSensitive pCombo hasSel
             let s2 = s1 & engineAddedRect .~ Nothing
                         & engineRemRect   .~ Nothing
             when draw $ do
@@ -377,6 +383,66 @@ engineStart eng = do
                 traverse_ (Gtk.treeSelectionSelectIter sel) iOpt
 
             p r x = (x ^. rectId) == (r ^. rectId)
+
+        onPropEntry = do
+            txt <- Gtk.entryGetText pEntry
+            let txt1     = trimString txt
+                notEmpty = not $ null txt1
+            when notEmpty $ do
+                s   <- readIORef stateRef
+                env <- readIORef envRef
+                v   <- readIORef iRef
+                let sOpt  = s ^. engineSelected
+                    rects = _engineRects env
+                    showError e = do
+                        m <- Gtk.messageDialogNew (Just window)
+                             [Gtk.DialogModal] Gtk.MessageError Gtk.ButtonsOk e
+                        Gtk.dialogRun m
+                        Gtk.widgetHide m
+
+                    callback r = do
+                        let pred x = (x ^. rectId) == (r ^. rectId)
+                            eOpt   = find (\x -> (x ^. rectName) == txt1) rects
+                            exists = isJust eOpt
+                            pId    = s ^. engineCurPage
+                            id     = r ^. rectId
+                        iOpt <- lookupStoreIter pred store
+                        when exists
+                            (showError ("\"" ++ txt1 ++ "\" is already used"))
+                        when (not exists) $ do
+                            let r1 = r & rectName .~ txt1
+                                v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id ?~ r1
+                                env1 = env { _engineRects = getRects s v1 }
+                            traverse_ (\it ->
+                                        let idx = Gtk.listStoreIterToIndex it in
+                                        Gtk.listStoreSetValue store idx r1) iOpt
+                            writeIORef envRef env1
+                            writeIORef iRef v1
+                traverse_ callback sOpt
+
+        onPropCombo = do
+            s   <- readIORef stateRef
+            env <- readIORef envRef
+            v   <- readIORef iRef
+            tOpt <- Gtk.comboBoxGetActiveText pCombo
+            let sOpt = s ^. engineSelected
+                pId  = s ^. engineCurPage
+                pOpt = (,) <$> sOpt <*> tOpt
+            traverse_ (\(r,typ) -> do
+                            let id = r ^. rectId
+                                r1 = r & rectType .~ typ
+                                pred x = (x ^. rectId) == (r ^. rectId)
+                                v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id ?~ r1
+                                env1 = env { _engineRects = getRects s v1 }
+                            print r
+                            iOpt <- lookupStoreIter pred store
+                            traverse_ (\it ->
+                                        let idx = Gtk.listStoreIterToIndex it in
+                                        Gtk.listStoreSetValue store idx r1
+                                      ) iOpt
+                            writeIORef envRef env1
+                            writeIORef iRef v1
+                      ) pOpt
 
     Gtk.on oitem Gtk.menuItemActivate $ do
         resp <- Gtk.dialogRun fdialog
@@ -495,6 +561,10 @@ engineStart eng = do
                 iOpt <- lookupStoreIter pred store
                 traverse_ (Gtk.listStoreRemove store)
                     (fmap Gtk.listStoreIterToIndex iOpt)
+                Gtk.entrySetText pEntry ""
+                Gtk.comboBoxSetActive pCombo (negate 1)
+                Gtk.widgetSetSensitive pEntry False
+                Gtk.widgetSetSensitive pCombo False
                 let env1 = env { _engineRects = getRects s' v1 }
                 writeIORef iRef v1
                 writeIORef envRef env1
@@ -508,7 +578,7 @@ engineStart eng = do
         s    <- readIORef stateRef
         sOpt <- Gtk.treeSelectionGetSelected sel
         let callback it = do
-                let idx    = Gtk.listStoreIterToIndex it
+                let idx = Gtk.listStoreIterToIndex it
                 r <- Gtk.listStoreGetValue store idx
                 let pred x = x == (r ^. rectType)
                 Gtk.entrySetText pEntry (r ^. rectName)
@@ -520,6 +590,8 @@ engineStart eng = do
                         engineDraw .= False
                 (s',_) <- execRWST action env s
                 writeIORef stateRef s'
+                Gtk.widgetSetSensitive pEntry True
+                Gtk.widgetSetSensitive pCombo True
                 Gtk.widgetQueueDraw area
         traverse_ callback sOpt
     Gtk.on area Gtk.exposeEvent $ Gtk.tryEvent $ liftIO $ do
@@ -576,6 +648,8 @@ engineStart eng = do
                     _            -> delta'
                 newValue = min (upper - pageSize) (max 0 (oldValue + delta))
             Gtk.adjustmentSetValue vadj newValue
+    Gtk.onEntryActivate pEntry onPropEntry
+    Gtk.on pCombo Gtk.changed $ onPropCombo
     Gtk.containerAdd window wvbox
     Gtk.set window windowParams
     Gtk.onDestroy window Gtk.mainQuit
