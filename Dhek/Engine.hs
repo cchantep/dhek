@@ -28,7 +28,7 @@ import Data.Array (Array, array, (!))
 import Data.Foldable (foldMap, traverse_)
 import qualified Data.IntMap as I
 import Data.IORef
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, isNothing)
 import Data.Traversable (traverse)
 
 import Graphics.UI.Gtk ( AttrOp( (:=) ))
@@ -74,7 +74,7 @@ data PrevPage = PrevPage
 data NextZoom = NextZoom
 data PrevZoom = PrevZoom
 
-data RemoveRect = RemoveRect !Rect
+data RemoveRect = RemoveRect
 
 data RectSelected = RectSelected
 
@@ -96,6 +96,8 @@ data EngineState = EngineState
     , _engineRectId    :: {-# UNPACK #-} !Int
     , _engineCollision :: !Bool
     , _engineDraw      :: !Bool
+    , _enginePropLabel :: !String
+    , _enginePropType  :: !(Maybe String)
     , _engineEvent     :: !(Maybe BoardEvent)
     , _engineSelection :: !(Maybe Rect)
     , _engineSelected  :: !(Maybe Rect)
@@ -149,6 +151,8 @@ gtkEngineNew = do
            0
            True
            False
+           ""
+           Nothing
            Nothing
            Nothing
            Nothing
@@ -323,11 +327,14 @@ engineStart eng = do
 
             (s1,_) <- execRWST (k evt) env1 s
             let env2 = env1 { _enginePrevX = x, _enginePrevY = y }
+            Gtk.set hruler [Gtk.rulerPosition := x]
+            Gtk.set vruler [Gtk.rulerPosition := y]
             writeIORef envRef env2
             evalReq v env2 s s1
 
         evalReq v env s0 s1 = do
             traverse_ update rOpt
+            when (s0Opt /= s1Opt && isNothing rOpt) (traverse_ update s1Opt)
             traverse_ onRem rmOpt
             frame  <- Gtk.widgetGetDrawWindow area
             curOpt <- traverse Gtk.cursorNew ctOpt
@@ -340,6 +347,8 @@ engineStart eng = do
                 Gtk.widgetQueueDraw area
             when (not draw) (writeIORef stateRef s2)
           where
+            s0Opt = s0 ^. engineSelected
+            s1Opt = s1 ^. engineSelected
             rOpt  = s1 ^. engineAddedRect
             pId   = s1 ^. engineCurPage
             draw  = s1 ^. engineDraw
@@ -470,7 +479,7 @@ engineStart eng = do
     Gtk.on rem Gtk.buttonActivated $ do
         env     <- readIORef envRef
         s       <- readIORef stateRef
-        (s', _) <- execRWST (remF (RemoveRect $ error "not now")) env s
+        (s', _) <- execRWST (remF RemoveRect) env s
         writeIORef stateRef s'
     --- Selection ---
     Gtk.on sel Gtk.treeSelectionSelectionChanged $ do
@@ -478,8 +487,12 @@ engineStart eng = do
         s    <- readIORef stateRef
         sOpt <- Gtk.treeSelectionGetSelected sel
         let callback it = do
-                let idx = Gtk.listStoreIterToIndex it
+                let idx    = Gtk.listStoreIterToIndex it
                 r <- Gtk.listStoreGetValue store idx
+                let pred x = x == (r ^. rectType)
+                Gtk.entrySetText pEntry (r ^. rectName)
+                tOpt <- lookupStoreIter pred tstore
+                traverse_ (Gtk.comboBoxSetActiveIter pCombo) tOpt
                 let action = do
                         engineSelected ?= r
                         selF RectSelected
@@ -495,6 +508,21 @@ engineStart eng = do
         let ratio = getRatio s v
             page  = getPage s v
         (s', _) <- execRWST (drawingF $ Drawing area page ratio) env s
+        hsize <- Gtk.adjustmentGetPageSize hadj
+        vsize <- Gtk.adjustmentGetPageSize vadj
+        hlower <- Gtk.adjustmentGetLower hadj
+        hupper <- Gtk.adjustmentGetUpper hadj
+        hincr <- Gtk.adjustmentGetPageIncrement hadj
+        sincr <- Gtk.adjustmentGetStepIncrement hadj
+        vincr <- Gtk.adjustmentGetPageIncrement vadj
+        hvalue <- Gtk.adjustmentGetValue hadj
+        vvalue <- Gtk.adjustmentGetValue vadj
+        let w  = (hsize/ratio) + hl
+            h  = (vsize/ratio) + vl
+            hl = hvalue / ratio
+            vl = vvalue / ratio
+        Gtk.set hruler [Gtk.rulerLower := hl, Gtk.rulerUpper := w, Gtk.rulerMaxSize := w]
+        Gtk.set vruler [Gtk.rulerLower := vl, Gtk.rulerUpper := h, Gtk.rulerMaxSize := h]
         writeIORef stateRef s'
     Gtk.on area Gtk.motionNotifyEvent $ Gtk.tryEvent $ do
         (x',y') <- Gtk.eventCoordinates
@@ -660,6 +688,8 @@ initState v s = EngineState
                 0
                 False
                 (s ^. engineCollision)
+                ""
+                Nothing
                 Nothing
                 Nothing
                 Nothing
