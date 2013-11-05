@@ -28,7 +28,7 @@ import Data.Array (Array, array, (!))
 import Data.Foldable (foldMap, traverse_)
 import qualified Data.IntMap as I
 import Data.IORef
-import Data.Maybe (fromJust, isNothing)
+import Data.Maybe (fromJust, isNothing, isJust)
 import Data.Traversable (traverse)
 
 import Graphics.UI.Gtk ( AttrOp( (:=) ))
@@ -74,7 +74,7 @@ data PrevPage = PrevPage
 data NextZoom = NextZoom
 data PrevZoom = PrevZoom
 
-data RemoveRect = RemoveRect
+data RemoveRect = RemoveRect !Rect
 
 data RectSelected = RectSelected
 
@@ -339,6 +339,7 @@ engineStart eng = do
             frame  <- Gtk.widgetGetDrawWindow area
             curOpt <- traverse Gtk.cursorNew ctOpt
             Gtk.drawWindowSetCursor frame curOpt
+            Gtk.widgetSetSensitive rem (isJust s1Opt)
             let s2 = s1 & engineAddedRect .~ Nothing
                         & engineRemRect   .~ Nothing
             when draw $ do
@@ -477,10 +478,30 @@ engineStart eng = do
         writeIORef stateRef s'
         Gtk.widgetQueueDraw area
     Gtk.on rem Gtk.buttonActivated $ do
-        env     <- readIORef envRef
-        s       <- readIORef stateRef
-        (s', _) <- execRWST (remF RemoveRect) env s
-        writeIORef stateRef s'
+        env <- readIORef envRef
+        s   <- readIORef stateRef
+        v   <- readIORef iRef
+        let rOpt = s ^. engineSelected
+            callback r = do
+                let pId = s ^. engineCurPage
+                    id  = r ^. rectId
+                    v1  = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id .~ Nothing
+                    pred x = (x ^. rectId) == (r ^. rectId)
+                    action = do
+                        remF $ RemoveRect r
+                        engineSelected .= Nothing
+                        engineDraw     .= False
+                (s', _) <- execRWST action env s
+                iOpt <- lookupStoreIter pred store
+                traverse_ (Gtk.listStoreRemove store)
+                    (fmap Gtk.listStoreIterToIndex iOpt)
+                let env1 = env { _engineRects = getRects s' v1 }
+                writeIORef iRef v1
+                writeIORef envRef env1
+                writeIORef stateRef s'
+                Gtk.widgetQueueDraw area
+                Gtk.widgetSetSensitive rem False
+        traverse_ callback rOpt
     --- Selection ---
     Gtk.on sel Gtk.treeSelectionSelectionChanged $ do
         env  <- readIORef envRef
@@ -508,13 +529,13 @@ engineStart eng = do
         let ratio = getRatio s v
             page  = getPage s v
         (s', _) <- execRWST (drawingF $ Drawing area page ratio) env s
-        hsize <- Gtk.adjustmentGetPageSize hadj
-        vsize <- Gtk.adjustmentGetPageSize vadj
+        hsize  <- Gtk.adjustmentGetPageSize hadj
+        vsize  <- Gtk.adjustmentGetPageSize vadj
         hlower <- Gtk.adjustmentGetLower hadj
         hupper <- Gtk.adjustmentGetUpper hadj
-        hincr <- Gtk.adjustmentGetPageIncrement hadj
-        sincr <- Gtk.adjustmentGetStepIncrement hadj
-        vincr <- Gtk.adjustmentGetPageIncrement vadj
+        hincr  <- Gtk.adjustmentGetPageIncrement hadj
+        sincr  <- Gtk.adjustmentGetStepIncrement hadj
+        vincr  <- Gtk.adjustmentGetPageIncrement vadj
         hvalue <- Gtk.adjustmentGetValue hadj
         vvalue <- Gtk.adjustmentGetValue vadj
         let w  = (hsize/ratio) + hl
