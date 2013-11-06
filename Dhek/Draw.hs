@@ -9,15 +9,14 @@ import System.CPUTime
 import Data.Foldable (mapM_)
 
 import qualified Graphics.Rendering.Cairo     as Cairo
-import qualified Graphics.UI.Gtk              as Gtk
 import qualified Graphics.UI.Gtk.Poppler.Page as Poppler
 
 import Dhek.Engine
 import Dhek.Instr
 import Dhek.Types
 
-gtkDraw :: DhekProgram ()
-gtkDraw = compile $ do
+cairoDraw :: DhekProgram ()
+cairoDraw = compile $ do
     ratio     <- getRatio
     selected  <- getSelected
     selection <- getSelection
