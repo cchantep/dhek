@@ -17,7 +17,9 @@ import Control.Lens
     , (?~)
     , (?=)
     , (.=)
-    , (%~))
+    , (%~)
+    , (<+~)
+    , (<-~))
 import Control.Monad ((<=<))
 import Control.Monad.Cont
 import Control.Monad.Reader
@@ -31,6 +33,8 @@ import Data.IORef
 import Data.Maybe (fromJust, isNothing, isJust)
 import Data.Traversable (traverse)
 
+import Debug.Trace
+
 import Graphics.UI.Gtk ( AttrOp( (:=) ))
 import qualified Graphics.UI.Gtk as Gtk
 import qualified Graphics.UI.Gtk.Poppler.Document as Poppler
@@ -38,57 +42,31 @@ import qualified Graphics.UI.Gtk.Poppler.Page     as Poppler
 
 import Dhek.Types
 import Dhek.Utils (takeFileName, trimString)
+import Dhek.Instr
 
 type EngineCallback a = a -> RWST EngineEnv () EngineState IO ()
 
 data Engine = Engine
-    { _engineState        :: IORef EngineState
-    , _engineEnv          :: IORef EngineEnv
-    , _enginePdfSel       :: EngineCallback PdfSelection
-    , _engineJsonLoad     :: EngineCallback JsonLoad
-    , _engineNextPage     :: EngineCallback NextPage
-    , _enginePrevPage     :: EngineCallback PrevPage
-    , _engineNextZoom     :: EngineCallback NextZoom
-    , _enginePrevZoom     :: EngineCallback PrevZoom
-    , _engineRemoveRect   :: EngineCallback RemoveRect
-    , _engineRectSelected :: EngineCallback RectSelected
-    , _engineDrawing      :: EngineCallback Drawing
-    , _engineMove         :: EngineCallback Move
-    , _enginePress        :: EngineCallback Press
-    , _engineRelease      :: EngineCallback Release
-    , _engineEnter        :: EngineCallback Enter }
+    { _engineState         :: IORef EngineState
+    , _engineEnv           :: IORef EngineEnv
+    , _enginePdfSel        :: DhekProgram ()
+    , _engineJsonLoad      :: DhekProgram ()
+    , _engineNextPage      :: DhekProgram ()
+    , _enginePrevPage      :: DhekProgram ()
+    , _engineNextZoom      :: DhekProgram ()
+    , _enginePrevZoom      :: DhekProgram ()
+    , _engineRemoveRect    :: DhekProgram ()
+    , _engineTreeSelection :: DhekProgram ()
+    , _engineDrawing       :: DhekProgram ()
+    , _engineMove          :: DhekProgram ()
+    , _enginePress         :: DhekProgram ()
+    , _engineRelease       :: DhekProgram ()
+    , _engineEnter         :: DhekProgram ()
+    , _enginePropChanged   :: DhekProgram () }
 
 data EngineInternal = EngineInternal
     { engineRef :: IORef Viewer
     }
-
-data PdfSelection = PdfSelection
-    { pdfURI      :: !String
-    , pdfFilename :: !String }
-
-data JsonLoad = JsonLoad { jsonURI :: !String }
-
-data NextPage = NextPage
-data PrevPage = PrevPage
-
-data NextZoom = NextZoom
-data PrevZoom = PrevZoom
-
-data RemoveRect = RemoveRect !Rect
-
-data RectSelected = RectSelected
-
-data Drawing = Drawing
-    { drawingArea  :: !Gtk.DrawingArea
-    , drawingPage  :: !PageItem
-    , drawingRatio :: !Double
-    }
-
-data Move = Move !Double !Double
-data Press = Press !Double !Double
-data Release = Release
-
-data Enter = Enter
 
 data EngineState = EngineState
     { _engineCurPage   :: {-# UNPACK #-} !Int
@@ -126,20 +104,22 @@ gtkEngineNew = do
     return $ Engine
         sRef
         eRef
-        (\_ -> return ())
-        (\_ -> return ())
-        (\_ -> return ())
-        (\_ -> return ())
-        (\_ -> return ())
-        (\_ -> return ())
-        (\_ -> return ())
-        (\_ -> return ())
-        (\_ -> return ())
-        (\_ -> return ())
-        (\_ -> return ())
-        (\_ -> return ())
-        (\_ -> return ())
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
   where
+    nop = compile $ return ()
     envNew =
         let neg1 :: forall a. Num a => a
             neg1 = negate 1 in
@@ -300,149 +280,229 @@ engineStart eng = do
         minusPF  = _enginePrevZoom eng
         plusPF   = _engineNextZoom eng
         remF     = _engineRemoveRect eng
-        selF     = _engineRectSelected eng
+        selF     = _engineTreeSelection eng
         drawingF = _engineDrawing eng
         moveF    = _engineMove eng
         pressF   = _enginePress eng
         releaseF = _engineRelease eng
         enterF   = _engineEnter eng
+        propF    = _enginePropChanged eng
 
-        prepareAll :: forall a t.
-                      (Double -> Double -> t)
-                   -> EngineCallback t
-                   -> Double
-                   -> Double
-                   -> Gtk.EventM a ()
-        prepareAll cs k x' y' = liftIO $ do
-            env <- readIORef envRef
-            s   <- readIORef stateRef
-            v   <- readIORef iRef
+        interpret :: Double -> Double -> DhekProgram () -> IO ()
+        interpret x' y' pgr = do
+            s     <- readIORef stateRef
+            v     <- readIORef iRef
+            env   <- readIORef envRef
+            frame <- Gtk.widgetGetDrawWindow area
             let ratio = getRatio s v
-                (x,y) = (x'/ratio, y'/ratio)
-                evt   = cs x y
+                x     = x' / ratio
+                y     = y' / ratio
                 rects = getRects s v
+                pId   = s ^. engineCurPage
+                nb    = v ^. viewerPageCount
+                page  = getPage s v
                 oOpt  = getOverRect x y rects
                 aOpt  = getOverArea ratio x y =<< oOpt
-                env1  = env { _engineOverRect = oOpt
-                            , _engineOverArea = aOpt
-                            , _engineRects    = rects
-                            }
+                filename = _engineFilename env
+                pred r x = (x ^. rectId) == (r ^. rectId)
 
-            (s1,_) <- execRWST (k evt) env1 s
-            let env2 = env1 { _enginePrevX = x, _enginePrevY = y }
-            Gtk.set hruler [Gtk.rulerPosition := x]
-            Gtk.set vruler [Gtk.rulerPosition := y]
-            writeIORef envRef env2
-            evalReq v env2 s s1
-
-        evalReq v env s0 s1 = do
-            traverse_ update rOpt
-            when (s0Opt /= s1Opt && isNothing rOpt) (traverse_ update s1Opt)
-            traverse_ onRem rmOpt
-            frame  <- Gtk.widgetGetDrawWindow area
-            curOpt <- traverse Gtk.cursorNew ctOpt
-            Gtk.drawWindowSetCursor frame curOpt
-            let hasSel = isJust s1Opt
-            Gtk.widgetSetSensitive rem hasSel
-            Gtk.widgetSetSensitive pEntry hasSel
-            Gtk.widgetSetSensitive pCombo hasSel
-            let s2 = s1 & engineAddedRect .~ Nothing
-                        & engineRemRect   .~ Nothing
-            when draw $ do
-                let s3 = s2 & engineDraw .~ False
-                writeIORef stateRef s3
-                Gtk.widgetQueueDraw area
-            when (not draw) (writeIORef stateRef s2)
-          where
-            s0Opt = s0 ^. engineSelected
-            s1Opt = s1 ^. engineSelected
-            rOpt  = s1 ^. engineAddedRect
-            pId   = s1 ^. engineCurPage
-            draw  = s1 ^. engineDraw
-            ctOpt = s1 ^. engineCursor
-            rmOpt = s1 ^. engineRemRect
-
-            onRem r =
-                let id = r ^. rectId
-                    v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id .~ Nothing in
-                writeIORef iRef v1
-
-            pageMap = v ^. viewerBoards.boardsMap.at pId.traverse.boardRects
-
-            update r = do
-                iOpt <- lookupStoreIter (p r) store
-                maybe (insert r) (Gtk.treeSelectionSelectIter sel) iOpt
-                let id = r ^. rectId
-                    v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id ?~ r
-                    env1 = env { _engineRects = getRects s1 v1 }
-                writeIORef envRef env1
-                writeIORef iRef v1
-            insert r = do
-                Gtk.listStoreAppend store r
-                iOpt <- lookupStoreIter (p r) store
-                traverse_ (Gtk.treeSelectionSelectIter sel) iOpt
-
-            p r x = (x ^. rectId) == (r ^. rectId)
-
-        onPropEntry = do
-            txt <- Gtk.entryGetText pEntry
-            let txt1     = trimString txt
-                notEmpty = not $ null txt1
-            when notEmpty $ do
-                s   <- readIORef stateRef
-                env <- readIORef envRef
-                v   <- readIORef iRef
-                let sOpt  = s ^. engineSelected
-                    rects = _engineRects env
-                    showError e = do
-                        m <- Gtk.messageDialogNew (Just window)
-                             [Gtk.DialogModal] Gtk.MessageError Gtk.ButtonsOk e
-                        Gtk.dialogRun m
-                        Gtk.widgetHide m
-
-                    callback r = do
-                        let pred x = (x ^. rectId) == (r ^. rectId)
-                            eOpt   = find (\x -> (x ^. rectName) == txt1) rects
-                            exists = isJust eOpt
-                            pId    = s ^. engineCurPage
-                            id     = r ^. rectId
-                        iOpt <- lookupStoreIter pred store
-                        when exists
-                            (showError ("\"" ++ txt1 ++ "\" is already used"))
-                        when (not exists) $ do
-                            let r1 = r & rectName .~ txt1
-                                v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id ?~ r1
-                                env1 = env { _engineRects = getRects s v1 }
-                            traverse_ (\it ->
-                                        let idx = Gtk.listStoreIterToIndex it in
-                                        Gtk.listStoreSetValue store idx r1) iOpt
-                            writeIORef envRef env1
-                            writeIORef iRef v1
-                traverse_ callback sOpt
-
-        onPropCombo = do
-            s   <- readIORef stateRef
-            env <- readIORef envRef
-            v   <- readIORef iRef
-            tOpt <- Gtk.comboBoxGetActiveText pCombo
-            let sOpt = s ^. engineSelected
-                pId  = s ^. engineCurPage
-                pOpt = (,) <$> sOpt <*> tOpt
-            traverse_ (\(r,typ) -> do
+                suspend (GetPointer k)  s v = k (x,y) s v
+                suspend (GetOverRect k) s v = k oOpt s v
+                suspend (GetOverArea k) s v = k aOpt s v
+                suspend (GetSelected k) s v = k (s ^. engineSelected) s v
+                suspend (SetSelected rOpt k) s v = do
+                    let callback r = do
                             let id = r ^. rectId
-                                r1 = r & rectType .~ typ
-                                pred x = (x ^. rectId) == (r ^. rectId)
-                                v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id ?~ r1
-                                env1 = env { _engineRects = getRects s v1 }
-                            print r
-                            iOpt <- lookupStoreIter pred store
-                            traverse_ (\it ->
-                                        let idx = Gtk.listStoreIterToIndex it in
-                                        Gtk.listStoreSetValue store idx r1
+                                s1 = s & engineSelected ?~ r
+                                v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id ?~ r
+                            iOpt <- lookupStoreIter (pred r) store
+                            traverse_ (\it -> do
+                                            let idx = Gtk.listStoreIterToIndex it
+                                            Gtk.listStoreSetValue store idx r
+                                            Gtk.treeSelectionSelectIter sel it
                                       ) iOpt
-                            writeIORef envRef env1
-                            writeIORef iRef v1
-                      ) pOpt
+                            Gtk.entrySetText pEntry (r ^. rectName)
+                            tOpt <- lookupStoreIter (\x -> x == (r ^. rectType)) tstore
+                            writeIORef stateRef s1 -- combobox hack in order to prevent sync issue
+                            traverse_ (Gtk.comboBoxSetActiveIter pCombo) tOpt
+                            Gtk.widgetSetSensitive rem True
+                            Gtk.widgetSetSensitive pCombo True
+                            Gtk.widgetSetSensitive pEntry True
+                            k s1 v1
+
+                        onNothing =
+                            suspend (UnselectRect k) s v
+                    maybe onNothing callback rOpt
+                suspend (GetEvent k) s v   = k (s ^. engineEvent) s v
+                suspend (SetEvent e k) s v =
+                    let s1 = s & engineEvent .~ e in
+                    k s1 v
+                suspend (GetRects k) s v = k rects s v
+                suspend (GetRatio k) s v = k ratio s v
+                suspend (GetSelection k) s v = k (s ^. engineSelection) s v
+                suspend (SetSelection r k) s v =
+                    let s1 = s & engineSelection .~ r in
+                    k s1 v
+                suspend (GetPage k) s v = k page s v
+                suspend (GetCurPage k) s v = k (s ^. engineCurPage) s v
+                suspend (GetPageCount k ) s v = k nb s v
+                suspend (SetCursor tOpt k) s v = do
+                    cOpt <- traverse Gtk.cursorNew tOpt
+                    Gtk.drawWindowSetCursor frame cOpt
+                    k s v
+                suspend (FreshId k) s v =
+                    let (id, s1) = s & engineRectId <+~ 1 in
+                    k id s1 v
+                suspend (IncrPage k) s v = do
+                    let (ncur, s1) = s & engineSelected .~ Nothing
+                                       & engineCurPage <+~ 1
+                        rects2     = getRects s1 v
+                    Gtk.widgetSetSensitive prev True
+                    Gtk.widgetSetSensitive next (ncur < nb)
+                    Gtk.listStoreClear store
+                    traverse_ (Gtk.listStoreAppend store) rects2
+                    k s1 v
+                suspend (DecrPage k) s v = do
+                    let (ncur, s1) = s & engineSelected .~ Nothing
+                                       & engineCurPage <-~ 1
+                        rects2     = getRects s1 v
+                    Gtk.widgetSetSensitive prev (ncur > 1)
+                    Gtk.widgetSetSensitive next True
+                    Gtk.listStoreClear store
+                    traverse_ (Gtk.listStoreAppend store) rects2
+                    k s1 v
+                suspend (IncrZoom k) s v = do
+                    let (ncur, s1) = s & engineCurZoom <+~ 1
+                    Gtk.widgetSetSensitive minus True
+                    Gtk.widgetSetSensitive plus (ncur < 10)
+                    k s1 v
+                suspend (DecrZoom k) s v = do
+                    let (ncur, s1) = s & engineCurZoom <-~ 1
+                    Gtk.widgetSetSensitive minus (ncur > 1)
+                    Gtk.widgetSetSensitive plus True
+                    k s1 v
+                suspend (RemoveRect r k) s v = do
+                    let id = r ^. rectId
+                        v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id .~ Nothing
+                    iOpt <- lookupStoreIter (pred r) store
+                    traverse_ (\it ->
+                                let idx = Gtk.listStoreIterToIndex it in
+                                Gtk.listStoreRemove store idx
+                              ) iOpt
+                    k s v1
+                suspend (DetachRect r k) s v = do
+                    let id = r ^. rectId
+                        v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id .~ Nothing
+                    k s v1
+                suspend (AttachRect r k) s v = do
+                    let id = r ^. rectId
+                        v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id ?~ r
+                    k s v1
+                suspend (AddRect r k) s v = do
+                    let id = r ^. rectId
+                        v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id ?~ r
+                    Gtk.listStoreAppend store r
+                    iOpt <- lookupStoreIter (pred r) store
+                    traverse_ (Gtk.treeSelectionSelectIter sel) iOpt
+                    k s v1
+                suspend (GetEntryText e k) s v =
+                    case e of
+                        PropEntry -> do
+                            txt <- Gtk.entryGetText pEntry
+                            let txt1 = trimString txt
+                                tOpt = if null txt1 then Nothing else Just txt1
+                            k tOpt s v
+                suspend (GetComboText e k) s v =
+                    case e of
+                        PropCombo -> do
+                            tOpt <- Gtk.comboBoxGetActiveText pCombo
+                            k tOpt s v
+                suspend (UnselectRect k) s v = do
+                    let s1 = s & engineSelected .~ Nothing
+                    Gtk.widgetSetSensitive pCombo False
+                    Gtk.widgetSetSensitive pEntry False
+                    Gtk.widgetSetSensitive rem False
+                    Gtk.entrySetText pEntry ""
+                    Gtk.comboBoxSetActive pCombo (negate 1)
+                    k s1 v
+                suspend (Draw k) s v =
+                    let s1 = s & engineDraw .~ True in
+                    k s1 v
+                suspend (SetTitle t k) s v = do
+                    Gtk.windowSetTitle window t
+                    k s v
+                suspend (GetFilename k) s v = k filename s v
+                suspend (GetFrameSize k) s v = do
+                    size <- Gtk.drawableGetSize frame
+                    k size s v
+                suspend (ExecCairo r k) s v = do
+                    Gtk.renderWithDrawable frame r
+                    k s v
+                suspend (SizeRequest rx ry k) s v = do
+                    Gtk.widgetSetSizeRequest area rx ry
+                    k s v
+                suspend (ShowError e k) s v = do
+                    m <- Gtk.messageDialogNew (Just window)
+                         [Gtk.DialogModal] Gtk.MessageError Gtk.ButtonsOk e
+                    Gtk.dialogRun m
+                    Gtk.widgetHide m
+                    k s v
+                suspend (PerformIO action k) s v = do
+                    action
+                    k s v
+                suspend (GetTreeSelection k) s v = do
+                    iOpt <- Gtk.treeSelectionGetSelected sel
+                    rOpt <- traverse (\it ->
+                                       let idx = Gtk.listStoreIterToIndex it in
+                                       Gtk.listStoreGetValue store idx
+                                     ) iOpt
+                    k rOpt s v
+
+                end a s v = do
+                    let drawing = s ^. engineDraw
+                        s1      = s & engineDraw .~ False
+                    writeIORef iRef v
+                    writeIORef stateRef s1
+                    when drawing (Gtk.widgetQueueDraw area)
+
+            (foldFree end suspend pgr) s v
+            where
+              getRatio :: EngineState -> Viewer -> Double
+              getRatio s v = (base * zoom) / width
+                where
+                  pIdx  = _engineCurPage s
+                  zIdx  = _engineCurZoom s
+                  pages = _viewerPages v
+                  base  = 777
+                  width = pageWidth (pages ! pIdx)
+                  zoom  = zoomValues ! zIdx
+
+              getPage :: EngineState -> Viewer -> PageItem
+              getPage s v = pages ! pIdx
+                where
+                  pIdx  = _engineCurPage s
+                  pages = _viewerPages v
+
+              getOverRect :: Double -> Double -> [Rect] -> Maybe Rect
+              getOverRect x y rs =
+                  let overed = isOver 1.0 x y
+                      oOpt   = find overed rs in
+                  oOpt
+
+              getOverArea :: Double -> Double -> Double -> Rect -> Maybe Area
+              getOverArea ratio x y r =
+                  let overed a =
+                          isOver 1.0 x y (rectArea (5/ratio) r a)
+
+                      aOpt = find overed (enumFrom TOP_LEFT) in
+                  aOpt
+
+              getRects :: EngineState -> Viewer -> [Rect]
+              getRects s v =
+                  let pId   = s ^. engineCurPage
+                      rects =
+                          v ^. viewerBoards.boardsMap.at pId.traverse.boardRects.to I.elems in
+                  rects
 
     Gtk.on oitem Gtk.menuItemActivate $ do
         resp <- Gtk.dialogRun fdialog
@@ -459,9 +519,8 @@ engineStart eng = do
                 let env  = initEnv nameOpt v
                     name = _engineFilename env
                 writeIORef envRef env
-                let evtOpt = PdfSelection <$> uriOpt <*> nameOpt
-                    nb     = v ^. viewerPageCount
-                (s', _) <- execRWST (traverse_ fPdf evtOpt) env (initState v s)
+                let nb     = v ^. viewerPageCount
+                    s'     = initState v s
                 writeIORef stateRef s'
                 ahbox <- Gtk.alignmentNew 0 0 1 1
                 Gtk.containerAdd ahbox hbox
@@ -481,159 +540,73 @@ engineStart eng = do
                 fOpt    <- Gtk.fileChooserGetFilename jdialog
                 env     <- readIORef envRef
                 s       <- readIORef stateRef
-                (s', _) <- execRWST (traverse_ (jsonLF . JsonLoad) fOpt) env s
-                writeIORef stateRef s'
+                writeIORef stateRef s
     -- Previous Button ---
     Gtk.on prev Gtk.buttonActivated $ do
-        env <- readIORef envRef
-        v   <- readIORef iRef
-        let nb     = _enginePageCount env
-            name   = _engineFilename env
-            action = do
-                i <- engineCurPage <-= 1
-                liftIO $ do
-                    Gtk.widgetSetSensitive prev (i > 1)
-                    Gtk.widgetSetSensitive next True
-                    Gtk.windowSetTitle window
-                        (name ++ " (page " ++ show i ++ " / " ++ show nb ++ ")")
-        s  <- readIORef stateRef
-        s' <- execStateT action s
-        let env1 = env { _engineRects = getRects s' v}
-        writeIORef envRef env1
-        writeIORef stateRef s'
-        Gtk.widgetQueueDraw area
+        let x = negate 1
+        interpret x x prevPF
     --- Next Button ---
     Gtk.on next Gtk.buttonActivated $ do
-        env <- readIORef envRef
-        v   <- readIORef iRef
-        let nb     = _enginePageCount env
-            name   = _engineFilename env
-            action = do
-                i <- engineCurPage <+= 1
-                liftIO $ do
-                    Gtk.widgetSetSensitive prev True
-                    Gtk.widgetSetSensitive next (i < nb)
-                    Gtk.windowSetTitle window
-                        (name ++ " (page " ++ show i ++ " / " ++ show nb ++ ")")
-        s  <- readIORef stateRef
-        s' <- execStateT action s
-        let env1 = env { _engineRects = getRects s' v}
-        writeIORef envRef env1
-        writeIORef stateRef s'
-        Gtk.widgetQueueDraw area
+        let x = negate 1
+        interpret x x nextPF
     --- Minus Button ---
     Gtk.on minus Gtk.buttonActivated $ do
-        let action = do
-                i <- engineCurZoom <-= 1
-                liftIO $ do
-                    Gtk.widgetSetSensitive minus (i > 1)
-                    Gtk.widgetSetSensitive plus True
-        s  <- readIORef stateRef
-        s' <- execStateT action s
-        writeIORef stateRef s'
-        Gtk.widgetQueueDraw area
+        let x = negate 1
+        interpret x x minusPF
     --- Plus Button ---
     Gtk.on plus Gtk.buttonActivated $ do
-        let action = do
-                 i <- engineCurZoom <+= 1
-                 liftIO $ do
-                     Gtk.widgetSetSensitive minus True
-                     Gtk.widgetSetSensitive plus (i < 10)
-        s  <- readIORef stateRef
-        s' <- execStateT action s
-        writeIORef stateRef s'
-        Gtk.widgetQueueDraw area
+        let x = negate 1
+        interpret x x plusPF
     Gtk.on rem Gtk.buttonActivated $ do
-        env <- readIORef envRef
-        s   <- readIORef stateRef
-        v   <- readIORef iRef
-        let rOpt = s ^. engineSelected
-            callback r = do
-                let pId = s ^. engineCurPage
-                    id  = r ^. rectId
-                    v1  = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id .~ Nothing
-                    pred x = (x ^. rectId) == (r ^. rectId)
-                    action = do
-                        remF $ RemoveRect r
-                        engineSelected .= Nothing
-                        engineDraw     .= False
-                (s', _) <- execRWST action env s
-                iOpt <- lookupStoreIter pred store
-                traverse_ (Gtk.listStoreRemove store)
-                    (fmap Gtk.listStoreIterToIndex iOpt)
-                Gtk.entrySetText pEntry ""
-                Gtk.comboBoxSetActive pCombo (negate 1)
-                Gtk.widgetSetSensitive pEntry False
-                Gtk.widgetSetSensitive pCombo False
-                let env1 = env { _engineRects = getRects s' v1 }
-                writeIORef iRef v1
-                writeIORef envRef env1
-                writeIORef stateRef s'
-                Gtk.widgetQueueDraw area
-                Gtk.widgetSetSensitive rem False
-        traverse_ callback rOpt
+        let x = negate 1
+        interpret x x remF
     --- Selection ---
     Gtk.on sel Gtk.treeSelectionSelectionChanged $ do
-        env  <- readIORef envRef
-        s    <- readIORef stateRef
-        sOpt <- Gtk.treeSelectionGetSelected sel
-        let callback it = do
-                let idx = Gtk.listStoreIterToIndex it
-                r <- Gtk.listStoreGetValue store idx
-                let pred x = x == (r ^. rectType)
-                Gtk.entrySetText pEntry (r ^. rectName)
-                tOpt <- lookupStoreIter pred tstore
-                traverse_ (Gtk.comboBoxSetActiveIter pCombo) tOpt
-                let action = do
-                        engineSelected ?= r
-                        selF RectSelected
-                        engineDraw .= False
-                (s',_) <- execRWST action env s
-                writeIORef stateRef s'
-                Gtk.widgetSetSensitive pEntry True
-                Gtk.widgetSetSensitive pCombo True
-                Gtk.widgetQueueDraw area
-        traverse_ callback sOpt
+        let x = negate 1
+        interpret x x selF
     Gtk.on area Gtk.exposeEvent $ Gtk.tryEvent $ liftIO $ do
-        env     <- readIORef envRef
-        s       <- readIORef stateRef
-        v       <- readIORef iRef
-        let ratio = getRatio s v
-            page  = getPage s v
-        (s', _) <- execRWST (drawingF $ Drawing area page ratio) env s
-        hsize  <- Gtk.adjustmentGetPageSize hadj
-        vsize  <- Gtk.adjustmentGetPageSize vadj
-        hlower <- Gtk.adjustmentGetLower hadj
-        hupper <- Gtk.adjustmentGetUpper hadj
-        hincr  <- Gtk.adjustmentGetPageIncrement hadj
-        sincr  <- Gtk.adjustmentGetStepIncrement hadj
-        vincr  <- Gtk.adjustmentGetPageIncrement vadj
-        hvalue <- Gtk.adjustmentGetValue hadj
-        vvalue <- Gtk.adjustmentGetValue vadj
-        let w  = (hsize/ratio) + hl
-            h  = (vsize/ratio) + vl
-            hl = hvalue / ratio
-            vl = vvalue / ratio
-        Gtk.set hruler [Gtk.rulerLower := hl, Gtk.rulerUpper := w, Gtk.rulerMaxSize := w]
-        Gtk.set vruler [Gtk.rulerLower := vl, Gtk.rulerUpper := h, Gtk.rulerMaxSize := h]
-        writeIORef stateRef s'
+        let x = negate 1
+            action = compile $ do
+                ratio <- getRatio
+                performIO $ do
+                    hsize  <- Gtk.adjustmentGetPageSize hadj
+                    vsize  <- Gtk.adjustmentGetPageSize vadj
+                    hlower <- Gtk.adjustmentGetLower hadj
+                    hupper <- Gtk.adjustmentGetUpper hadj
+                    hincr  <- Gtk.adjustmentGetPageIncrement hadj
+                    sincr  <- Gtk.adjustmentGetStepIncrement hadj
+                    vincr  <- Gtk.adjustmentGetPageIncrement vadj
+                    hvalue <- Gtk.adjustmentGetValue hadj
+                    vvalue <- Gtk.adjustmentGetValue vadj
+                    let w  = (hsize/ratio) + hl
+                        h  = (vsize/ratio) + vl
+                        hl = hvalue / ratio
+                        vl = vvalue / ratio
+                    Gtk.set hruler [ Gtk.rulerLower   := hl
+                                   , Gtk.rulerUpper   := w
+                                   , Gtk.rulerMaxSize := w]
+                    Gtk.set vruler [ Gtk.rulerLower   := vl
+                                   , Gtk.rulerUpper   := h
+                                   , Gtk.rulerMaxSize := h]
+        interpret x x (drawingF >> action)
     Gtk.on area Gtk.motionNotifyEvent $ Gtk.tryEvent $ do
         (x',y') <- Gtk.eventCoordinates
-        prepareAll Move moveF x' y'
+        let action = compile $ do
+                (x,y) <- getPointer
+                performIO $ do
+                    Gtk.set hruler [Gtk.rulerPosition := x]
+                    Gtk.set vruler [Gtk.rulerPosition := y]
+
+        liftIO $ interpret x' y' (moveF >> action)
     Gtk.on area Gtk.buttonPressEvent $ Gtk.tryEvent $ do
-        (x',y') <- Gtk.eventCoordinates
-        prepareAll Press pressF x' y'
+       (x',y') <- Gtk.eventCoordinates
+       liftIO $ interpret x' y' pressF
     Gtk.on area Gtk.buttonReleaseEvent $ Gtk.tryEvent $ liftIO $ do
-        env    <- readIORef envRef
-        s      <- readIORef stateRef
-        v      <- readIORef iRef
-        (s',_) <- execRWST (releaseF Release) env s
-        evalReq v env s s'
+        let x = negate 1
+        interpret x x releaseF
     Gtk.on area Gtk.enterNotifyEvent $ Gtk.tryEvent $ liftIO $ do
-        env     <- readIORef envRef
-        s       <- readIORef stateRef
-        (s', _) <- execRWST (enterF Enter) env s
-        writeIORef stateRef s'
+        let x = negate 1
+        interpret x x enterF
     Gtk.on area Gtk.scrollEvent $ Gtk.tryEvent $ do
         dir <- Gtk.eventScrollDirection
         liftIO $ do
@@ -648,8 +621,12 @@ engineStart eng = do
                     _            -> delta'
                 newValue = min (upper - pageSize) (max 0 (oldValue + delta))
             Gtk.adjustmentSetValue vadj newValue
-    Gtk.onEntryActivate pEntry onPropEntry
-    Gtk.on pCombo Gtk.changed $ onPropCombo
+    Gtk.on pEntry Gtk.entryActivate $ do
+       let x = negate 1
+       interpret x x propF
+    Gtk.on pCombo Gtk.changed $ do
+       let x = negate 1
+       interpret x x propF
     Gtk.containerAdd window wvbox
     Gtk.set window windowParams
     Gtk.onDestroy window Gtk.mainQuit
@@ -703,9 +680,6 @@ loadPdf path = do
   pages <- loadPages doc
   return (Viewer doc pages 1 nb 100 3 1.0 (boardsNew nb))
 
-freshId :: RWST EngineEnv () EngineState IO Int
-freshId = engineRectId <+= 1
-
 lookupStoreIter :: (a -> Bool) -> Gtk.ListStore a -> IO (Maybe Gtk.TreeIter)
 lookupStoreIter pred store = Gtk.treeModelGetIterFirst store >>= go
   where
@@ -725,46 +699,6 @@ loadPages doc = do
         page  <- Poppler.documentGetPage doc (i-1)
         (w,h) <- Poppler.pageGetSize page
         return (i, PageItem page w h)
-
-getRatio :: EngineState -> Viewer -> Double
-getRatio s v = (base * zoom) / width
-  where
-    pIdx  = _engineCurPage s
-    zIdx  = _engineCurZoom s
-    pages = _viewerPages v
-    base  = 777
-    width = pageWidth (pages ! pIdx)
-    zoom  = zoomValues ! zIdx
-
-getPage :: EngineState -> Viewer -> PageItem
-getPage s v = pages ! pIdx
-  where
-    pIdx  = _engineCurPage s
-    pages = _viewerPages v
-
-getOverRect :: Double -> Double -> [Rect] -> Maybe Rect
-getOverRect x y rs =
-    let overed r
-            | isOver 1.0 x y r = Just r
-            | otherwise        = Nothing
-
-        (First oOpt) = foldMap (First . overed) rs in oOpt
-
-getOverArea :: Double -> Double -> Double -> Rect -> Maybe Area
-getOverArea ratio x y r =
-    let overed ratio a
-            | isOver 1.0 x y (rectArea (5/ratio) r a) = Just a
-            | otherwise                               = Nothing
-
-        (First aOpt) = foldMap (First . overed ratio) (enumFrom TOP_LEFT) in
-    aOpt
-
-getRects :: EngineState -> Viewer -> [Rect]
-getRects s v =
-    let pId   = s ^. engineCurPage
-        rects =
-            v ^. viewerBoards.boardsMap.at pId.traverse.boardRects.to I.elems in
-    rects
 
 initEnv :: Maybe String -> Viewer -> EngineEnv
 initEnv fOpt v = EngineEnv

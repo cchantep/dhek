@@ -13,45 +13,39 @@ import qualified Graphics.UI.Gtk              as Gtk
 import qualified Graphics.UI.Gtk.Poppler.Page as Poppler
 
 import Dhek.Engine
+import Dhek.Instr
 import Dhek.Types
 
-gtkDraw :: EngineCallback Drawing
-gtkDraw d = do
-    env       <- ask
-    selected  <- use engineSelected
-    selection <- use engineSelection
-    event     <- use engineEvent
-    liftIO $ do
-        cpu <- getCPUTime
-        print ("Drawing: " ++ show cpu)
-        frame     <- Gtk.widgetGetDrawWindow area
-        (fw',fh') <- Gtk.drawableGetSize frame
-        let width  = ratio * (pageWidth page)
-            height = ratio * (pageHeight page)
-            fw     = fromIntegral fw'
-            fh     = fromIntegral fh'
-            overed = _engineOverRect env
-            rects  = _engineRects env
-            eventR = event >>= eventGetRect
-        Gtk.widgetSetSizeRequest area (truncate width) (truncate height)
-        Gtk.renderWithDrawable frame $ do
-            Cairo.setSourceRGB 1.0 1.0 1.0
-            Cairo.rectangle 0 0 fw fh
-            Cairo.fill
-            Cairo.scale ratio ratio
-            Poppler.pageRender (pagePtr page)
-            --mapM_ (drawGuide fW fH) guides
-            --mapM_ (drawGuide fW fH) curGuide
-            Cairo.closePath
-            Cairo.stroke
-            drawRects 1.0 selected overed rects
-            drawingSel selection
-            drawRects 1.0 Nothing eventR eventR
+gtkDraw :: DhekProgram ()
+gtkDraw = compile $ do
+    ratio     <- getRatio
+    selected  <- getSelected
+    selection <- getSelection
+    event     <- getEvent
+    page      <- getPage
+    overed    <- getOverRect
+    rects     <- getRects
+    (fw',fh') <- getFrameSize
+    let width  = ratio * (pageWidth page)
+        height = ratio * (pageHeight page)
+        fw     = fromIntegral fw'
+        fh     = fromIntegral fh'
+        eventR = event >>= eventGetRect
+    sizeRequest (truncate width) (truncate height)
+    execCairo $ do
+        Cairo.setSourceRGB 1.0 1.0 1.0
+        Cairo.rectangle 0 0 fw fh
+        Cairo.fill
+        Cairo.scale ratio ratio
+        Poppler.pageRender (pagePtr page)
+        --mapM_ (drawGuide fW fH) guides
+        --mapM_ (drawGuide fW fH) curGuide
+        Cairo.closePath
+        Cairo.stroke
+        drawRects 1.0 selected overed rects
+        drawingSel selection
+        drawRects 1.0 Nothing eventR eventR
   where
-    area  = drawingArea d
-    ratio = drawingRatio d
-    page  = drawingPage d
-
     drawRects th sel ove = mapM_ (drawing th sel ove)
 
     drawing th sel ove r =

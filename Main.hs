@@ -9,6 +9,9 @@ import Control.Monad.State
 import Dhek.Engine
 import Dhek.Draw
 import Dhek.Move
+import Dhek.Button
+import Dhek.Property
+import Dhek.Selection
 
 main :: IO ()
 main = do
@@ -16,10 +19,17 @@ main = do
     engineStart eng
   where
     conf = do
-        engineDrawing .= gtkDraw
-        engineMove    .= onMove
-        enginePress   .= onPress
-        engineRelease .= onRelease
+        engineDrawing       .= gtkDraw
+        engineMove          .= onMove
+        enginePress         .= onPress
+        engineRelease       .= onRelease
+        engineNextPage      .= onNext
+        enginePrevPage      .= onPrev
+        engineNextZoom      .= onPlus
+        enginePrevZoom      .= onMinus
+        engineTreeSelection .= onSel
+        engineRemoveRect    .= onRem
+        enginePropChanged   .= onProp
 
 -- main = do
 --   initGUI

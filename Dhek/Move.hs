@@ -11,66 +11,66 @@ import Data.Maybe (isJust)
 import Data.Traversable (traverse)
 
 import Dhek.Engine
-import Dhek.Types
+import Dhek.Instr
+import Dhek.Types hiding (addRect)
 
-onMove :: EngineCallback Move
-onMove (Move x y) = do
-    env <- ask
-    let oOpt = _engineOverRect env
-        aOpt = _engineOverArea env
-    sOpt <- engineSelection <%= fmap (execState selection)
-    eOpt <- engineEvent     <%= fmap event
-    cursor eOpt aOpt oOpt
-    engineDraw .= (isJust sOpt || isJust eOpt)
-  where
-    selection = do
-        x0 <- use rectX
-        y0 <- use rectY
-        rectWidth  .= x - x0
-        rectHeight .= y - y0
+onMove :: DhekProgram ()
+onMove = compile $ do
+    (x,y) <- getPointer
+    oOpt  <- getOverRect
+    aOpt  <- getOverArea
+    sOpt  <- getSelection
+    eOpt  <- getEvent
+    let  selection = do
+             x0 <- use rectX
+             y0 <- use rectY
+             rectWidth  .= x - x0
+             rectHeight .= y - y0
 
-    event (Hold r (x0,y0))     = Hold (translateRect (x-x0) (y-y0) r) (x,y)
-    event (Resize r (x0,y0) a) = Resize (resizeRect (x-x0) (y-y0) a r) (x,y) a
+         event (Hold r (x0,y0))     =
+             Hold (translateRect (x-x0) (y-y0) r) (x,y)
+         event (Resize r (x0,y0) a) =
+             Resize (resizeRect (x-x0) (y-y0) a r) (x,y) a
 
-    cursor eOpt aOpt oOpt =
-        let cOpt = fmap eventCursor eOpt <|>
-                   fmap areaCursor aOpt  <|>
-                   handCursor <$ oOpt
-        in
-        engineCursor .= cOpt
+         cOpt = fmap eventCursor eOpt <|>
+                fmap areaCursor aOpt  <|>
+                handCursor <$ oOpt
 
-onPress :: EngineCallback Press
-onPress (Press x y) = do
-    env <- ask
-    let oOpt   = _engineOverRect env
-        aOpt   = _engineOverArea env
-        newSel = rectNew x y 0 0
-    maybe (engineSelection ?= newSel) (onEvent aOpt) oOpt
-    engineDraw .= True
-  where
-    onEvent aOpt r = do
-        let evt = maybe (Hold r (x,y)) (Resize r (x,y)) aOpt
-        engineEvent   ?= evt
-        engineRemRect ?= r
+    setSelection $ fmap (execState selection) sOpt
+    setEvent     $ fmap event eOpt
+    setCursor cOpt
+    when (isJust sOpt || isJust eOpt) draw
 
-onRelease :: EngineCallback Release
-onRelease _ = do
-    eOpt <- use engineEvent
-    sOpt <- use engineSelection
+onPress :: DhekProgram ()
+onPress = compile $ do
+    (x,y) <- getPointer
+    oOpt  <- getOverRect
+    aOpt  <- getOverArea
+    let newSel = rectNew x y 0 0
+        onEvent aOpt r = do
+            let evt = maybe (Hold r (x,y)) (Resize r (x,y)) aOpt
+            setEvent (Just evt)
+            detachRect r
+
+    maybe (setSelection (Just newSel)) (onEvent aOpt) oOpt
+    draw
+
+onRelease :: DhekProgram ()
+onRelease = compile $ do
+    sOpt <- getSelection
+    eOpt <- getEvent
     traverse_ update eOpt
     traverse_ insert sOpt
-    engineDraw .= (isJust eOpt || isJust sOpt)
+    when (isJust eOpt || isJust sOpt) draw
   where
     update e =
         let r0 = case e of
                 Hold x _     -> x
                 Resize x _ _ -> x
             r  = normalize r0 in
-        do engineAddedRect ?= r
-           engineSelected  ?= r
-           engineEvent     .= Nothing
-
-
+        do attachRect r
+           setSelected (Just r)
+           setEvent Nothing
     insert r0 =
         let w  = r0 ^. rectWidth
             h  = r0 ^. rectHeight
@@ -79,9 +79,9 @@ onRelease _ = do
                id <- freshId
                let r2 =  r1 & rectId   .~ id
                             & rectName %~ (++ show id)
-               engineAddedRect ?= r2
-               engineSelected  ?= r2
-           engineSelection .= Nothing
+               addRect r2
+               setSelected (Just r2)
+           setSelection Nothing
 
 resizeRect :: Double -> Double -> Area -> Rect -> Rect
 resizeRect dx dy area r = execState (go area) r
