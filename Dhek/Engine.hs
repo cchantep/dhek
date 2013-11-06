@@ -519,10 +519,11 @@ engineStart eng = do
                         nb            = length xs
                         b             = execState action (boardsNew nb)
                         v1            = v & viewerBoards .~ b
-                        rects2        = getRects s v1
+                        s1            = s & engineRectId .~ (b ^. boardsState)
+                        rects2        = getRects s1 v1
                     Gtk.listStoreClear store
                     traverse_ (Gtk.listStoreAppend store) rects2
-                    k s v1
+                    k s1 v1
 
                 end a s v = do
                     let drawing = s ^. engineDraw
