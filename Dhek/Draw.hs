@@ -25,6 +25,8 @@ gtkDraw = compile $ do
     page      <- getPage
     overed    <- getOverRect
     rects     <- getRects
+    guides    <- getGuides
+    curGuide  <- getCurGuide
     (fw',fh') <- getFrameSize
     let width  = ratio * (pageWidth page)
         height = ratio * (pageHeight page)
@@ -38,8 +40,8 @@ gtkDraw = compile $ do
         Cairo.fill
         Cairo.scale ratio ratio
         Poppler.pageRender (pagePtr page)
-        --mapM_ (drawGuide fW fH) guides
-        --mapM_ (drawGuide fW fH) curGuide
+        mapM_ (drawGuide fw fh) guides
+        mapM_ (drawGuide fw fh) curGuide
         Cairo.closePath
         Cairo.stroke
         drawRects 1.0 selected overed rects
@@ -47,6 +49,17 @@ gtkDraw = compile $ do
         drawRects 1.0 Nothing eventR eventR
   where
     drawRects th sel ove = mapM_ (drawing th sel ove)
+
+    drawGuide w h (Guide x typ) = do
+        Cairo.setSourceRGB 0.16 0.26 0.87
+        Cairo.setLineWidth 0.5
+        case typ of
+            GuideVertical   -> do
+                Cairo.moveTo x 0.0
+                Cairo.lineTo x h
+            GuideHorizontal -> do
+                Cairo.moveTo 0.0 x
+                Cairo.lineTo w x
 
     drawing th sel ove r =
         let x = r ^. rectX

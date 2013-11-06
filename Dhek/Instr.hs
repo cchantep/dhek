@@ -52,6 +52,11 @@ data DhekInstr a = GetPointer ((Double, Double) -> a)
                  | ShowError !String a
                  | PerformIO !(IO ()) a
                  | GetTreeSelection (Maybe Rect -> a)
+                 | NewGuide GuideType a
+                 | UpdateGuide a
+                 | AddGuide a
+                 | GetCurGuide (Maybe Guide -> a)
+                 | GetGuides ([Guide] -> a)
 
 instance Functor DhekInstr where
     fmap f (GetPointer k)       = GetPointer (f . k)
@@ -90,6 +95,11 @@ instance Functor DhekInstr where
     fmap f (ShowError e a)      = ShowError e (f a)
     fmap f (PerformIO o a)      = PerformIO o (f a)
     fmap f (GetTreeSelection k) = GetTreeSelection (f . k)
+    fmap f (NewGuide g a)       = NewGuide g (f a)
+    fmap f (UpdateGuide a)      = UpdateGuide (f a)
+    fmap f (AddGuide a)         = AddGuide (f a)
+    fmap f (GetCurGuide k)      = GetCurGuide (f . k)
+    fmap f (GetGuides k)        = GetGuides (f . k)
 
 getPointer :: F DhekInstr (Double, Double)
 getPointer = wrap $ GetPointer return
@@ -198,6 +208,21 @@ performIO o = wrap $ PerformIO o (return ())
 
 getTreeSelection :: F DhekInstr (Maybe Rect)
 getTreeSelection = wrap $ GetTreeSelection return
+
+newGuide :: GuideType -> F DhekInstr ()
+newGuide g = wrap $ NewGuide g (return ())
+
+updateGuide :: F DhekInstr ()
+updateGuide = wrap $ UpdateGuide (return ())
+
+addGuide :: F DhekInstr ()
+addGuide = wrap $ AddGuide (return ())
+
+getCurGuide :: F DhekInstr (Maybe Guide)
+getCurGuide = wrap $ GetCurGuide return
+
+getGuides :: F DhekInstr [Guide]
+getGuides = wrap $ GetGuides return
 
 compile :: F DhekInstr a -> Free DhekInstr a
 compile = fromF

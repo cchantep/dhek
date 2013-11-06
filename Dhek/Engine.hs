@@ -3,6 +3,8 @@
 {-# LANGUAGE TemplateHaskell  #-}
 module Dhek.Engine where
 
+import Prelude hiding (foldr)
+
 import Control.Applicative (Applicative(..), (<$>))
 import Control.Lens
     ( at
@@ -27,7 +29,7 @@ import Control.Monad.RWS.Strict
 import Control.Monad.State
 
 import Data.Array (Array, array, (!))
-import Data.Foldable (find, foldMap, traverse_)
+import Data.Foldable (find, foldMap, traverse_, foldr)
 import qualified Data.IntMap as I
 import Data.IORef
 import Data.Maybe (fromJust, isNothing, isJust)
@@ -143,32 +145,32 @@ gtkEngineNew = do
 engineStart :: Engine -> IO ()
 engineStart eng = do
     Gtk.initGUI
-    iRef <- newIORef (error "impossible situation")
-    window  <- Gtk.windowNew
+    iRef     <- newIORef (error "impossible situation")
+    window   <- Gtk.windowNew
     wvbox    <- Gtk.vBoxNew False 10
-    fdialog <- createPdfChooserDialog window
-    jdialog <- createJsonChooserDialog window
-    mbar    <- Gtk.menuBarNew
-    malign  <- Gtk.alignmentNew 0 0 1 0
-    fitem   <- Gtk.menuItemNewWithLabel "File"
-    oitem   <- Gtk.menuItemNewWithLabel "Open PDF"
-    iitem   <- Gtk.menuItemNewWithLabel "Load mappings"
-    sitem   <- Gtk.menuItemNewWithLabel "Save mappings"
-    prev    <- Gtk.buttonNewWithLabel "Previous"
-    next    <- Gtk.buttonNewWithLabel "Next"
-    minus   <- Gtk.buttonNewWithLabel "-"
-    plus    <- Gtk.buttonNewWithLabel "+"
-    rem     <- Gtk.buttonNewWithLabel "Remove"
-    store   <- Gtk.listStoreNew ([] :: [Rect])
-    treeV   <- Gtk.treeViewNewWithModel store
-    sel     <- Gtk.treeViewGetSelection treeV
-    fmenu   <- Gtk.menuNew
-    area    <- Gtk.drawingAreaNew
-    hruler  <- Gtk.hRulerNew
-    halign  <- Gtk.alignmentNew 0 0 1 1
-    valign  <- Gtk.alignmentNew 0 0 0 1
-    hadj    <- Gtk.adjustmentNew 0 0 0 0 0 0
-    vadj    <- Gtk.adjustmentNew 0 0 0 0 0 0
+    fdialog  <- createPdfChooserDialog window
+    jdialog  <- createJsonChooserDialog window
+    mbar     <- Gtk.menuBarNew
+    malign   <- Gtk.alignmentNew 0 0 1 0
+    fitem    <- Gtk.menuItemNewWithLabel "File"
+    oitem    <- Gtk.menuItemNewWithLabel "Open PDF"
+    iitem    <- Gtk.menuItemNewWithLabel "Load mappings"
+    sitem    <- Gtk.menuItemNewWithLabel "Save mappings"
+    prev     <- Gtk.buttonNewWithLabel "Previous"
+    next     <- Gtk.buttonNewWithLabel "Next"
+    minus    <- Gtk.buttonNewWithLabel "-"
+    plus     <- Gtk.buttonNewWithLabel "+"
+    rem      <- Gtk.buttonNewWithLabel "Remove"
+    store    <- Gtk.listStoreNew ([] :: [Rect])
+    treeV    <- Gtk.treeViewNewWithModel store
+    sel      <- Gtk.treeViewGetSelection treeV
+    fmenu    <- Gtk.menuNew
+    area     <- Gtk.drawingAreaNew
+    hruler   <- Gtk.hRulerNew
+    halign   <- Gtk.alignmentNew 0 0 1 1
+    valign   <- Gtk.alignmentNew 0 0 0 1
+    hadj     <- Gtk.adjustmentNew 0 0 0 0 0 0
+    vadj     <- Gtk.adjustmentNew 0 0 0 0 0 0
     viewport <- Gtk.viewportNew hadj vadj
     hscroll  <- Gtk.hScrollbarNew hadj
     vscroll  <- Gtk.vScrollbarNew vadj
@@ -181,21 +183,22 @@ engineStart eng = do
     atswin   <- Gtk.alignmentNew 0 0 1 1
     arem     <- Gtk.alignmentNew 0.5 0 0 0
     bbox     <- Gtk.hButtonBoxNew
-    vruler <- Gtk.vRulerNew
-    hruler <- Gtk.hRulerNew
-    pEntry <- Gtk.entryNew
-    pCombo <- Gtk.comboBoxNew
-    atable <- Gtk.tableNew 3 3 False
-    nlabel <- Gtk.labelNew (Just "Name")
-    tlabel <- Gtk.labelNew (Just "Type")
-    salign <- Gtk.alignmentNew 0 0 1 0
-    ualign <- Gtk.alignmentNew 0.5 0 0 0
-    nalign <- Gtk.alignmentNew 0 0.5 0 0
-    talign <- Gtk.alignmentNew 0 0.5 0 0
-    cstore  <- Gtk.comboBoxSetModelText pCombo
-    table  <- Gtk.tableNew 2 2 False
-    tvbox  <- Gtk.vBoxNew False 10
-    sep    <- Gtk.hSeparatorNew
+    vruler   <- Gtk.vRulerNew
+    hruler   <- Gtk.hRulerNew
+    pEntry   <- Gtk.entryNew
+    pCombo   <- Gtk.comboBoxNew
+    atable   <- Gtk.tableNew 3 3 False
+    nlabel   <- Gtk.labelNew (Just "Name")
+    tlabel   <- Gtk.labelNew (Just "Type")
+    salign   <- Gtk.alignmentNew 0 0 1 0
+    ualign   <- Gtk.alignmentNew 0.5 0 0 0
+    nalign   <- Gtk.alignmentNew 0 0.5 0 0
+    talign   <- Gtk.alignmentNew 0 0.5 0 0
+    cstore   <- Gtk.comboBoxSetModelText pCombo
+    table    <- Gtk.tableNew 2 2 False
+    tvbox    <- Gtk.vBoxNew False 10
+    vsep     <- Gtk.vSeparatorNew
+    hsep     <- Gtk.hSeparatorNew
     Gtk.containerAdd viewport area
     Gtk.set vruler [Gtk.rulerMetric := Gtk.Pixels]
     Gtk.set hruler [Gtk.rulerMetric := Gtk.Pixels]
@@ -225,7 +228,7 @@ engineStart eng = do
     Gtk.containerAdd align bbox
     Gtk.containerAdd bbox prev
     Gtk.containerAdd bbox next
-    Gtk.containerAdd bbox sep
+    Gtk.containerAdd bbox vsep
     Gtk.containerAdd bbox minus
     Gtk.containerAdd bbox plus
     Gtk.boxPackStart vbox align Gtk.PackNatural 0
@@ -247,14 +250,12 @@ engineStart eng = do
     -- Properties --
     nlabel <- Gtk.labelNew (Just "Name")
     tlabel <- Gtk.labelNew (Just "Type")
-    salign <- Gtk.alignmentNew 0 0 1 0
     ualign <- Gtk.alignmentNew 0.5 0 0 0
     nalign <- Gtk.alignmentNew 0 0.5 0 0
     talign <- Gtk.alignmentNew 0 0.5 0 0
-    tstore  <- Gtk.comboBoxSetModelText pCombo
+    tstore <- Gtk.comboBoxSetModelText pCombo
     table  <- Gtk.tableNew 2 2 False
     tvbox  <- Gtk.vBoxNew False 10
-    sep    <- Gtk.hSeparatorNew
     Gtk.containerAdd nalign nlabel
     Gtk.containerAdd talign tlabel
     Gtk.tableAttachDefaults table nalign 0 1 0 1
@@ -264,7 +265,7 @@ engineStart eng = do
     Gtk.tableSetRowSpacings table 10
     Gtk.tableSetColSpacings table 10
     traverse_ (Gtk.listStoreAppend tstore) ["text", "checkbox"]
-    Gtk.containerAdd salign sep
+    Gtk.containerAdd salign hsep
     Gtk.boxPackStart tvbox table Gtk.PackNatural 0
     Gtk.boxPackStart vleft salign Gtk.PackNatural 0
     Gtk.containerAdd vleft tvbox
@@ -457,6 +458,32 @@ engineStart eng = do
                                        Gtk.listStoreGetValue store idx
                                      ) iOpt
                     k rOpt s v
+                suspend (NewGuide t k) s v =
+                    let v1 = v & viewerBoards.boardsCurGuide ?~ Guide 0 t in
+                    k s v1
+                suspend (UpdateGuide k) s v = do
+                    x <- Gtk.get hruler Gtk.rulerPosition
+                    y <- Gtk.get vruler Gtk.rulerPosition
+                    let upd g =
+                            let v = case g ^. guideType of
+                                    GuideVertical -> x
+                                    GuideHorizontal -> y in
+                            g & guideValue .~ v
+                        v1 = v & viewerBoards.boardsCurGuide %~ fmap upd
+                    k s v1
+                suspend (AddGuide k) s v =
+                    let action = do
+                            gOpt <- use $ viewerBoards.boardsCurGuide
+                            gs   <- use $ viewerBoards.boardsGuides
+                            let gs1 = foldr (:) gs gOpt
+                            viewerBoards.boardsCurGuide .= Nothing
+                            viewerBoards.boardsGuides   .= gs1
+                        v1 = execState action v in
+                    k s v1
+                suspend (GetCurGuide k) s v =
+                    k (v ^. viewerBoards.boardsCurGuide) s v
+                suspend (GetGuides k) s v =
+                    k (v ^. viewerBoards.boardsGuides) s v
 
                 end a s v = do
                     let drawing = s ^. engineDraw
@@ -627,6 +654,52 @@ engineStart eng = do
     Gtk.on pCombo Gtk.changed $ do
        let x = negate 1
        interpret x x propF
+    Gtk.on vruler Gtk.buttonPressEvent $ Gtk.tryEvent $ do
+        let x      = negate 1
+            action = compile $ newGuide GuideVertical
+        liftIO $ interpret x x action
+    Gtk.on vruler Gtk.motionNotifyEvent $ Gtk.tryEvent $ do
+        (x',y') <- Gtk.eventCoordinates
+        let x      = negate 1
+            action = compile $ do
+                ratio <- getRatio
+                performIO $ do
+                    v <- Gtk.adjustmentGetValue hadj
+                    let (x,y) = ((x'-25+v)/ratio, y'/ratio)
+                    Gtk.set hruler [Gtk.rulerPosition := x]
+                    Gtk.set vruler [Gtk.rulerPosition := y]
+                updateGuide
+                draw
+        liftIO $ interpret x' y' action
+    Gtk.on vruler Gtk.buttonReleaseEvent $ Gtk.tryEvent $ liftIO $ do
+        let x      = negate 1
+            action = compile $ do
+                addGuide
+                draw
+        liftIO $ interpret x x action
+    Gtk.on hruler Gtk.buttonPressEvent $ Gtk.tryEvent $ do
+        let x      = negate 1
+            action = compile $ newGuide GuideHorizontal
+        liftIO $ interpret x x action
+    Gtk.on hruler Gtk.motionNotifyEvent $ Gtk.tryEvent $ do
+        (x',y') <- Gtk.eventCoordinates
+        let x      = negate 1
+            action = compile $ do
+                ratio <- getRatio
+                performIO $ do
+                    v <- Gtk.adjustmentGetValue vadj
+                    let (x,y) = (x'/ratio, (y'+v-25)/ratio)
+                    Gtk.set hruler [Gtk.rulerPosition := x]
+                    Gtk.set vruler [Gtk.rulerPosition := y]
+                updateGuide
+                draw
+        liftIO $ interpret x' y' action
+    Gtk.on hruler Gtk.buttonReleaseEvent $ Gtk.tryEvent $ liftIO $ do
+        let x      = negate 1
+            action = compile $ do
+                addGuide
+                draw
+        liftIO $ interpret x x action
     Gtk.containerAdd window wvbox
     Gtk.set window windowParams
     Gtk.onDestroy window Gtk.mainQuit
