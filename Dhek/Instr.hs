@@ -1,3 +1,4 @@
+{-# LANGUAGE ExistentialQuantification #-}
 module Dhek.Instr where
 
 import Control.Monad.Free
@@ -50,7 +51,7 @@ data DhekInstr a = GetPointer ((Double, Double) -> a)
                  | ExecCairo !(Render ()) a
                  | SizeRequest !Int !Int a
                  | ShowError !String a
-                 | PerformIO !(IO ()) a
+                 | forall b. PerformIO !(IO b) (b -> a)
                  | GetTreeSelection (Maybe Rect -> a)
                  | NewGuide GuideType a
                  | UpdateGuide a
@@ -59,6 +60,8 @@ data DhekInstr a = GetPointer ((Double, Double) -> a)
                  | GetGuides ([Guide] -> a)
                  | SelectJsonFile (Maybe String -> a)
                  | GetAllRects ([(Int, [Rect])] -> a)
+                 | SetRects [(Int, [Rect])] a
+                 | OpenJsonFile (Maybe String -> a)
 
 instance Functor DhekInstr where
     fmap f (GetPointer k)       = GetPointer (f . k)
@@ -95,7 +98,7 @@ instance Functor DhekInstr where
     fmap f (ExecCairo r a)      = ExecCairo r (f a)
     fmap f (SizeRequest x y a)  = SizeRequest x y (f a)
     fmap f (ShowError e a)      = ShowError e (f a)
-    fmap f (PerformIO o a)      = PerformIO o (f a)
+    fmap f (PerformIO o k)      = PerformIO o (f . k)
     fmap f (GetTreeSelection k) = GetTreeSelection (f . k)
     fmap f (NewGuide g a)       = NewGuide g (f a)
     fmap f (UpdateGuide a)      = UpdateGuide (f a)
@@ -104,6 +107,8 @@ instance Functor DhekInstr where
     fmap f (GetGuides k)        = GetGuides (f . k)
     fmap f (SelectJsonFile k)   = SelectJsonFile (f . k)
     fmap f (GetAllRects k)      = GetAllRects (f . k)
+    fmap f (SetRects xs a)      = SetRects xs (f a)
+    fmap f (OpenJsonFile k)     = OpenJsonFile (f . k)
 
 getPointer :: F DhekInstr (Double, Double)
 getPointer = wrap $ GetPointer return
@@ -207,8 +212,8 @@ sizeRequest x y = wrap $ SizeRequest x y (return ())
 showError :: String -> F DhekInstr ()
 showError e = wrap $ ShowError e (return ())
 
-performIO :: IO () -> F DhekInstr ()
-performIO o = wrap $ PerformIO o (return ())
+performIO :: IO b -> F DhekInstr b
+performIO o = wrap $ PerformIO o return
 
 getTreeSelection :: F DhekInstr (Maybe Rect)
 getTreeSelection = wrap $ GetTreeSelection return
@@ -233,6 +238,12 @@ selectJsonFile = wrap $ SelectJsonFile return
 
 getAllRects :: F DhekInstr [(Int, [Rect])]
 getAllRects = wrap $ GetAllRects return
+
+setRects :: [(Int, [Rect])] -> F DhekInstr ()
+setRects xs = wrap $ SetRects xs (return ())
+
+openJsonFile :: F DhekInstr (Maybe String)
+openJsonFile = wrap $ OpenJsonFile return
 
 compile :: F DhekInstr a -> Free DhekInstr a
 compile = fromF

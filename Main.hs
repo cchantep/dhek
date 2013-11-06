@@ -32,6 +32,7 @@ main = do
         engineRemoveRect    .= onRem
         enginePropChanged   .= onProp
         engineJsonSave      .= onJsonSave
+        engineJsonLoad      .= onJsonImport
 
 -- main = do
 --   initGUI

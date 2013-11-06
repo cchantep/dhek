@@ -152,6 +152,7 @@ engineStart eng = do
     wvbox    <- Gtk.vBoxNew False 10
     fdialog  <- createPdfChooserDialog window
     jdialog  <- createJsonChooserDialog window
+    idialog  <- createJsonImportDialog window
     mbar     <- Gtk.menuBarNew
     malign   <- Gtk.alignmentNew 0 0 1 0
     fitem    <- Gtk.menuItemNewWithLabel "File"
@@ -452,8 +453,8 @@ engineStart eng = do
                     Gtk.widgetHide m
                     k s v
                 suspend (PerformIO action k) s v = do
-                    action
-                    k s v
+                    b <- action
+                    k b s v
                 suspend (GetTreeSelection k) s v = do
                     iOpt <- Gtk.treeSelectionGetSelected sel
                     rOpt <- traverse (\it ->
@@ -499,6 +500,29 @@ engineStart eng = do
                     let tup (i, b) = (i, b ^. boardRects.to I.elems)
                         list       = fmap tup . I.toList in
                     k (v ^. viewerBoards.boardsMap.to list) s v
+                suspend (OpenJsonFile k) s v = do
+                    resp <- Gtk.dialogRun idialog
+                    Gtk.widgetHide idialog
+                    case resp of
+                        Gtk.ResponseCancel -> k Nothing s v
+                        Gtk.ResponseOk     -> do
+                            fOpt <- Gtk.fileChooserGetFilename idialog
+                            k fOpt s v
+                suspend (SetRects xs k) s v = do
+                    let onEach page r = do
+                            id <- boardsState <+= 1
+                            let r1 = r & rectId .~ id
+                            boardsMap.at page.traverse.boardRects.at id ?= r1
+
+                        go (page, rs) = traverse_ (onEach page) rs
+                        action        = traverse_ go xs
+                        nb            = length xs
+                        b             = execState action (boardsNew nb)
+                        v1            = v & viewerBoards .~ b
+                        rects2        = getRects s v1
+                    Gtk.listStoreClear store
+                    traverse_ (Gtk.listStoreAppend store) rects2
+                    k s v1
 
                 end a s v = do
                     let drawing = s ^. engineDraw
@@ -568,6 +592,7 @@ engineStart eng = do
                 Gtk.containerAdd ahbox hbox
                 Gtk.boxPackStart wvbox ahbox Gtk.PackGrow 0
                 Gtk.widgetSetSensitive oitem False
+                Gtk.widgetSetSensitive iitem True
                 Gtk.widgetSetSensitive sitem True
                 Gtk.widgetSetSensitive prev False
                 Gtk.widgetSetSensitive next (nb /= 1)
@@ -575,15 +600,8 @@ engineStart eng = do
                         (name ++ " (page 1 / " ++ show nb ++ ")")
                 Gtk.widgetShowAll ahbox
     Gtk.on iitem Gtk.menuItemActivate $ do
-        resp <- Gtk.dialogRun jdialog
-        Gtk.widgetHide jdialog
-        case resp of
-            Gtk.ResponseCancel -> return ()
-            Gtk.ResponseOk     -> do
-                fOpt    <- Gtk.fileChooserGetFilename jdialog
-                env     <- readIORef envRef
-                s       <- readIORef stateRef
-                writeIORef stateRef s
+        let x = negate 1
+        interpret x x jsonLF
     Gtk.on sitem Gtk.menuItemActivate $ do
         let x = negate 1
         interpret x x saveF
@@ -757,6 +775,20 @@ createJsonChooserDialog win = do
       responses = [("Save", Gtk.ResponseOk)
                   ,("Cancel", Gtk.ResponseCancel)]
       title = Just "Open a Json file"
+
+createJsonImportDialog :: Gtk.Window -> IO Gtk.FileChooserDialog
+createJsonImportDialog win = do
+  ch <- Gtk.fileChooserDialogNew title (Just win)
+        Gtk.FileChooserActionOpen responses
+  filt <- Gtk.fileFilterNew
+  Gtk.fileFilterAddPattern filt "*.json"
+  Gtk.fileFilterSetName filt "Json File"
+  Gtk.fileChooserAddFilter ch filt
+  return ch
+    where
+      responses = [("Choose", Gtk.ResponseOk)
+                  ,("Cancel", Gtk.ResponseCancel)]
+      title = Just "Choose a Json file"
 
 windowParams :: [Gtk.AttrOp Gtk.Window]
 windowParams =

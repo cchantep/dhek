@@ -22,3 +22,22 @@ onJsonSave = compile $ do
                 | otherwise                     = path ++ ".json"
         performIO $
             B.writeFile path1 (encode save)
+
+onJsonImport :: DhekProgram ()
+onJsonImport = compile $ do
+    fOpt <- openJsonFile
+    traverse_ go fOpt
+  where
+    go path = do
+        bytes <- performIO $ B.readFile path
+        let rectsE = fmap saveToRects (eitherDecode bytes)
+        either showError upd rectsE
+
+    upd rs = do
+        setRects rs
+        draw
+
+saveToRects :: Save -> [(Int, [Rect])]
+saveToRects (Save _ xs) = fmap go xs
+  where
+    go (i, xsOpt) = (i, maybe [] id xsOpt)
