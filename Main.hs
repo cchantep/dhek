@@ -6,10 +6,11 @@ import Control.Monad.State
 -- import Graphics.UI.Gtk
 -- import Dhek.Views (createPdfChooserDialog, windowParams, createMenuBar)
 -- import Dhek.ViewerRef
-import Dhek.Engine
-import Dhek.Draw
-import Dhek.Move
 import Dhek.Button
+import Dhek.Draw
+import Dhek.Engine
+import Dhek.File
+import Dhek.Move
 import Dhek.Property
 import Dhek.Selection
 
@@ -30,6 +31,7 @@ main = do
         engineTreeSelection .= onSel
         engineRemoveRect    .= onRem
         enginePropChanged   .= onProp
+        engineJsonSave      .= onJsonSave
 
 -- main = do
 --   initGUI

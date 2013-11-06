@@ -53,6 +53,7 @@ data Engine = Engine
     , _engineEnv           :: IORef EngineEnv
     , _enginePdfSel        :: DhekProgram ()
     , _engineJsonLoad      :: DhekProgram ()
+    , _engineJsonSave      :: DhekProgram ()
     , _engineNextPage      :: DhekProgram ()
     , _enginePrevPage      :: DhekProgram ()
     , _engineNextZoom      :: DhekProgram ()
@@ -106,6 +107,7 @@ gtkEngineNew = do
     return $ Engine
         sRef
         eRef
+        nop
         nop
         nop
         nop
@@ -288,6 +290,7 @@ engineStart eng = do
         releaseF = _engineRelease eng
         enterF   = _engineEnter eng
         propF    = _enginePropChanged eng
+        saveF    = _engineJsonSave eng
 
         interpret :: Double -> Double -> DhekProgram () -> IO ()
         interpret x' y' pgr = do
@@ -484,6 +487,18 @@ engineStart eng = do
                     k (v ^. viewerBoards.boardsCurGuide) s v
                 suspend (GetGuides k) s v =
                     k (v ^. viewerBoards.boardsGuides) s v
+                suspend (SelectJsonFile k) s v = do
+                    resp <- Gtk.dialogRun jdialog
+                    Gtk.widgetHide jdialog
+                    case resp of
+                        Gtk.ResponseCancel -> k Nothing s v
+                        Gtk.ResponseOk     -> do
+                            fOpt <- Gtk.fileChooserGetFilename jdialog
+                            k fOpt s v
+                suspend (GetAllRects k) s v =
+                    let tup (i, b) = (i, b ^. boardRects.to I.elems)
+                        list       = fmap tup . I.toList in
+                    k (v ^. viewerBoards.boardsMap.to list) s v
 
                 end a s v = do
                     let drawing = s ^. engineDraw
@@ -553,6 +568,7 @@ engineStart eng = do
                 Gtk.containerAdd ahbox hbox
                 Gtk.boxPackStart wvbox ahbox Gtk.PackGrow 0
                 Gtk.widgetSetSensitive oitem False
+                Gtk.widgetSetSensitive sitem True
                 Gtk.widgetSetSensitive prev False
                 Gtk.widgetSetSensitive next (nb /= 1)
                 Gtk.windowSetTitle window
@@ -568,6 +584,9 @@ engineStart eng = do
                 env     <- readIORef envRef
                 s       <- readIORef stateRef
                 writeIORef stateRef s
+    Gtk.on sitem Gtk.menuItemActivate $ do
+        let x = negate 1
+        interpret x x saveF
     -- Previous Button ---
     Gtk.on prev Gtk.buttonActivated $ do
         let x = negate 1

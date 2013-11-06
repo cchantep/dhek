@@ -57,6 +57,8 @@ data DhekInstr a = GetPointer ((Double, Double) -> a)
                  | AddGuide a
                  | GetCurGuide (Maybe Guide -> a)
                  | GetGuides ([Guide] -> a)
+                 | SelectJsonFile (Maybe String -> a)
+                 | GetAllRects ([(Int, [Rect])] -> a)
 
 instance Functor DhekInstr where
     fmap f (GetPointer k)       = GetPointer (f . k)
@@ -100,6 +102,8 @@ instance Functor DhekInstr where
     fmap f (AddGuide a)         = AddGuide (f a)
     fmap f (GetCurGuide k)      = GetCurGuide (f . k)
     fmap f (GetGuides k)        = GetGuides (f . k)
+    fmap f (SelectJsonFile k)   = SelectJsonFile (f . k)
+    fmap f (GetAllRects k)      = GetAllRects (f . k)
 
 getPointer :: F DhekInstr (Double, Double)
 getPointer = wrap $ GetPointer return
@@ -223,6 +227,12 @@ getCurGuide = wrap $ GetCurGuide return
 
 getGuides :: F DhekInstr [Guide]
 getGuides = wrap $ GetGuides return
+
+selectJsonFile :: F DhekInstr (Maybe String)
+selectJsonFile = wrap $ SelectJsonFile return
+
+getAllRects :: F DhekInstr [(Int, [Rect])]
+getAllRects = wrap $ GetAllRects return
 
 compile :: F DhekInstr a -> Free DhekInstr a
 compile = fromF
