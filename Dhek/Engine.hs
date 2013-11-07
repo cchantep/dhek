@@ -133,7 +133,7 @@ gtkEngineNew = do
            1
            3
            0
-           True
+           False
            False
            ""
            Nothing
@@ -159,6 +159,7 @@ engineStart eng = do
     oitem    <- Gtk.menuItemNewWithLabel "Open PDF"
     iitem    <- Gtk.menuItemNewWithLabel "Load mappings"
     sitem    <- Gtk.menuItemNewWithLabel "Save mappings"
+    citem    <- Gtk.menuItemNewWithLabel "Disable overlapping areas"
     prev     <- Gtk.buttonNewWithLabel "Previous"
     next     <- Gtk.buttonNewWithLabel "Next"
     minus    <- Gtk.buttonNewWithLabel "-"
@@ -208,11 +209,13 @@ engineStart eng = do
     Gtk.menuShellAppend fmenu oitem
     Gtk.menuShellAppend fmenu iitem
     Gtk.menuShellAppend fmenu sitem
+    Gtk.menuShellAppend fmenu citem
     Gtk.menuItemSetSubmenu fitem fmenu
     Gtk.menuShellAppend mbar fitem
     Gtk.containerAdd malign mbar
     Gtk.widgetSetSensitive iitem False
     Gtk.widgetSetSensitive sitem False
+    Gtk.widgetSetSensitive citem False
     Gtk.boxPackStart wvbox malign Gtk.PackNatural 0
     Gtk.widgetAddEvents area [Gtk.PointerMotionMask]
     Gtk.widgetSetSizeRequest viewport 200 200
@@ -524,6 +527,18 @@ engineStart eng = do
                     Gtk.listStoreClear store
                     traverse_ (Gtk.listStoreAppend store) rects2
                     k s1 v1
+                suspend (Active o b k) s v =
+                    case o of
+                        Collision -> do
+                            let s1 = s & engineCollision .~ b
+                                msg
+                                    | not b     = "Disable overlapping areas"
+                                    | otherwise = "Enable overlapping areas"
+                            Gtk.menuItemSetLabel citem msg
+                            k s1 v
+                suspend (IsActive o k) s v =
+                    case o of
+                        Collision -> k (s ^. engineCollision) s v
 
                 end a s v = do
                     let drawing = s ^. engineDraw
@@ -595,6 +610,7 @@ engineStart eng = do
                 Gtk.widgetSetSensitive oitem False
                 Gtk.widgetSetSensitive iitem True
                 Gtk.widgetSetSensitive sitem True
+                Gtk.widgetSetSensitive citem True
                 Gtk.widgetSetSensitive prev False
                 Gtk.widgetSetSensitive next (nb /= 1)
                 Gtk.windowSetTitle window
@@ -606,6 +622,12 @@ engineStart eng = do
     Gtk.on sitem Gtk.menuItemActivate $ do
         let x = negate 1
         interpret x x saveF
+    Gtk.on citem Gtk.menuItemActivate $ do
+        let x      = negate 1
+            action = compile $ do
+                b <- isActive Collision
+                active Collision (not b)
+        interpret x x action
     -- Previous Button ---
     Gtk.on prev Gtk.buttonActivated $ do
         let x = negate 1

@@ -17,6 +17,8 @@ data DhekEntry = PropEntry
 
 data DhekCombo = PropCombo
 
+data DhekOption = Collision
+
 data DhekInstr a = GetPointer ((Double, Double) -> a)
                  | GetOverRect (Maybe Rect -> a)
                  | GetOverArea (Maybe Area -> a)
@@ -62,6 +64,8 @@ data DhekInstr a = GetPointer ((Double, Double) -> a)
                  | GetAllRects ([(Int, [Rect])] -> a)
                  | SetRects [(Int, [Rect])] a
                  | OpenJsonFile (Maybe String -> a)
+                 | Active DhekOption Bool a
+                 | IsActive DhekOption (Bool -> a)
 
 instance Functor DhekInstr where
     fmap f (GetPointer k)       = GetPointer (f . k)
@@ -109,6 +113,8 @@ instance Functor DhekInstr where
     fmap f (GetAllRects k)      = GetAllRects (f . k)
     fmap f (SetRects xs a)      = SetRects xs (f a)
     fmap f (OpenJsonFile k)     = OpenJsonFile (f . k)
+    fmap f (Active o b a)       = Active o b (f a)
+    fmap f (IsActive o k)       = IsActive o (f . k)
 
 getPointer :: F DhekInstr (Double, Double)
 getPointer = wrap $ GetPointer return
@@ -244,6 +250,12 @@ setRects xs = wrap $ SetRects xs (return ())
 
 openJsonFile :: F DhekInstr (Maybe String)
 openJsonFile = wrap $ OpenJsonFile return
+
+active :: DhekOption -> Bool -> F DhekInstr ()
+active o b = wrap $ Active o b (return ())
+
+isActive :: DhekOption -> F DhekInstr Bool
+isActive o = wrap $ IsActive o return
 
 compile :: F DhekInstr a -> Free DhekInstr a
 compile = fromF
