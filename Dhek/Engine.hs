@@ -159,7 +159,7 @@ engineStart eng = do
     oitem    <- Gtk.menuItemNewWithLabel "Open PDF"
     iitem    <- Gtk.menuItemNewWithLabel "Load mappings"
     sitem    <- Gtk.menuItemNewWithLabel "Save mappings"
-    citem    <- Gtk.menuItemNewWithLabel "Disable overlapping areas"
+    citem    <- Gtk.checkMenuItemNewWithLabel "Enable overlapping areas"
     prev     <- Gtk.buttonNewWithLabel "Previous"
     next     <- Gtk.buttonNewWithLabel "Next"
     minus    <- Gtk.buttonNewWithLabel "-"
@@ -531,10 +531,7 @@ engineStart eng = do
                     case o of
                         Collision -> do
                             let s1 = s & engineCollision .~ b
-                                msg
-                                    | not b     = "Disable overlapping areas"
-                                    | otherwise = "Enable overlapping areas"
-                            Gtk.menuItemSetLabel citem msg
+                            Gtk.checkMenuItemSetActive citem b
                             k s1 v
                 suspend (IsActive o k) s v =
                     case o of
