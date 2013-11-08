@@ -72,9 +72,9 @@ onRelease = compile $ do
            setSelected (Just r)
            setEvent Nothing
     insert r0 =
-        let w  = r0 ^. rectWidth
-            h  = r0 ^. rectHeight
-            r1 = normalize r0 in
+        let r1 = normalize r0
+            w  = r1 ^. rectWidth
+            h  = r1 ^. rectHeight in
         do when (w*h >= 30) $ do
                id <- freshId
                let r2 =  r1 & rectId   .~ id
