@@ -259,3 +259,7 @@ isOver thick x y r = go
     y' = (y0 - thick)
 
     go = x >= x' && x <= x1 && y >= y' && y <= y1
+
+modifyEventRect :: (Rect -> Rect) -> BoardEvent -> BoardEvent
+modifyEventRect k (Hold r p)     = Hold (k r) p
+modifyEventRect k (Resize r p a) = Resize (k r) p a

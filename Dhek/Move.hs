@@ -1,13 +1,14 @@
 module Dhek.Move where
 
 import Control.Applicative ((<|>), (<$))
-import Control.Lens (use, (.=), (%=), (?=), (+=), (-=), (<%=), (^.), (&), (.~), (%~))
+import Control.Lens (use, (.=), (%=), (?=), (+=), (-=), (<%=), (^.), (&), (.~), (%~), (-~))
 import Control.Monad ((<=<), when)
 import Control.Monad.Reader (ask)
 import Control.Monad.State (execState)
 
-import Data.Foldable (traverse_)
-import Data.Maybe (isJust)
+import Data.Foldable (foldMap, for_, traverse_)
+import Data.Maybe (isJust, fromMaybe)
+import Data.Monoid (First(..))
 import Data.Traversable (traverse)
 
 import Dhek.Engine
@@ -21,23 +22,37 @@ onMove = compile $ do
     aOpt  <- getOverArea
     sOpt  <- getSelection
     eOpt  <- getEvent
-    let  selection = do
+    col   <- isActive Collision
+    let onEvent   = isJust eOpt
+        selection = do
              x0 <- use rectX
              y0 <- use rectY
              rectWidth  .= x - x0
              rectHeight .= y - y0
 
-         event (Hold r (x0,y0))     =
-             Hold (translateRect (x-x0) (y-y0) r) (x,y)
-         event (Resize r (x0,y0) a) =
-             Resize (resizeRect (x-x0) (y-y0) a r) (x,y) a
+        event (Hold r (x0,y0))     =
+            Hold (translateRect (x-x0) (y-y0) r) (x,y)
+        event (Resize r (x0,y0) a) =
+            Resize (resizeRect (x-x0) (y-y0) a r) (x,y) a
 
-         cOpt = fmap eventCursor eOpt <|>
-                fmap areaCursor aOpt  <|>
-                handCursor <$ oOpt
+        cOpt = fmap eventCursor eOpt <|>
+               fmap areaCursor aOpt  <|>
+               handCursor <$ oOpt
 
-    setSelection $ fmap (execState selection) sOpt
-    setEvent     $ fmap event eOpt
+        eOpt2 = fmap event eOpt
+        sOpt2 = fmap (execState selection) sOpt
+
+        onCollision = do
+            rs    <- getRects
+            ratio <- getRatio
+            for_ (eOpt2 >>= eventGetRect) $ \r ->
+                for_ (intersection ratio rs r) $ \r2 -> do
+                    setCollisionPointer (x,y)
+                    setEventRect r2
+
+    setSelection sOpt2
+    setEvent eOpt2
+    when (onEvent && col) onCollision
     setCursor cOpt
     when (isJust sOpt || isJust eOpt) draw
 
@@ -112,3 +127,18 @@ resizeRect dx dy area r = execState (go area) r
     go LEFT = do
         rectX += dx
         rectWidth -= dx
+
+intersection :: Double -> [Rect] -> Rect -> Maybe Rect
+intersection ratio rs l = getFirst $ foldMap (First . go) rs
+  where
+    go r = fmap (action r) (rectIntersect l r)
+
+    lx = l ^. rectX
+    ly = l ^. rectY
+    lw = l ^. rectWidth
+    lh = l ^. rectHeight
+
+    action r NORTH = l & rectY -~ (ly+lh) - (r ^. rectY) + ratio
+    action r EAST = l & rectX .~ (r ^. rectX) + (r ^. rectWidth) + ratio
+    action r SOUTH = l & rectY .~ (r ^. rectY) + (r ^. rectHeight) + ratio
+    action r WEST = l & rectX -~ (lx+lw) - (r ^. rectX) + ratio

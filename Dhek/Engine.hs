@@ -85,6 +85,8 @@ data EngineState = EngineState
     , _engineCursor    :: !(Maybe Gtk.CursorType)
     , _engineAddedRect :: !(Maybe Rect)
     , _engineRemRect   :: !(Maybe Rect)
+    , _enginePrevPos   :: !(Double, Double)
+    , _engineColPos    :: !(Double, Double)
     }
 
 data EngineEnv = EngineEnv
@@ -143,6 +145,8 @@ gtkEngineNew = do
            Nothing
            Nothing
            Nothing
+           (negate 1, negate 1)
+           (negate 1, negate 1)
 
 engineStart :: Engine -> IO ()
 engineStart eng = do
@@ -536,10 +540,18 @@ engineStart eng = do
                 suspend (IsActive o k) s v =
                     case o of
                         Collision -> k (s ^. engineCollision) s v
+                suspend (PrevPointer k) s v =
+                    k (s ^. enginePrevPos) s v
+                suspend (SetColPointer o k) s v =
+                    let s1 = s & engineColPos .~ o in
+                    k s1 v
+                suspend (GetColPointer k) s v =
+                    k (s ^. engineColPos) s v
 
                 end a s v = do
                     let drawing = s ^. engineDraw
-                        s1      = s & engineDraw .~ False
+                        s1      = s & engineDraw    .~ False
+                                    & enginePrevPos .~ (x,y)
                     writeIORef iRef v
                     writeIORef stateRef s1
                     when drawing (Gtk.widgetQueueDraw area)
@@ -869,6 +881,8 @@ initState v s = EngineState
                 Nothing
                 Nothing
                 Nothing
+                (negate 1, negate 1)
+                (negate 1, negate 1)
 
 zoomValues :: Array Int Double
 zoomValues = array (0, 10) values

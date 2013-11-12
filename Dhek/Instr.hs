@@ -4,7 +4,7 @@ module Dhek.Instr where
 import Control.Monad.Free
 import Control.Monad.Free.Church
 
-import Data.Foldable (traverse_)
+import Data.Foldable (for_, traverse_)
 
 import Dhek.Types
 
@@ -66,6 +66,9 @@ data DhekInstr a = GetPointer ((Double, Double) -> a)
                  | OpenJsonFile (Maybe String -> a)
                  | Active DhekOption Bool a
                  | IsActive DhekOption (Bool -> a)
+                 | PrevPointer ((Double, Double) -> a)
+                 | SetColPointer !(Double, Double) a
+                 | GetColPointer ((Double, Double) -> a)
 
 instance Functor DhekInstr where
     fmap f (GetPointer k)       = GetPointer (f . k)
@@ -115,6 +118,9 @@ instance Functor DhekInstr where
     fmap f (OpenJsonFile k)     = OpenJsonFile (f . k)
     fmap f (Active o b a)       = Active o b (f a)
     fmap f (IsActive o k)       = IsActive o (f . k)
+    fmap f (PrevPointer k)      = PrevPointer (f . k)
+    fmap f (SetColPointer o a)  = SetColPointer o (f a)
+    fmap f (GetColPointer k)    = GetColPointer (f . k)
 
 getPointer :: F DhekInstr (Double, Double)
 getPointer = wrap $ GetPointer return
@@ -136,6 +142,14 @@ getEvent = wrap $ GetEvent return
 
 setEvent :: Maybe BoardEvent -> F DhekInstr ()
 setEvent e = wrap $ SetEvent e (return ())
+
+setEventRect :: Rect -> F DhekInstr ()
+setEventRect r = do
+    eOpt <- getEvent
+    for_ eOpt $ \e ->
+        case e of
+            Hold _ p     -> setEvent $ Just $ Hold r p
+            Resize _ p a -> setEvent $ Just $ Resize r p a
 
 getRects :: F DhekInstr [Rect]
 getRects = wrap $ GetRects return
@@ -256,6 +270,15 @@ active o b = wrap $ Active o b (return ())
 
 isActive :: DhekOption -> F DhekInstr Bool
 isActive o = wrap $ IsActive o return
+
+prevPointer :: F DhekInstr (Double, Double)
+prevPointer = wrap $ PrevPointer return
+
+setCollisionPointer :: (Double, Double) -> F DhekInstr ()
+setCollisionPointer o = wrap $ SetColPointer o (return ())
+
+getCollisionPointer :: F DhekInstr (Double, Double)
+getCollisionPointer = wrap $ GetColPointer return
 
 compile :: F DhekInstr a -> Free DhekInstr a
 compile = fromF
