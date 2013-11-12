@@ -15,6 +15,8 @@ import Dhek.Engine
 import Dhek.Instr
 import Dhek.Types hiding (addRect)
 
+import Debug.Trace
+
 onMove :: DhekProgram ()
 onMove = compile $ do
     (x,y) <- getPointer
@@ -138,7 +140,7 @@ intersection ratio rs l = getFirst $ foldMap (First . go) rs
     lw = l ^. rectWidth
     lh = l ^. rectHeight
 
-    action r NORTH = l & rectY -~ (ly+lh) - (r ^. rectY) + ratio
-    action r EAST = l & rectX .~ (r ^. rectX) + (r ^. rectWidth) + ratio
-    action r SOUTH = l & rectY .~ (r ^. rectY) + (r ^. rectHeight) + ratio
-    action r WEST = l & rectX -~ (lx+lw) - (r ^. rectX) + ratio
+    action r NORTH = l & rectY -~ (ly+lh) - (r ^. rectY)
+    action r EAST = l & rectX -~ (lx+lw) - (r ^. rectX)
+    action r SOUTH = l & rectY .~ (r ^. rectY) + (r ^. rectHeight)
+    action r WEST = l & rectX .~ (r ^. rectX) + (r ^. rectWidth)

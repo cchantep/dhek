@@ -217,34 +217,42 @@ rectArea eps r area = go area
     go BOTTOM_LEFT  = rectNew x (y+h-eps) eps eps
     go LEFT         = rectNew x (y+eps) (h-2*eps) eps
 
+-- | Using Minkowski Sum
 rectIntersect :: Rect -> Rect -> Maybe Direction
-rectIntersect l r =
-    case () of
-        _ | not intersected -> Nothing
-          | otherwise ->
-              case () of
-                  _ | north -> Just NORTH
-                    | east  -> Just EAST
-                    | south -> Just SOUTH
-                    | west  -> Just WEST
+rectIntersect a b
+    | not collides = Nothing
+    | otherwise =
+        if wy > hx
+        then if wy > negate hx
+             then Just SOUTH
+             else Just EAST
+        else if wy > negate hx
+             then Just WEST
+             else Just NORTH
   where
-    lx = l ^. rectX
-    ly = l ^. rectY
-    lw = l ^. rectWidth
-    lh = l ^. rectHeight
+    aw = a ^. rectWidth
+    ah = a ^. rectHeight
+    ax = a ^. rectX
+    ay = a ^. rectY
+    acenterx = ax + aw / 2
+    acentery = ay + ah / 2
 
-    rx = r ^. rectX
-    ry = r ^. rectY
-    rw = r ^. rectWidth
-    rh = r ^. rectHeight
+    bw = b ^. rectWidth
+    bh = b ^. rectHeight
+    bx = b ^. rectX
+    by = b ^. rectY
+    bcenterx = bx + bw / 2
+    bcentery = by + bh / 2
 
-    intersected =
-        (lx+lw) >= rx && (rx+rw) >= lx && (ly+lh) >= ry && (ry+rh) >= ly
+    w  = 0.5 * (aw + bw)
+    h  = 0.5 * (ah + bh)
+    dx = acenterx - bcenterx
+    dy = acentery - bcentery
 
-    north = ly <= ry && ry <= (ly+lh)
-    east  = lx <= rx && rx <= (lx+lw)
-    south = ry <= ly && ly <= (ry+rh)
-    west  = rx <= lx && lx <= (rx+rw)
+    collides = abs dx <= w && abs dy <= h
+
+    wy = w * dy
+    hx = h * dx
 
 isOver :: Double -> Double -> Double -> Rect -> Bool
 isOver thick x y r = go
