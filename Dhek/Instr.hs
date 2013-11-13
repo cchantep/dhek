@@ -67,8 +67,8 @@ data DhekInstr a = GetPointer ((Double, Double) -> a)
                  | Active DhekOption Bool a
                  | IsActive DhekOption (Bool -> a)
                  | PrevPointer ((Double, Double) -> a)
-                 | SetColPointer !(Double, Double) a
-                 | GetColPointer ((Double, Double) -> a)
+                 | SetCol !(Maybe (Double, Double, Direction)) a
+                 | GetCol (Maybe (Double, Double, Direction) -> a)
 
 instance Functor DhekInstr where
     fmap f (GetPointer k)       = GetPointer (f . k)
@@ -119,8 +119,8 @@ instance Functor DhekInstr where
     fmap f (Active o b a)       = Active o b (f a)
     fmap f (IsActive o k)       = IsActive o (f . k)
     fmap f (PrevPointer k)      = PrevPointer (f . k)
-    fmap f (SetColPointer o a)  = SetColPointer o (f a)
-    fmap f (GetColPointer k)    = GetColPointer (f . k)
+    fmap f (SetCol o a)         = SetCol o (f a)
+    fmap f (GetCol k)           = GetCol (f . k)
 
 getPointer :: F DhekInstr (Double, Double)
 getPointer = wrap $ GetPointer return
@@ -274,11 +274,11 @@ isActive o = wrap $ IsActive o return
 prevPointer :: F DhekInstr (Double, Double)
 prevPointer = wrap $ PrevPointer return
 
-setCollisionPointer :: (Double, Double) -> F DhekInstr ()
-setCollisionPointer o = wrap $ SetColPointer o (return ())
+setCollision :: Maybe (Double, Double, Direction) -> F DhekInstr ()
+setCollision o = wrap $ SetCol o (return ())
 
-getCollisionPointer :: F DhekInstr (Double, Double)
-getCollisionPointer = wrap $ GetColPointer return
+getCollision :: F DhekInstr (Maybe (Double, Double, Direction))
+getCollision = wrap $ GetCol return
 
 compile :: F DhekInstr a -> Free DhekInstr a
 compile = fromF

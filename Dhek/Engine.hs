@@ -86,7 +86,7 @@ data EngineState = EngineState
     , _engineAddedRect :: !(Maybe Rect)
     , _engineRemRect   :: !(Maybe Rect)
     , _enginePrevPos   :: !(Double, Double)
-    , _engineColPos    :: !(Double, Double)
+    , _engineColPos    :: !(Maybe (Double, Double, Direction))
     }
 
 data EngineEnv = EngineEnv
@@ -146,7 +146,7 @@ gtkEngineNew = do
            Nothing
            Nothing
            (negate 1, negate 1)
-           (negate 1, negate 1)
+           Nothing
 
 engineStart :: Engine -> IO ()
 engineStart eng = do
@@ -542,10 +542,10 @@ engineStart eng = do
                         Collision -> k (s ^. engineCollision) s v
                 suspend (PrevPointer k) s v =
                     k (s ^. enginePrevPos) s v
-                suspend (SetColPointer o k) s v =
+                suspend (SetCol o k) s v =
                     let s1 = s & engineColPos .~ o in
                     k s1 v
-                suspend (GetColPointer k) s v =
+                suspend (GetCol k) s v =
                     k (s ^. engineColPos) s v
 
                 end a s v = do
@@ -882,7 +882,7 @@ initState v s = EngineState
                 Nothing
                 Nothing
                 (negate 1, negate 1)
-                (negate 1, negate 1)
+                Nothing
 
 zoomValues :: Array Int Double
 zoomValues = array (0, 10) values

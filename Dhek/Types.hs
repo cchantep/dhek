@@ -165,6 +165,12 @@ rectNew x y h w = Rect 0 x y h w "field" "text"
 translateRect :: Double -> Double -> Rect -> Rect
 translateRect x y r = r & rectX +~ x & rectY +~ y
 
+translateRectX :: Double -> Rect -> Rect
+translateRectX x r = r & rectX +~ x
+
+translateRectY :: Double -> Rect -> Rect
+translateRectY y r = r & rectY +~ y
+
 eventGetRect :: BoardEvent -> Maybe Rect
 eventGetRect (Hold r _)     = Just r
 eventGetRect (Resize r _ _) = Just r
