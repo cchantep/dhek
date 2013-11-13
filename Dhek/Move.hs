@@ -72,11 +72,11 @@ onMove = compile $ do
                 catchUp  = delta <= 0
                 ccOpt    = (intersection rs <=< eventGetRect) =<< eOpt
                 collides = isJust ccOpt
-                eOpt3    = if catchUp -- || not collides
+                eOpt3    = if catchUp || not collides
                            then eOpt2
                            else fmap (eventD d) eOpt
             setEvent eOpt3
-            when catchUp (setCollision Nothing)
+            when (catchUp || not collides) (setCollision Nothing)
 
         noPrevCollision = do
             setEvent eOpt2
@@ -117,6 +117,8 @@ onRelease = compile $ do
         do attachRect r
            setSelected (Just r)
            setEvent Nothing
+           setCollision Nothing
+
     insert r0 =
         let r1 = normalize r0
             w  = r1 ^. rectWidth
