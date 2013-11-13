@@ -17,13 +17,13 @@ import Dhek.Types hiding (addRect)
 
 onMove :: DhekProgram ()
 onMove = compile $ do
-    (x,y) <- getPointer
-    oOpt  <- getOverRect
-    aOpt  <- getOverArea
-    sOpt  <- getSelection
-    eOpt  <- getEvent
-    lOpt  <- getCollision
-    col   <- isActive Collision
+    (x,y)   <- getPointer
+    oOpt    <- getOverRect
+    aOpt    <- getOverArea
+    sOpt    <- getSelection
+    eOpt    <- getEvent
+    lOpt    <- getCollision
+    overlap <- isActive Overlap
     let onEvent   = isJust eOpt
         selection = do
              x0 <- use rectX
@@ -61,6 +61,7 @@ onMove = compile $ do
                     setEventRect (replaceRect d l r)
 
         prevCollision (x0,y0,d) = do
+            rs <- getRects
             let delta =
                     case d of
                         NORTH -> y-y0
@@ -68,14 +69,18 @@ onMove = compile $ do
                         EAST  -> x-x0
                         WEST  -> x0-x
 
-                catchUp = delta <= 0
-                eOpt3   = if catchUp then eOpt2 else fmap (eventD d) eOpt
+                catchUp  = delta <= 0
+                ccOpt    = (intersection rs <=< eventGetRect) =<< eOpt
+                collides = isJust ccOpt
+                eOpt3    = if catchUp -- || not collides
+                           then eOpt2
+                           else fmap (eventD d) eOpt
             setEvent eOpt3
             when catchUp (setCollision Nothing)
 
         noPrevCollision = do
             setEvent eOpt2
-            when (onEvent && col) onCollisionActivated
+            when (onEvent && not overlap) onCollisionActivated
 
     setSelection sOpt2
     maybe noPrevCollision prevCollision lOpt

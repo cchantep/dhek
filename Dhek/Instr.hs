@@ -17,7 +17,7 @@ data DhekEntry = PropEntry
 
 data DhekCombo = PropCombo
 
-data DhekOption = Collision
+data DhekOption = Overlap
 
 data DhekInstr a = GetPointer ((Double, Double) -> a)
                  | GetOverRect (Maybe Rect -> a)

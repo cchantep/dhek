@@ -75,7 +75,7 @@ data EngineState = EngineState
     { _engineCurPage   :: {-# UNPACK #-} !Int
     , _engineCurZoom   :: {-# UNPACK #-} !Int
     , _engineRectId    :: {-# UNPACK #-} !Int
-    , _engineCollision :: !Bool
+    , _engineOverlap   :: !Bool
     , _engineDraw      :: !Bool
     , _enginePropLabel :: !String
     , _enginePropType  :: !(Maybe String)
@@ -477,7 +477,7 @@ engineStart eng = do
                     y <- Gtk.get vruler Gtk.rulerPosition
                     let upd g =
                             let v = case g ^. guideType of
-                                    GuideVertical -> x
+                                    GuideVertical   -> x
                                     GuideHorizontal -> y in
                             g & guideValue .~ v
                         v1 = v & viewerBoards.boardsCurGuide %~ fmap upd
@@ -533,13 +533,13 @@ engineStart eng = do
                     k s1 v1
                 suspend (Active o b k) s v =
                     case o of
-                        Collision -> do
-                            let s1 = s & engineCollision .~ b
+                        Overlap -> do
+                            let s1 = s & engineOverlap .~ b
                             Gtk.checkMenuItemSetActive citem b
                             k s1 v
                 suspend (IsActive o k) s v =
                     case o of
-                        Collision -> k (s ^. engineCollision) s v
+                        Overlap -> k (s ^. engineOverlap) s v
                 suspend (PrevPointer k) s v =
                     k (s ^. enginePrevPos) s v
                 suspend (SetCol o k) s v =
@@ -634,8 +634,8 @@ engineStart eng = do
     Gtk.on citem Gtk.menuItemActivate $ do
         let x      = negate 1
             action = compile $ do
-                b <- isActive Collision
-                active Collision (not b)
+                b <- isActive Overlap
+                active Overlap (not b)
         interpret x x action
     -- Previous Button ---
     Gtk.on prev Gtk.buttonActivated $ do
@@ -871,8 +871,8 @@ initState v s = EngineState
                 1
                 3
                 0
+                (s ^. engineOverlap)
                 False
-                (s ^. engineCollision)
                 ""
                 Nothing
                 Nothing
