@@ -57,10 +57,11 @@ onMove = compile $ do
             rs <- getRects
             for_ (eOpt2 >>= eventGetRect) $ \l ->
                 for_ (intersection rs l) $ \(r, d) -> do
-                    setCollision $ Just (x,y,d)
+                    let (rmin, rmax) = rectRange d r
+                    setCollision $ Just (x,y,rmin,rmax,d)
                     setEventRect (replaceRect d l r)
 
-        prevCollision (x0,y0,d) = do
+        prevCollision (x0,y0,rmin,rmax,d) = do
             rs <- getRects
             let delta =
                     case d of
@@ -69,12 +70,20 @@ onMove = compile $ do
                         EAST  -> x-x0
                         WEST  -> x0-x
 
+                doesCollides l =
+                    let lx = l ^. rectX
+                        ly = l ^. rectY
+                        lw = l ^. rectWidth
+                        lh = l ^. rectHeight in
+                    case d of
+                        NORTH -> rmin <= (lx+lw) && lx <= rmax
+                        SOUTH -> rmin <= (lx+lw) && lx <= rmax
+                        EAST  -> rmin <= (ly+lh) && ly <= rmax
+                        WEST  -> rmin <= (ly+lh) && ly <= rmax
+
                 catchUp  = delta <= 0
-                ccOpt    = (intersection rs <=< eventGetRect) =<< eOpt
-                collides = isJust ccOpt
-                eOpt3    = if catchUp || not collides
-                           then eOpt2
-                           else fmap (eventD d) eOpt
+                eOpt3    = fmap (eventD d) eOpt
+                collides = maybe False doesCollides (eOpt2 >>= eventGetRect)
             setEvent eOpt3
             when (catchUp || not collides) (setCollision Nothing)
 
@@ -182,3 +191,16 @@ intersection rs l = getFirst $ foldMap (First . go) rs
     go r = do
         dir <- rectIntersect l r
         return (r, dir)
+
+rectRange :: Direction -> Rect -> (Double, Double)
+rectRange d r =
+    case d of
+        NORTH -> (x, x+w)
+        EAST  -> (y, y+h)
+        SOUTH -> (x, x+w)
+        WEST  -> (y, y+h)
+  where
+    x = r ^. rectX
+    y = r ^. rectY
+    w = r ^. rectWidth
+    h = r ^. rectHeight

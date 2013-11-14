@@ -86,7 +86,7 @@ data EngineState = EngineState
     , _engineAddedRect :: !(Maybe Rect)
     , _engineRemRect   :: !(Maybe Rect)
     , _enginePrevPos   :: !(Double, Double)
-    , _engineColPos    :: !(Maybe (Double, Double, Direction))
+    , _engineColPos    :: !(Maybe (Double, Double, Double, Double, Direction))
     }
 
 data EngineEnv = EngineEnv
