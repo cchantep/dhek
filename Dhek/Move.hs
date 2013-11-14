@@ -1,7 +1,7 @@
 module Dhek.Move where
 
 import Control.Applicative ((<|>), (<$))
-import Control.Lens (use, (.=), (%=), (?=), (+=), (-=), (<%=), (^.), (&), (.~), (%~), (-~))
+import Control.Lens (use, (.=), (%=), (?=), (+=), (-=), (<%=), (^.), (&), (.~), (%~), (-~), (+~))
 import Control.Monad ((<=<), when)
 import Control.Monad.Reader (ask)
 import Control.Monad.State (execState)
@@ -60,8 +60,16 @@ onMove = compile $ do
             for_ (eOpt2 >>= eventGetRect) $ \l ->
                 for_ (intersection rs l) $ \(r, d) -> do
                     let (rmin, rmax) = rectRange d r
-                    setCollision $ Just (x,y,rmin,rmax,d)
-                    setEventRect (replaceRect d l r)
+                        (delta, l1)  = replaceRect d l r
+                        (x1, y1)     =
+                            case d of
+                                NORTH -> (x, y-delta)
+                                EAST  -> (x-delta, y)
+                                SOUTH -> (x, y+delta)
+                                WEST  -> (x+delta, y)
+
+                    setCollision $ Just (x1,y1,rmin,rmax,d)
+                    setEventRect l1
 
         prevCollision (x0,y0,rmin,rmax,d) = do
             rs <- getRects
@@ -180,7 +188,7 @@ resizeRect dx dy area r = execState (go area) r
         rectX += dx
         rectWidth -= dx
 
-replaceRect :: Direction -> Rect -> Rect -> Rect
+replaceRect :: Direction -> Rect -> Rect -> (Double, Rect)
 replaceRect d l r  = r1
   where
     lx = l ^. rectX
@@ -188,12 +196,17 @@ replaceRect d l r  = r1
     lw = l ^. rectWidth
     lh = l ^. rectHeight
 
+    rx = r ^. rectX
+    ry = r ^. rectY
+    rw = r ^. rectWidth
+    rh = r ^. rectHeight
+
     r1 =
         case d of
-            NORTH -> l & rectY -~ (ly+lh) - (r ^. rectY)
-            EAST  -> l & rectX -~ (lx+lw) - (r ^. rectX)
-            SOUTH -> l & rectY .~ (r ^. rectY) + (r ^. rectHeight)
-            WEST  -> l & rectX .~ (r ^. rectX) + (r ^. rectWidth)
+            NORTH -> let e = ly + lh - ry in (e, l & rectY -~ e)
+            EAST  -> let e = lx + lw - rx in (e, l & rectX -~ e)
+            SOUTH -> let e = ry + rh - ly in (e, l & rectY +~ e)
+            WEST  -> let e = rx + rw - lx in (e, l & rectX +~ e)
 
 intersection :: [Rect] -> Rect -> Maybe (Rect, Direction)
 intersection rs l = getFirst $ foldMap (First . go) rs
