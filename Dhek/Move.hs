@@ -83,7 +83,7 @@ onMove = compile $ do
 
                 catchUp  = delta <= 0
                 eOpt3    = fmap (eventD d) eOpt
-                collides = maybe False doesCollides (eOpt2 >>= eventGetRect)
+                collides = maybe False doesCollides (eOpt3 >>= eventGetRect)
             setEvent eOpt3
             when (catchUp || not collides) (setCollision Nothing)
 
