@@ -15,6 +15,8 @@ import Dhek.Engine
 import Dhek.Instr
 import Dhek.Types hiding (addRect)
 
+import Debug.Trace
+
 onMove :: DhekProgram ()
 onMove = compile $ do
     (x,y)   <- getPointer
@@ -81,7 +83,15 @@ onMove = compile $ do
                         EAST  -> rmin <= (ly+lh) && ly <= rmax
                         WEST  -> rmin <= (ly+lh) && ly <= rmax
 
-                catchUp  = delta <= 0
+                debug = "BEGIN --\n" ++
+                        "cur: " ++ show (x,y) ++ "\n" ++
+                        "colPos: " ++ show (x0,y0) ++ "\n" ++
+                        "colRange: " ++ show(rmin, rmax) ++ "\n" ++
+                        "delta: " ++ show delta ++ "\n" ++
+                        "collides: " ++ show collides ++ "\n" ++
+                        "direction: " ++ show d ++ "\nEND"
+
+                catchUp  = trace debug (delta <= 0)
                 eOpt3    = fmap (eventD d) eOpt
                 collides = maybe False doesCollides (eOpt3 >>= eventGetRect)
             setEvent eOpt3

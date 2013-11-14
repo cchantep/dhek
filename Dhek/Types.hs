@@ -45,7 +45,7 @@ data Area = TOP_LEFT
 data Direction = NORTH
                | EAST
                | SOUTH
-               | WEST deriving Eq
+               | WEST deriving (Eq, Show)
 
 data Boards = Boards { _boardsState     :: {-# UNPACK #-} !Int
                      , _boardsEvent     :: !BoardEvent
