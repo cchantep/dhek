@@ -23,10 +23,14 @@ onMove = compile $ do
     oOpt    <- getOverRect
     aOpt    <- getOverArea
     sOpt    <- getSelection
-    eOpt    <- getEvent
+    eOpt'   <- getEvent
     lOpt    <- getCollision
     overlap <- isActive Overlap
-    let onEvent   = isJust eOpt
+    bidon   <- getBidon
+    when bidon (setBidon False)
+
+    let eOpt = bool bidon Nothing eOpt'
+        onEvent   = isJust eOpt
         selection = do
              x0 <- use rectX
              y0 <- use rectY
@@ -64,21 +68,23 @@ onMove = compile $ do
                         (x1, y1)     =
                             case d of
                                 NORTH -> (x, y-delta)
-                                EAST  -> (x-delta, y)
+                                WEST  -> (x-delta, y)
                                 SOUTH -> (x, y+delta)
-                                WEST  -> (x+delta, y)
+                                EAST  -> (x+delta, y)
 
-                    setCollision $ Just (x1,y1,rmin,rmax,d)
+                        opp = oppositeDirection d
+                        de  = fromEdge opp (x1,y1) l1
+
+                    setCollision $ Just (x1,y1,de,rmin,rmax,d)
                     setEventRect l1
 
-        prevCollision (x0,y0,rmin,rmax,d) = do
-            rs <- getRects
+        prevCollision (x0,y0,de,rmin,rmax,d) = do
             let delta =
                     case d of
                         NORTH -> y-y0
                         SOUTH -> y0-y
-                        EAST  -> x-x0
-                        WEST  -> x0-x
+                        WEST  -> x-x0
+                        EAST  -> x0-x
 
                 doesCollides l =
                     let lx = l ^. rectX
@@ -91,8 +97,19 @@ onMove = compile $ do
                         EAST  -> rmin <= (ly+lh) && ly <= rmax
                         WEST  -> rmin <= (ly+lh) && ly <= rmax
 
+                correct NORTH (Hold r (px,py)) =
+                     Hold (r & rectY .~ y0+de) (px, y0+de)
+                correct SOUTH (Hold r (px, py)) =
+                    Hold (r & rectY .~ y0-de) (px, y0-de)
+                correct WEST (Hold r (px,py)) =
+                    Hold (r & rectX .~ x0+de) (x0+de, py)
+                correct EAST (Hold r (px,py)) =
+                    Hold (r & rectX .~ x0-de) (x0-de, py)
+                correct _ e = e
+
                 debug = "BEGIN --\n" ++
                         "cur: " ++ show (x,y) ++ "\n" ++
+                        "de: " ++ show de ++ "\n" ++
                         "colPos: " ++ show (x0,y0) ++ "\n" ++
                         "colRange: " ++ show(rmin, rmax) ++ "\n" ++
                         "delta: " ++ show delta ++ "\n" ++
@@ -101,9 +118,14 @@ onMove = compile $ do
 
                 catchUp  = trace debug (delta <= 0)
                 eOpt3    = fmap (eventD d) eOpt
+                eOpt4    = fmap (correct d) eOpt3
                 collides = maybe False doesCollides (eOpt3 >>= eventGetRect)
             setEvent eOpt3
-            when (catchUp || not collides) (setCollision Nothing)
+            when (catchUp || not collides) $ do
+                when catchUp $ do
+                    setEvent eOpt4
+                    setBidon True
+                setCollision Nothing
 
         noPrevCollision = do
             setEvent eOpt2
@@ -204,9 +226,9 @@ replaceRect d l r  = r1
     r1 =
         case d of
             NORTH -> let e = ly + lh - ry in (e, l & rectY -~ e)
-            EAST  -> let e = lx + lw - rx in (e, l & rectX -~ e)
+            WEST  -> let e = lx + lw - rx in (e, l & rectX -~ e)
             SOUTH -> let e = ry + rh - ly in (e, l & rectY +~ e)
-            WEST  -> let e = rx + rw - lx in (e, l & rectX +~ e)
+            EAST  -> let e = rx + rw - lx in (e, l & rectX +~ e)
 
 intersection :: [Rect] -> Rect -> Maybe (Rect, Direction)
 intersection rs l = getFirst $ foldMap (First . go) rs
@@ -227,3 +249,16 @@ rectRange d r =
     y = r ^. rectY
     w = r ^. rectWidth
     h = r ^. rectHeight
+
+fromEdge :: Direction -> (Double, Double) -> Rect -> Double
+fromEdge d (x,y) r =
+    case d of
+        NORTH -> y - ry
+        SOUTH -> y - (ry+rh)
+        WEST  -> x - rx
+        EAST  -> x - (rx+rw)
+  where
+    rx = r ^. rectX
+    ry = r ^. rectY
+    rw = r ^. rectWidth
+    rh = r ^. rectHeight

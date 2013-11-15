@@ -67,8 +67,10 @@ data DhekInstr a = GetPointer ((Double, Double) -> a)
                  | Active DhekOption Bool a
                  | IsActive DhekOption (Bool -> a)
                  | PrevPointer ((Double, Double) -> a)
-                 | SetCol !(Maybe (Double, Double, Double, Double, Direction)) a
-                 | GetCol (Maybe (Double, Double, Double, Double, Direction) -> a)
+                 | SetCol !(Maybe (Double, Double, Double, Double, Double, Direction)) a
+                 | GetCol (Maybe (Double, Double, Double, Double, Double, Direction) -> a)
+                 | SetBidon Bool a
+                 | GetBidon (Bool -> a)
 
 instance Functor DhekInstr where
     fmap f (GetPointer k)       = GetPointer (f . k)
@@ -121,6 +123,8 @@ instance Functor DhekInstr where
     fmap f (PrevPointer k)      = PrevPointer (f . k)
     fmap f (SetCol o a)         = SetCol o (f a)
     fmap f (GetCol k)           = GetCol (f . k)
+    fmap f (SetBidon b a)       = SetBidon b (f a)
+    fmap f (GetBidon k)         = GetBidon (f . k)
 
 getPointer :: F DhekInstr (Double, Double)
 getPointer = wrap $ GetPointer return
@@ -274,11 +278,18 @@ isActive o = wrap $ IsActive o return
 prevPointer :: F DhekInstr (Double, Double)
 prevPointer = wrap $ PrevPointer return
 
-setCollision :: Maybe (Double, Double, Double, Double, Direction) -> F DhekInstr ()
+setCollision :: Maybe (Double, Double, Double, Double, Double, Direction)
+             -> F DhekInstr ()
 setCollision o = wrap $ SetCol o (return ())
 
-getCollision :: F DhekInstr (Maybe (Double, Double, Double, Double, Direction))
+getCollision :: F DhekInstr (Maybe (Double, Double, Double, Double, Double, Direction))
 getCollision = wrap $ GetCol return
+
+setBidon :: Bool -> F DhekInstr ()
+setBidon b = wrap $ SetBidon b (return ())
+
+getBidon :: F DhekInstr Bool
+getBidon = wrap $ GetBidon return
 
 compile :: F DhekInstr a -> Free DhekInstr a
 compile = fromF

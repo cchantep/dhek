@@ -86,7 +86,8 @@ data EngineState = EngineState
     , _engineAddedRect :: !(Maybe Rect)
     , _engineRemRect   :: !(Maybe Rect)
     , _enginePrevPos   :: !(Double, Double)
-    , _engineColPos    :: !(Maybe (Double, Double, Double, Double, Direction))
+    , _engineColPos    :: !(Maybe (Double, Double, Double, Double, Double, Direction))
+    , _engineBidon     :: !Bool
     }
 
 data EngineEnv = EngineEnv
@@ -147,6 +148,7 @@ gtkEngineNew = do
            Nothing
            (negate 1, negate 1)
            Nothing
+           False
 
 engineStart :: Engine -> IO ()
 engineStart eng = do
@@ -547,6 +549,11 @@ engineStart eng = do
                     k s1 v
                 suspend (GetCol k) s v =
                     k (s ^. engineColPos) s v
+                suspend (SetBidon b k) s v =
+                    let s1 = s & engineBidon .~ b in
+                    k s1 v
+                suspend (GetBidon k) s v =
+                    k (s ^. engineBidon) s v
 
                 end a s v = do
                     let drawing = s ^. engineDraw
@@ -696,7 +703,9 @@ engineStart eng = do
         liftIO $ interpret x' y' (moveF >> action)
     Gtk.on area Gtk.buttonPressEvent $ Gtk.tryEvent $ do
        (x',y') <- Gtk.eventCoordinates
-       liftIO $ interpret x' y' pressF
+       b       <- Gtk.eventButton
+       when (b == Gtk.LeftButton) $
+           liftIO $ interpret x' y' pressF
     Gtk.on area Gtk.buttonReleaseEvent $ Gtk.tryEvent $ liftIO $ do
         let x = negate 1
         interpret x x releaseF
@@ -883,6 +892,7 @@ initState v s = EngineState
                 Nothing
                 (negate 1, negate 1)
                 Nothing
+                False
 
 zoomValues :: Array Int Double
 zoomValues = array (0, 10) values

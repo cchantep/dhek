@@ -231,9 +231,9 @@ rectIntersect a b
         if wy > hx
         then if wy > negate hx
              then Just SOUTH
-             else Just EAST
+             else Just WEST
         else if wy > negate hx
-             then Just WEST
+             then Just EAST
              else Just NORTH
   where
     aw = a ^. rectWidth
@@ -277,3 +277,9 @@ isOver thick x y r = go
 modifyEventRect :: (Rect -> Rect) -> BoardEvent -> BoardEvent
 modifyEventRect k (Hold r p)     = Hold (k r) p
 modifyEventRect k (Resize r p a) = Resize (k r) p a
+
+oppositeDirection :: Direction -> Direction
+oppositeDirection NORTH = SOUTH
+oppositeDirection SOUTH = NORTH
+oppositeDirection EAST  = WEST
+oppositeDirection WEST  = EAST
