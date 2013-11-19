@@ -87,7 +87,6 @@ data EngineState = EngineState
     , _engineRemRect   :: !(Maybe Rect)
     , _enginePrevPos   :: !(Double, Double)
     , _engineColPos    :: !(Maybe (Double, Double, Double, Double, Double, Direction))
-    , _engineBidon     :: !Bool
     }
 
 data EngineEnv = EngineEnv
@@ -148,7 +147,6 @@ gtkEngineNew = do
            Nothing
            (negate 1, negate 1)
            Nothing
-           False
 
 engineStart :: Engine -> IO ()
 engineStart eng = do
@@ -549,11 +547,6 @@ engineStart eng = do
                     k s1 v
                 suspend (GetCol k) s v =
                     k (s ^. engineColPos) s v
-                suspend (SetBidon b k) s v =
-                    let s1 = s & engineBidon .~ b in
-                    k s1 v
-                suspend (GetBidon k) s v =
-                    k (s ^. engineBidon) s v
 
                 end a s v = do
                     let drawing = s ^. engineDraw
@@ -892,7 +885,6 @@ initState v s = EngineState
                 Nothing
                 (negate 1, negate 1)
                 Nothing
-                False
 
 zoomValues :: Array Int Double
 zoomValues = array (0, 10) values
