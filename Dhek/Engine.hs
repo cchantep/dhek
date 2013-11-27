@@ -274,7 +274,7 @@ engineStart eng = do
     Gtk.tableAttachDefaults table pCombo 1 2 1 2
     Gtk.tableSetRowSpacings table 10
     Gtk.tableSetColSpacings table 10
-    traverse_ (Gtk.listStoreAppend tstore) ["text", "checkbox"]
+    traverse_ (Gtk.listStoreAppend tstore) ["text", "checkbox", "radio"]
     Gtk.containerAdd salign hsep
     Gtk.boxPackStart tvbox table Gtk.PackNatural 0
     Gtk.boxPackStart vleft salign Gtk.PackNatural 0
