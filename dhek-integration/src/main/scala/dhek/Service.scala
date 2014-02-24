@@ -30,10 +30,28 @@ trait Service extends HttpService {
           complete {
             <html>
               <body>
-                <h1>Hello Dhek</h1>
+                <h1>Étape 1 - Modèle de fusion</h1>
+                <form method="post" enctype="multipart/form-data" action="/">
+                  <table>
+                    <tr>
+                      <td><div><label for="pdf">Document PDF:</label></div><input name="pdf" type="file" /></td>
+                    </tr>
+                    <tr>
+                      <td><div><label for="json">Modèle JSON:</label></div><input name="json" type="file" /></td>
+                    </tr>
+                    <tr>
+                      <td><input type="submit" value="Continuer" /></td>
+                    </tr>
+                  </table>
+                </form>
               </body>
             </html>
           }
+        }
+      } ~
+      post {
+        formFields('pdf, 'json) { (pdf, json) =>
+          complete("pdf and json model submitted !")
         }
       }
     }
