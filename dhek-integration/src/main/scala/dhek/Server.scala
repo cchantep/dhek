@@ -2,17 +2,23 @@ package dhek
 
 import org.jboss.netty.channel.ChannelHandlerContext
 import unfiltered.netty.{ Http, async }
-import unfiltered.request.{ GET, Path }
-import unfiltered.response.ResponseString
+import unfiltered.request.{ GET, POST, Path }
+import unfiltered.response.{ ResponseString, NotFound }
 
-object Server extends async.Plan {
+object Server extends async.Plan with Html {
   def intent = {
     case req @ GET(Path("/")) ⇒
-      req.respond(ResponseString("Hello world"))
+      req.respond(ResponseString(index))
+    case req @ POST(Path("/upload")) ⇒
+      req.respond(ResponseString("POST"))
+    case req ⇒
+      req.respond(NotFound)
   }
 
   def onException(ctx: ChannelHandlerContext, t: Throwable) {
-    ctx.getChannel.write(ResponseString("Oups ! Something bad happend"))
+    print(t)
+    throw t
+    //ctx.getChannel.write(ResponseString("Oups ! Something bad happend"))
   }
 }
 
