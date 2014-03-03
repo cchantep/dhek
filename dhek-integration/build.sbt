@@ -1,28 +1,11 @@
-organization  := "fr.applicius.dhek"
+name := "dhek-integration"
 
-name          := "integration"
+scalaVersion := "2.10.3"
 
-version       := "0.1"
+organization := "fr.applicius.dhek"
 
-scalaVersion  := "2.10.3"
+libraryDependencies += "org.scalaz"  %% "scalaz-core" % "7.0.4"
 
-scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8")
+libraryDependencies += "org.specs2" %% "specs2" % "2.3.2" % "test"
 
-resolvers ++= Seq(
-  "spray repo" at "http://repo.spray.io/"
-)
-
-libraryDependencies ++= {
-  val akkaV = "2.2.3"
-  val sprayV = "1.2.0"
-  Seq(
-    "io.spray"            %   "spray-can"     % sprayV,
-    "io.spray"            %   "spray-routing" % sprayV,
-    "io.spray"            %   "spray-testkit" % sprayV  % "test",
-    "com.typesafe.akka"   %%  "akka-actor"    % akkaV,
-    "com.typesafe.akka"   %%  "akka-testkit"  % akkaV   % "test",
-    "org.specs2"          %%  "specs2-core"   % "2.3.7" % "test"
-  )
-}
-
-seq(Revolver.settings: _*)
+libraryDependencies += "net.databinder" %% "unfiltered-netty-server" % "0.7.1"
