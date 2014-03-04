@@ -3,6 +3,7 @@ package dhek
 import java.io.{
   ByteArrayOutputStream,
   InputStream,
+  IOException,
   PushbackInputStream
 }
 
@@ -92,8 +93,8 @@ object BodyParser {
   private lazy val unexpectedEOF: Either[Throwable, Nothing] =
     Left(new RuntimeException("End of Stream"))
 
-  def runParser[A](p: Parser[A], input: ⇒ InputStream): Either[Throwable, A] =
-    managed(new PushbackInputStream(input)).acquireAndGet { s ⇒
+  def runParser[A](p: Parser[A], input: ⇒ InputStream): Either[List[Throwable], A] =
+    managed(new PushbackInputStream(input)).acquireFor { s ⇒
 
       def readByte(k: Byte ⇒ Parser[Any]): Either[Throwable, Parser[Any]] = {
         val b = s.read
@@ -116,31 +117,31 @@ object BodyParser {
         }
       }
 
-      def reportError(e: Either[String, Throwable]): Either[Throwable, Nothing] =
-        e.fold(m ⇒ Left(new RuntimeException(m)), Left(_))
+      def reportError(e: Either[String, Throwable]): Throwable =
+        e.fold(m ⇒ new IOException(m), identity)
 
       @annotation.tailrec
-      def loop(step: Parser[Any]): Either[Throwable, A] = step match {
+      def loop(step: Parser[Any]): A = step match {
         case Get(k) ⇒ readByte(k) match {
-          case Left(e)     ⇒ Left(e)
+          case Left(e)     ⇒ throw e
           case Right(next) ⇒ loop(next)
         }
         case Peek(k) ⇒ peekByte(k) match {
-          case Left(e)     ⇒ Left(e)
+          case Left(e)     ⇒ throw e
           case Right(next) ⇒ loop(next)
         }
-        case Return(a)  ⇒ Right(a.asInstanceOf[A])
-        case Failure(e) ⇒ reportError(e)
+        case Return(a)  ⇒ a.asInstanceOf[A]
+        case Failure(e) ⇒ throw reportError(e)
         case Bind(m, f) ⇒ m() match {
           case Get(k) ⇒ readByte(k) match {
-            case Left(e)     ⇒ Left(e)
+            case Left(e)     ⇒ throw e
             case Right(next) ⇒ loop(Bind(() ⇒ next, f))
           }
           case Peek(k) ⇒ peekByte(k) match {
-            case Left(e)     ⇒ Left(e)
+            case Left(e)     ⇒ throw e
             case Right(next) ⇒ loop(Bind(() ⇒ next, f))
           }
-          case Failure(e) ⇒ reportError(e)
+          case Failure(e) ⇒ throw reportError(e)
           case Return(a)  ⇒ loop(f(a))
           case Bind(n, g) ⇒
             val next = n().flatMap((x: Any) ⇒ g(x) flatMap f)
