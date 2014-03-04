@@ -26,6 +26,7 @@ object BodyParser {
 
   case class Get[A](k: Byte ⇒ Parser[A]) extends Parser[A]
   case class Peek[A](k: Byte ⇒ Parser[A]) extends Parser[A]
+  case class Take[A](n: Int, k: Array[Byte] ⇒ Parser[A]) extends Parser[A]
   case class Return[A](v: A) extends Parser[A]
   case class Failure(e: Either[String, Throwable]) extends Parser[Nothing]
   case class Bind[A, B](m: () ⇒ Parser[A], f: A ⇒ Parser[B]) extends Parser[B]
@@ -36,18 +37,8 @@ object BodyParser {
   def peekByte: Parser[Byte] =
     Peek(Return(_))
 
-  def take(n: Int): Parser[Array[Byte]] = {
-    val buffer = new ByteArrayOutputStream()
-
-    def loop(i: Int): Parser[Array[Byte]] =
-      if (i == 0) Return(buffer.toByteArray)
-      else getByte.flatMap { b ⇒
-        buffer.write(b.toInt)
-        loop(i - 1)
-      }
-
-    loop(n)
-  }
+  def take(n: Int): Parser[Array[Byte]] =
+    Take(n, Return(_))
 
   def takeWhile(p: Byte ⇒ Boolean): Parser[Array[Byte]] = {
     val buffer = new ByteArrayOutputStream()
@@ -93,8 +84,9 @@ object BodyParser {
   private lazy val unexpectedEOF: Either[Throwable, Nothing] =
     Left(new RuntimeException("End of Stream"))
 
-  def runParser[A](p: Parser[A], input: ⇒ InputStream): Either[List[Throwable], A] =
+  def runParser[A](p: Parser[A], input: ⇒ InputStream, bsize: Int = 8192): Either[List[Throwable], A] =
     managed(new PushbackInputStream(input)).acquireFor { s ⇒
+      val buffer = new Array[Byte](bsize)
 
       def readByte(k: Byte ⇒ Parser[Any]): Either[Throwable, Parser[Any]] = {
         val b = s.read
@@ -117,6 +109,24 @@ object BodyParser {
         }
       }
 
+      def takeBytes(n: Int, k: Array[Byte] ⇒ Parser[Any]): Either[Throwable, Parser[Any]] =
+        if (n <= bsize) {
+          val readByte = s.read(buffer, 0, n)
+
+          if (readByte < n)
+            unexpectedEOF
+          else
+            Right(k(buffer.slice(0, n)))
+        } else {
+          val tmpBuffer = new Array[Byte](n)
+          val readByte = s.read(tmpBuffer)
+
+          if (readByte < n)
+            unexpectedEOF
+          else
+            Right(k(tmpBuffer))
+        }
+
       def reportError(e: Either[String, Throwable]): Throwable =
         e.fold(m ⇒ new IOException(m), identity)
 
@@ -130,6 +140,10 @@ object BodyParser {
           case Left(e)     ⇒ throw e
           case Right(next) ⇒ loop(next)
         }
+        case Take(n, k) ⇒ takeBytes(n, k) match {
+          case Left(e)     ⇒ throw e
+          case Right(next) ⇒ loop(next)
+        }
         case Return(a)  ⇒ a.asInstanceOf[A]
         case Failure(e) ⇒ throw reportError(e)
         case Bind(m, f) ⇒ m() match {
@@ -138,6 +152,10 @@ object BodyParser {
             case Right(next) ⇒ loop(Bind(() ⇒ next, f))
           }
           case Peek(k) ⇒ peekByte(k) match {
+            case Left(e)     ⇒ throw e
+            case Right(next) ⇒ loop(Bind(() ⇒ next, f))
+          }
+          case Take(n, k) ⇒ takeBytes(n, k) match {
             case Left(e)     ⇒ throw e
             case Right(next) ⇒ loop(Bind(() ⇒ next, f))
           }
