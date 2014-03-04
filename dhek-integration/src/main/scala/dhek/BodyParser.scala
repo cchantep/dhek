@@ -63,15 +63,15 @@ object BodyParser {
     loop
   }
 
-  def string(s: String): Parser[Unit] = {
+  def expect(s: String): Parser[Unit] = {
     def loop(cur: String): Parser[Unit] =
       if (cur.isEmpty) Return(())
       else {
-        val c = s.head
+        val c = cur.head
 
         getByte.flatMap { x ⇒
-          if (c.toByte == x) loop(s.tail)
-          else failure(s"Expectation $s: Got ${x.toChar}, Expected: $x")
+          if (c.toByte == x) loop(cur.tail)
+          else failure(s"Expectation $s: Got ${x.toChar}, Expected: $c")
         }
       }
 

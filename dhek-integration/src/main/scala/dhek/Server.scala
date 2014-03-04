@@ -10,7 +10,7 @@ object Server extends async.Plan with Html {
     case req @ GET(Path("/")) ⇒
       req.respond(ResponseString(index))
     case req @ POST(Path("/upload")) ⇒
-      req.respond(ResponseString("POST"))
+
     case req ⇒
       req.respond(NotFound)
   }
