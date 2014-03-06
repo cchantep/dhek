@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Login</title>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link href="http://netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css" rel="stylesheet" />
+
+    <link href="css/dialog.css" rel="stylesheet" />
+    <link href="css/login.css" rel="stylesheet" />
+
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+      <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="container">
+      <form class="form-signin" role="form">
+        <h2 class="form-signin-heading">Dhek</h2>
+        <input type="email" id="username" name="username" 
+               class="form-control" placeholder="Email" />
+        <input type="password" id="password" name="password" 
+               class="form-control" placeholder="Password" />
+        <button class="btn btn-lg btn-primary btn-block login" 
+                type="submit">Connect</button>
+      </form>
+      <div id="dhek-message"></div>
+    </div>
+
+    <script src="http://codeorigin.jquery.com/jquery-1.11.0.min.js"></script>
+    <script src="//netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
+
+    <script src="js/ajax.js"></script>
+    <script src="js/login.js"></script>
+  </body>
+</html>
