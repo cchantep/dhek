@@ -16,16 +16,16 @@ object BodyParserSpec extends Specification with BodyParserFixtures {
   }
 
   "multipart/form-data" should {
-    "be parsed with length" in {
+    "be parsed with length and extracted Boundary value" in {
       lazy val action =
-        BodyParser.runParser(parser_form_data, parser_multipart_form_data_file)
+        BodyParser.runParser(parser_form_data_complete, parser_multipart_form_data_file)
 
       action aka "Parse result" must beRight.which { b ⇒
-        b aka "Boundary" must_== parser_form_expect
+        b aka "Boundary value" must_== "Larry"
       }
     }
 
-    "be parsed with NO length" in {
+    "be parsed with no Length" in {
       lazy val action =
         BodyParser.runParser(parser_form_data, parser_multipart_form_no_length_data_file)
 
@@ -56,4 +56,21 @@ sealed trait BodyParserFixtures {
     _ ← BodyParser.expect(" ")
     b ← Form.boundary
   } yield b
+
+  val parser_form_data_complete = for {
+    _ ← Form.header
+    _ ← BodyParser.expect(" ")
+    b ← Form.boundary
+    _ ← BodyParser.expect("\n\n\n")
+    _ ← BodyParser.expect(s"${b.name}\n")
+    _ ← BodyParser.expect("Content-Disposition: ")
+    d ← BodyParser.takeWhile1(_ != ';'.toByte)
+    _ ← BodyParser.expect("; ")
+    _ ← BodyParser.expect("name=\"")
+    n ← BodyParser.takeWhile1(_ != '"'.toByte) flatMap BodyParser.liftString
+    _ ← BodyParser.expect("\"\n\n\n")
+    v ← BodyParser.takeWhile1(_ != '\n'.toByte) flatMap BodyParser.liftString
+    _ ← BodyParser.getByte
+    _ ← BodyParser.expect(s"${b.name}")
+  } yield v
 }

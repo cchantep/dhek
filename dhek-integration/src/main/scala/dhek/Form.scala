@@ -1,12 +1,6 @@
 package dhek
 
-import dhek.BodyParser.{
-  Parser,
-  expect,
-  getByte,
-  optional,
-  takeWhile
-}
+import dhek.BodyParser.Parser
 
 object Form {
 
@@ -21,27 +15,24 @@ object Form {
   def notWhitespace(b: Byte): Boolean =
     b != `\n` && b != space
 
-  def digit(b: Byte): Boolean =
-    b >= '0'.toByte && b <= '9'.toByte
-
   def header: Parser[ContentType] =
     for {
-      _ ← expect("Content-Type: ")
-      bs ← takeWhile(_ != `;`)
-      _ ← getByte
+      _ ← BodyParser.expect("Content-Type: ")
+      bs ← BodyParser.takeWhile(_ != `;`)
+      _ ← BodyParser.getByte
     } yield ContentType(new String(bs))
 
   def boundary: Parser[Boundary] = {
     val contentLength = for {
-      _ ← getByte
-      _ ← expect("Content-Length: ")
-      l ← takeWhile(digit).map(b ⇒ new String(b).toInt)
+      _ ← BodyParser.getByte
+      _ ← BodyParser.expect("Content-Length: ")
+      l ← BodyParser.integer
     } yield l
 
     for {
-      _ ← expect("boundary=")
-      bs ← takeWhile(notWhitespace)
-      l ← optional(contentLength)
+      _ ← BodyParser.expect("boundary=")
+      bs ← BodyParser.takeWhile1(notWhitespace)
+      l ← BodyParser.optional(contentLength)
     } yield Boundary(new String(bs), l)
   }
 }

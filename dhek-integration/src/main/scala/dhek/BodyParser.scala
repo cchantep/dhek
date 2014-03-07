@@ -62,6 +62,14 @@ object BodyParser {
   def take(n: Int): Parser[Array[Byte]] =
     Suspend(Take(n, Return(_)))
 
+  val integer: Parser[Int] = for {
+    bs ← takeWhile1(b ⇒ Character.isDigit(b.toChar))
+    i ← beware(new String(bs).toInt)
+  } yield i
+
+  def liftString(bs: Array[Byte]): Parser[String] =
+    beware(new String(bs))
+
   def buffer(max: Option[Int] = Some(8192)): Parser[Array[Byte]] =
     Suspend(Buffer(max, Return(_)))
 
@@ -73,6 +81,20 @@ object BodyParser {
 
   def release(key: ReleaseKey): Parser[Unit] =
     Suspend(Release(key, Return(())))
+
+  def takeWhile1(p: Byte ⇒ Boolean): Parser[Array[Byte]] =
+    for {
+      b ← getByte
+      _ ← if (p(b)) unit else failure("takeWhile1: predicate not satisfied")
+      bs ← takeWhile(p)
+    } yield {
+      val buffer = new ByteArrayOutputStream()
+
+      buffer.write(b)
+      buffer.write(bs)
+
+      buffer.toByteArray
+    }
 
   def takeWhile(p: Byte ⇒ Boolean): Parser[Array[Byte]] = {
     val buffer = new ByteArrayOutputStream()
