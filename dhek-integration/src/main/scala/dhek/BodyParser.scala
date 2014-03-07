@@ -24,6 +24,7 @@ object BodyParser {
       case r @ Take(_, k)     ⇒ r.copy(k = f compose k)
       case r @ Buffer(_, k)   ⇒ r.copy(k = f compose k)
       case r @ OrElse(x, y)   ⇒ r.copy(l = f(x), r = f(y))
+      case r @ Commit(n)      ⇒ r.copy(n = f(n))
       case r @ Alloc(_, _, _) ⇒ r.mapping(f)
       case r @ Release(_, n)  ⇒ r.copy(next = f(n))
       case Failure(e)         ⇒ Failure(e)
@@ -35,6 +36,7 @@ object BodyParser {
   case class Take[A](n: Int, k: Array[Byte] ⇒ A) extends Instr[A]
   case class Buffer[A](max: Option[Int], k: Array[Byte] ⇒ A) extends Instr[A]
   case class OrElse[A](l: A, r: A) extends Instr[A]
+  case class Commit[A](n: A) extends Instr[A]
   case class Alloc[A, B](ack: () ⇒ A, release: A ⇒ Unit, k: (A, ReleaseKey) ⇒ B) extends Instr[B] {
     def mapping[C](f: B ⇒ C): Alloc[A, C] =
       copy(k = (a: A, r: ReleaseKey) ⇒ f(k(a, r)))
@@ -102,8 +104,14 @@ object BodyParser {
     loop(s)
   }
 
-  def optional[A](p: Parser[A]): Parser[Option[A]] =
-    Suspend(OrElse(p.map((Some(_): Option[A])), Return((None: Option[A]))))
+  def optional[A](p: Parser[A]): Parser[Option[A]] = {
+    val action = for {
+      a ← p
+      r ← commit(Some(a))
+    } yield r
+
+    Suspend(OrElse(action, Return(None)))
+  }
 
   def failure(msg: String): Parser[Nothing] =
     Suspend(Failure(Left(msg)))
@@ -115,6 +123,9 @@ object BodyParser {
     try Return(v) catch {
       case e: Throwable ⇒ throwable(e)
     }
+
+  private def commit[A](a: A): Parser[A] =
+    Suspend(Commit(Return(a)))
 
   private lazy val unexpectedEOF: Either[Throwable, Nothing] =
     Left(new RuntimeException("End of Stream"))
@@ -271,6 +282,8 @@ object BodyParser {
         case (st, Buffer(m, k)) ⇒ (st, readBytes(m, k, st.tracks.headOption))
         case (st, OrElse(l, r)) ⇒
           (st.copy(tracks = newTrack :: st.tracks, alts = r :: st.alts), l)
+        case (State(_ :: ts, _ :: as, map), Commit(next)) ⇒
+          (State(ts, as, map), next)
         case (st, Alloc(ack, release, k)) ⇒
           (st, doAlloc(st.map, ack, release, k))
         case (st, Release(key, next)) ⇒ (st, doRelease(st.map, key, next))
