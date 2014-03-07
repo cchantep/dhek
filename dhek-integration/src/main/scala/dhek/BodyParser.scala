@@ -7,59 +7,70 @@ import java.io.{
   PushbackInputStream
 }
 
+import scalaz.{ Free, Functor }
+import scalaz.Free.{ Return, Suspend }
+
 import resource.managed
 
 object BodyParser {
-  trait Parser[+A] {
 
-    def map[B](f: A ⇒ B): Parser[B] =
-      flatMap(a ⇒ Return(f(a)))
-
-    def flatMap[B](f: A ⇒ Parser[B]): Parser[B] = this match {
-      case Bind(m, k) ⇒ Bind(m, (x: Any) ⇒ Bind(() ⇒ k(x), f))
-      case m          ⇒ Bind(() ⇒ m, f)
-    }
-
-    def >>[B](n: ⇒ Parser[B]): Parser[B] =
-      flatMap(_ ⇒ n)
-
-    def orElse[B >: A](other: Parser[B]): Parser[B] =
-      OrElse(this, other)
-  }
-
+  type Parser[A] = Free[Instr, A]
   type ReleaseKey = Int
 
-  case class Get[A](k: Byte ⇒ Parser[A]) extends Parser[A]
-  case class Peek[A](k: Byte ⇒ Parser[A]) extends Parser[A]
-  case class Take[A](n: Int, k: Array[Byte] ⇒ Parser[A]) extends Parser[A]
-  case class Buffer[A](max: Option[Int], k: Array[Byte] ⇒ Parser[A]) extends Parser[A]
-  case class OrElse[A](l: Parser[A], r: Parser[A]) extends Parser[A]
-  case class Return[A](v: A) extends Parser[A]
-  case class Alloc[A, B](ack: () ⇒ A, release: A ⇒ Unit, k: (A, ReleaseKey) ⇒ Parser[B]) extends Parser[B]
-  case class Release[A](key: ReleaseKey, next: Parser[A]) extends Parser[A]
-  case class Failure(e: Either[String, Throwable]) extends Parser[Nothing]
-  case class Bind[A, B](m: () ⇒ Parser[A], f: A ⇒ Parser[B]) extends Parser[B]
+  trait Instr[+A] {
+    def map[B](f: A ⇒ B): Instr[B] = this match {
+      case r @ Get(k)         ⇒ r.copy(k = f compose k)
+      case r @ Peek(k)        ⇒ r.copy(k = f compose k)
+      case r @ Take(_, k)     ⇒ r.copy(k = f compose k)
+      case r @ Buffer(_, k)   ⇒ r.copy(k = f compose k)
+      case r @ OrElse(x, y)   ⇒ r.copy(l = f(x), r = f(y))
+      case r @ Alloc(_, _, _) ⇒ r.mapping(f)
+      case r @ Release(_, n)  ⇒ r.copy(next = f(n))
+      case Failure(e)         ⇒ Failure(e)
+    }
+  }
+
+  case class Get[A](k: Byte ⇒ A) extends Instr[A]
+  case class Peek[A](k: Byte ⇒ A) extends Instr[A]
+  case class Take[A](n: Int, k: Array[Byte] ⇒ A) extends Instr[A]
+  case class Buffer[A](max: Option[Int], k: Array[Byte] ⇒ A) extends Instr[A]
+  case class OrElse[A](l: A, r: A) extends Instr[A]
+  case class Alloc[A, B](ack: () ⇒ A, release: A ⇒ Unit, k: (A, ReleaseKey) ⇒ B) extends Instr[B] {
+    def mapping[C](f: B ⇒ C): Alloc[A, C] =
+      copy(k = (a: A, r: ReleaseKey) ⇒ f(k(a, r)))
+  }
+  case class Release[A](key: ReleaseKey, next: A) extends Instr[A]
+  case class Failure(e: Either[String, Throwable]) extends Instr[Nothing]
+
+  object Instr {
+    implicit val instrFunctor = new Functor[Instr] {
+      def map[A, B](fa: Instr[A])(f: A ⇒ B): Instr[B] = fa map f
+    }
+  }
 
   def unit: Parser[Unit] =
     Return(())
 
   def getByte: Parser[Byte] =
-    Get(Return(_))
+    Suspend(Get(Return(_)))
 
   def peekByte: Parser[Byte] =
-    Peek(Return(_))
+    Suspend(Peek(Return(_)))
 
   def take(n: Int): Parser[Array[Byte]] =
-    Take(n, Return(_))
+    Suspend(Take(n, Return(_)))
 
   def buffer(max: Option[Int] = Some(8192)): Parser[Array[Byte]] =
-    Buffer(max, Return(_))
+    Suspend(Buffer(max, Return(_)))
 
   def alloc[R](ack: ⇒ R, release: R ⇒ Unit): Parser[(R, ReleaseKey)] =
-    Alloc[R, (R, ReleaseKey)](() ⇒ ack, release, (r, key) ⇒ Return((r, key)))
+    Suspend[Instr, (R, ReleaseKey)](Alloc[R, Free[Instr, (R, ReleaseKey)]](
+      () ⇒ ack,
+      release,
+      (r, key) ⇒ Return((r, key))))
 
   def release(key: ReleaseKey): Parser[Unit] =
-    Release(key, Return(()))
+    Suspend(Release(key, Return(())))
 
   def takeWhile(p: Byte ⇒ Boolean): Parser[Array[Byte]] = {
     val buffer = new ByteArrayOutputStream()
@@ -70,7 +81,7 @@ object BodyParser {
     def loop: Parser[Array[Byte]] =
       for {
         b ← peekByte
-        bs ← if (p(b)) shift >> loop else Return(buffer.toByteArray)
+        bs ← if (p(b)) shift.flatMap(_ ⇒ loop) else Return[Instr, Array[Byte]](buffer.toByteArray)
       } yield bs
 
     loop
@@ -92,13 +103,13 @@ object BodyParser {
   }
 
   def optional[A](p: Parser[A]): Parser[Option[A]] =
-    OrElse(p.map((Some(_): Option[A])), Return((None: Option[A])))
+    Suspend(OrElse(p.map((Some(_): Option[A])), Return((None: Option[A]))))
 
   def failure(msg: String): Parser[Nothing] =
-    Failure(Left(msg))
+    Suspend(Failure(Left(msg)))
 
   def throwable(e: Throwable): Parser[Nothing] =
-    Failure(Right(e))
+    Suspend(Failure(Right(e)))
 
   def beware[A](v: ⇒ A): Parser[A] =
     try Return(v) catch {
@@ -110,17 +121,17 @@ object BodyParser {
 
   private lazy val emptyBuffer: Array[Byte] = Array()
 
-  type Finalizers = scala.collection.mutable.Map[Int, () ⇒ Unit]
-  type Track = Option[ByteArrayOutputStream]
-  type Tracks = List[ByteArrayOutputStream]
-  type Alternatives = List[Parser[Any]]
-
   def runParser[A](p: Parser[A], input: ⇒ InputStream, bsize: Int = 8192): Either[List[Throwable], A] =
     managed(new PushbackInputStream(input, bsize)).acquireFor { s ⇒
+      type Finalizers = scala.collection.mutable.Map[Int, () ⇒ Unit]
+      type Track = Option[ByteArrayOutputStream]
+      type Tracks = List[ByteArrayOutputStream]
+      type Alternatives = List[Parser[A]]
+
       val buffer = new Array[Byte](bsize)
       var keyCnt = 0
 
-      def readByte(k: Byte ⇒ Parser[Any], track: Track): Either[Throwable, Parser[Any]] = {
+      def readByte(k: Byte ⇒ Parser[A], track: Track): Either[Throwable, Parser[A]] = {
         val b = s.read
 
         if (b == -1)
@@ -132,20 +143,19 @@ object BodyParser {
         }
       }
 
-      def peekByte(k: Byte ⇒ Parser[Any]): Either[Throwable, Parser[Any]] = {
+      def peekByte(k: Byte ⇒ Parser[A]): Either[Throwable, Parser[A]] = {
         val b = s.read
 
         if (b == -1)
           unexpectedEOF
         else {
-          println(b.toChar)
           s.unread(b)
 
           Right(k(b.toByte))
         }
       }
 
-      def takeBytes(n: Int, k: Array[Byte] ⇒ Parser[Any], track: Track): Either[Throwable, Parser[Any]] =
+      def takeBytes(n: Int, k: Array[Byte] ⇒ Parser[A], track: Track): Either[Throwable, Parser[A]] =
         if (n <= bsize) {
           val readByte = s.read(buffer, 0, n)
           lazy val slice = buffer.slice(0, n)
@@ -170,7 +180,7 @@ object BodyParser {
             Right(k(tmpBuffer))
         }
 
-      def readBytes(max: Option[Int], k: Array[Byte] ⇒ Parser[Any], track: Track): Parser[Any] = {
+      def readBytes(max: Option[Int], k: Array[Byte] ⇒ Parser[A], track: Track): Parser[A] = {
         val tmpBuffer = max.fold(buffer) {
           case limit if limit <= bsize ⇒ buffer
           case limit                   ⇒ new Array[Byte](limit)
@@ -192,7 +202,7 @@ object BodyParser {
         map: Finalizers,
         ack: () ⇒ Any,
         release: Any ⇒ Unit,
-        k: (Any, ReleaseKey) ⇒ Parser[Any]): Parser[Any] = {
+        k: (Any, ReleaseKey) ⇒ Parser[A]): Parser[A] = {
 
         val r = ack()
         val curKey = keyCnt
@@ -201,7 +211,7 @@ object BodyParser {
         k(r, curKey)
       }
 
-      def doRelease(map: Finalizers, key: ReleaseKey, next: Parser[Any]): Parser[Any] = {
+      def doRelease(map: Finalizers, key: ReleaseKey, next: Parser[A]): Parser[A] = {
         map.get(key).foreach { finalizer ⇒
           finalizer()
           map - key
@@ -210,9 +220,13 @@ object BodyParser {
         next
       }
 
-      case class Next(tracks: Tracks, alts: Alternatives, next: Parser[Any])
+      case class Next(tracks: Tracks, alts: Alternatives, next: Parser[A])
 
-      def handleError(tracks: Tracks, alts: Alternatives, e: Throwable): Either[Throwable, Next] = (tracks, alts) match {
+      def handleError(
+        tracks: Tracks,
+        alts: Alternatives,
+        e: Throwable): Either[Throwable, Next] = (tracks, alts) match {
+
         case (t :: ts, a :: as) ⇒
           s.unread(t.toByteArray)
           Right(Next(ts, as, a))
@@ -226,82 +240,49 @@ object BodyParser {
       def reportError(e: Either[String, Throwable]): Throwable =
         e.fold(m ⇒ new IOException(m), identity)
 
-      @annotation.tailrec
-      def loop(
-        tracks: Tracks,
-        alts: Alternatives,
-        map: Finalizers,
-        step: Parser[Any]): A =
-        step match {
-          case Get(k) ⇒ readByte(k, tracks.headOption) match {
-            case Left(e) ⇒ handleError(tracks, alts, e) match {
-              case Left(e)                           ⇒ throw e
-              case Right(Next(ntracks, nalts, next)) ⇒ loop(ntracks, nalts, map, next)
-            }
-            case Right(next) ⇒ loop(tracks, alts, map, next)
-          }
-          case Peek(k) ⇒ peekByte(k) match {
-            case Left(e) ⇒ handleError(tracks, alts, e) match {
-              case Left(e)                           ⇒ throw e
-              case Right(Next(ntracks, nalts, next)) ⇒ loop(ntracks, nalts, map, next)
-            }
-            case Right(next) ⇒ loop(tracks, alts, map, next)
-          }
-          case Take(n, k) ⇒ takeBytes(n, k, tracks.headOption) match {
-            case Left(e) ⇒ handleError(tracks, alts, e) match {
-              case Left(e)                           ⇒ throw e
-              case Right(Next(ntracks, nalts, next)) ⇒ loop(ntracks, nalts, map, next)
-            }
-            case Right(next) ⇒ loop(tracks, alts, map, next)
-          }
-          case Buffer(m, k)           ⇒ loop(tracks, alts, map, readBytes(m, k, tracks.headOption))
-          case OrElse(l, r)           ⇒ loop(newTrack :: tracks, r :: alts, map, l)
-          case Alloc(ack, release, k) ⇒ loop(tracks, alts, map, doAlloc(map, ack, release, k))
-          case Release(key, next)     ⇒ loop(tracks, alts, map, doRelease(map, key, next))
-          case Return(a)              ⇒ a.asInstanceOf[A]
-          case Failure(e) ⇒ handleError(tracks, alts, reportError(e)) match {
-            case Left(e)                           ⇒ throw e
-            case Right(Next(ntracks, nalts, next)) ⇒ loop(ntracks, nalts, map, next)
-          }
-          case Bind(m, f) ⇒ m() match {
-            case Get(k) ⇒ readByte(k, tracks.headOption) match {
-              case Left(e) ⇒ handleError(tracks, alts, e) match {
-                case Left(e)                           ⇒ throw e
-                case Right(Next(ntracks, nalts, next)) ⇒ loop(ntracks, nalts, map, next)
-              }
-              case Right(next) ⇒ loop(tracks, alts, map, Bind(() ⇒ next, f))
-            }
-            case Peek(k) ⇒ peekByte(k) match {
-              case Left(e) ⇒ handleError(tracks, alts, e) match {
-                case Left(e)                           ⇒ throw e
-                case Right(Next(ntracks, nalts, next)) ⇒ loop(ntracks, nalts, map, next)
-              }
-              case Right(next) ⇒ loop(tracks, alts, map, Bind(() ⇒ next, f))
-            }
-            case Take(n, k) ⇒ takeBytes(n, k, tracks.headOption) match {
-              case Left(e) ⇒ handleError(tracks, alts, e) match {
-                case Left(e)                           ⇒ throw e
-                case Right(Next(ntracks, nalts, next)) ⇒ loop(ntracks, nalts, map, next)
-              }
-              case Right(next) ⇒ loop(tracks, alts, map, Bind(() ⇒ next, f))
-            }
-            case Buffer(m, k)           ⇒ loop(tracks, alts, map, Bind(() ⇒ readBytes(m, k, tracks.headOption), f))
-            case OrElse(l, r)           ⇒ loop(newTrack :: tracks, r :: alts, map, Bind(() ⇒ l, f))
-            case Alloc(ack, release, k) ⇒ loop(tracks, alts, map, Bind(() ⇒ doAlloc(map, ack, release, k), f))
-            case Release(key, next)     ⇒ loop(tracks, alts, map, Bind(() ⇒ doRelease(map, key, next), f))
-            case Failure(e) ⇒ handleError(tracks, alts, reportError(e)) match {
-              case Left(e)                           ⇒ throw e
-              case Right(Next(ntracks, nalts, next)) ⇒ loop(ntracks, nalts, map, next)
-            }
-            case Return(a) ⇒ loop(tracks, alts, map, f(a))
-            case Bind(n, g) ⇒
-              val next = n().flatMap((x: Any) ⇒ g(x) flatMap f)
-              loop(tracks, alts, map, next)
-          }
-        }
+      case class State(tracks: Tracks, alts: Alternatives, map: Finalizers)
 
       val map = scala.collection.mutable.Map[Int, () ⇒ Unit]()
-      try loop(Nil, Nil, map, p) finally {
+      lazy val res = p.foldRun(State(Nil, Nil, map)) {
+        case (st, Get(k)) ⇒ readByte(k, st.tracks.headOption) match {
+          case Left(e) ⇒ handleError(st.tracks, st.alts, e) match {
+            case Left(e) ⇒ throw e
+            case Right(Next(ntracks, nalts, next)) ⇒
+              (st.copy(tracks = ntracks, alts = nalts), next)
+          }
+          case Right(next) ⇒ (st, next)
+        }
+        case (st, Peek(k)) ⇒ peekByte(k) match {
+          case Left(e) ⇒ handleError(st.tracks, st.alts, e) match {
+            case Left(e) ⇒ throw e
+            case Right(Next(ntracks, nalts, next)) ⇒
+              (st.copy(tracks = ntracks, alts = nalts), next)
+          }
+          case Right(next) ⇒ (st, next)
+        }
+        case (st, Take(n, k)) ⇒ takeBytes(n, k, st.tracks.headOption) match {
+          case Left(e) ⇒ handleError(st.tracks, st.alts, e) match {
+            case Left(e) ⇒ throw e
+            case Right(Next(ntracks, nalts, next)) ⇒
+              (st.copy(tracks = ntracks, alts = nalts), next)
+          }
+          case Right(next) ⇒ (st, next)
+        }
+        case (st, Buffer(m, k)) ⇒ (st, readBytes(m, k, st.tracks.headOption))
+        case (st, OrElse(l, r)) ⇒
+          (st.copy(tracks = newTrack :: st.tracks, alts = r :: st.alts), l)
+        case (st, Alloc(ack, release, k)) ⇒
+          (st, doAlloc(st.map, ack, release, k))
+        case (st, Release(key, next)) ⇒ (st, doRelease(st.map, key, next))
+        case (st, Failure(e)) ⇒
+          handleError(st.tracks, st.alts, reportError(e)) match {
+            case Left(e) ⇒ throw e
+            case Right(Next(ntracks, nalts, next)) ⇒
+              (st.copy(tracks = ntracks, alts = nalts), next)
+          }
+      }
+
+      try res._2 finally {
         map.foreach {
           case (_, finalizer) ⇒ finalizer()
         }

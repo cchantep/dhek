@@ -29,7 +29,7 @@ object BodyParserSpec extends Specification with BodyParserFixtures {
       lazy val action =
         BodyParser.runParser(parser_form_data, parser_multipart_form_no_length_data_file)
 
-      action aka "Parse result" must beLike {
+      action aka "Parse result" must beRight.which {
         case b ⇒ b aka "Boundary" must_== parser_form_expect_no_length
       }
     }
