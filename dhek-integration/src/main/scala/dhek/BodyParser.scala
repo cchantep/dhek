@@ -1,5 +1,7 @@
 package dhek
 
+import java.nio.charset.Charset
+
 import java.io.{
   ByteArrayOutputStream,
   InputStream,
@@ -11,6 +13,8 @@ import scalaz.{ Free, Functor }
 import scalaz.Free.{ Return, Suspend }
 
 import resource.managed
+
+import BodyParser._
 
 object BodyParser {
 
@@ -53,6 +57,9 @@ object BodyParser {
   def unit: Parser[Unit] =
     Return(())
 
+  def point[A](a: A): Parser[A] =
+    Return(a)
+
   def getByte: Parser[Byte] =
     Suspend(Get(Return(_)))
 
@@ -62,10 +69,51 @@ object BodyParser {
   def take(n: Int): Parser[Array[Byte]] =
     Suspend(Take(n, Return(_)))
 
-  val integer: Parser[Int] = for {
+  def or[A](l: Parser[A], r: Parser[A]): Parser[A] =
+    Suspend(OrElse(l.flatMap(commit), r))
+
+  def satisfy(k: Byte ⇒ Boolean): Parser[Byte] =
+    for {
+      b ← getByte
+      _ ← if (k(b)) unit else failure("Unsatisfied predicate")
+    } yield b
+
+  def is(c: Char): Parser[Byte] =
+    satisfy(_ == c.toByte)
+
+  val doubleQuote = is('"')
+
+  def attributeValue(charset: Charset = Charset.forName("UTF-8")): Parser[String] = {
+    def pred(b: Byte) = {
+      val char = b.toChar
+
+      Character.isLetterOrDigit(char) || '-' == char || '_' == char || '.' == char
+    }
+
+    takeWhile1(pred).map(bs ⇒ new String(bs, charset))
+  }
+
+  def doubleQuotedValue(charset: Charset = Charset.forName("UTF-8")): Parser[String] =
+    between(doubleQuote, attributeValue(charset), doubleQuote)
+
+  def integer(charset: Charset = Charset.forName("UTF-8")): Parser[Int] = for {
     bs ← takeWhile1(b ⇒ Character.isDigit(b.toChar))
-    i ← beware(new String(bs).toInt)
+    i ← beware(new String(bs, charset).toInt)
   } yield i
+
+  def word(charset: Charset = Charset.forName("UTF-8")): Parser[String] = {
+    def notSpace(b: Byte) =
+      ' '.toByte != b && '\n'.toByte != b
+
+    takeWhile1(notSpace).map(bs ⇒ new String(bs, charset))
+  }
+
+  def between[A, B](start: Parser[A], action: Parser[B], end: Parser[A]): Parser[B] =
+    for {
+      _ ← start
+      b ← action
+      _ ← end
+    } yield b
 
   def liftString(bs: Array[Byte]): Parser[String] =
     beware(new String(bs))
@@ -73,7 +121,7 @@ object BodyParser {
   def buffer(max: Option[Int] = Some(8192)): Parser[Array[Byte]] =
     Suspend(Buffer(max, Return(_)))
 
-  def alloc[R](ack: ⇒ R, release: R ⇒ Unit): Parser[(R, ReleaseKey)] =
+  def alloc[R](ack: ⇒ R)(release: R ⇒ Unit): Parser[(R, ReleaseKey)] =
     Suspend[Instr, (R, ReleaseKey)](Alloc[R, Free[Instr, (R, ReleaseKey)]](
       () ⇒ ack,
       release,
@@ -87,14 +135,7 @@ object BodyParser {
       b ← getByte
       _ ← if (p(b)) unit else failure("takeWhile1: predicate not satisfied")
       bs ← takeWhile(p)
-    } yield {
-      val buffer = new ByteArrayOutputStream()
-
-      buffer.write(b)
-      buffer.write(bs)
-
-      buffer.toByteArray
-    }
+    } yield b +: bs
 
   def takeWhile(p: Byte ⇒ Boolean): Parser[Array[Byte]] = {
     val buffer = new ByteArrayOutputStream()
@@ -119,7 +160,7 @@ object BodyParser {
 
         getByte.flatMap { x ⇒
           if (c.toByte == x) loop(cur.tail)
-          else failure(s"Expectation $s: Got ${x.toChar}, Expected: $c")
+          else failure(s"Full expectation: [$s]. Got [${x.toChar}], Expected: [$c]")
         }
       }
 
@@ -214,12 +255,12 @@ object BodyParser {
         }
 
       def readBytes(max: Option[Int], k: Array[Byte] ⇒ Parser[A], track: Track): Parser[A] = {
-        val tmpBuffer = max.fold(buffer) {
-          case limit if limit <= bsize ⇒ buffer
-          case limit                   ⇒ new Array[Byte](limit)
+        val (limit, tmpBuffer) = max.fold((buffer.length, buffer)) {
+          case limit if limit <= bsize ⇒ (limit, buffer)
+          case limit                   ⇒ (limit, new Array[Byte](limit))
         }
 
-        val readBytes = s.read(tmpBuffer, 0, bsize)
+        val readBytes = s.read(tmpBuffer, 0, limit)
         lazy val slice = tmpBuffer.slice(0, readBytes)
 
         if (readBytes != -1)

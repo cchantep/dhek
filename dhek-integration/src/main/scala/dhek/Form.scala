@@ -26,7 +26,7 @@ object Form {
     val contentLength = for {
       _ ← BodyParser.getByte
       _ ← BodyParser.expect("Content-Length: ")
-      l ← BodyParser.integer
+      l ← BodyParser.integer()
     } yield l
 
     for {
