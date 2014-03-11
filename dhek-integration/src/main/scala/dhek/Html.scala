@@ -1,12 +1,15 @@
 package dhek
 
-import java.io.{ BufferedReader, File, FileReader }
+import java.io.{ BufferedReader, File, FileReader, Reader }
 
 import resource.managed
 
 trait Html {
-  private def loadFile(path: String): String =
-    managed(new BufferedReader(new FileReader(new File(path)))).acquireAndGet { r ⇒
+  def loadFile(path: String): String =
+    loadReader(new FileReader(new File(path)))
+
+  def loadReader(r: Reader): String =
+    managed(new BufferedReader(r)).acquireAndGet { r ⇒
       val buffer = new StringBuffer()
 
       @annotation.tailrec

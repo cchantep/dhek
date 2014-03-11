@@ -10,7 +10,7 @@ import javax.servlet.{
 
 import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 
-object App extends Filter with Html {
+object App extends Filter with App {
   def destroy() {}
   def init(config: FilterConfig) {}
 
@@ -22,11 +22,69 @@ object App extends Filter with Html {
 
     hreq.getRequestURI match {
       case "/" if hreq.getMethod == "GET" ⇒
-        hresp.getWriter.print(index)
+        home(hreq, hresp)
       case "/upload" if hreq.getMethod == "POST" ⇒
-        hresp.getWriter.print("OK")
+        modelFusion(hreq, hresp)
       case _ ⇒
         chain.doFilter(req, resp)
     }
+  }
+}
+
+trait App extends Html {
+  import java.io.InputStreamReader
+  import argonaut._, Argonaut._
+
+  case class Rect(x: Int, y: Int, h: Int, w: Int, name: String, typ: String)
+  case class Page(areas: Option[List[Rect]])
+  case class Model(format: String, pages: List[Page])
+
+  object Rect {
+    implicit def rectCodecJson =
+      casecodec6(Rect.apply, Rect.unapply)("x", "y", "height", "width", "name", "type")
+  }
+
+  object Page {
+    implicit def pageCodecJson =
+      casecodec1(Page.apply, Page.unapply)("pages")
+  }
+
+  object Model {
+    implicit def modelCodecJson =
+      casecodec2(Model.apply, Model.unapply)("format", "pages")
+  }
+
+  def home(req: HttpServletRequest, resp: HttpServletResponse) {
+    resp.getWriter.print(index)
+  }
+
+  def modelFusion(req: HttpServletRequest, resp: HttpServletResponse) {
+    val pdfOpt = Option(req.getPart("pdf"))
+    val jsonOpt = Option(req.getPart("json"))
+    lazy val onError = {
+      resp.setStatus(400)
+      resp.getWriter.println("Submitted PDF or JSON are wrong")
+    }
+
+    val res = for {
+      pdfPart ← pdfOpt if pdfPart.getContentType == "application/pdf" && pdfPart.getSize > 0
+      jsonPart ← jsonOpt if jsonPart.getContentType == "application/json" && jsonPart.getSize >= 0
+    } yield {
+
+      def onJsonError(e: String) {
+        resp.setStatus(400)
+        resp.getWriter.print(e)
+      }
+
+      def onJsonSuccess(m: Model) {
+
+      }
+
+      val jsonReader = new InputStreamReader(jsonPart.getInputStream)
+
+      Parse.decodeEither[Model](loadReader(jsonReader)).fold(onJsonError, onJsonSuccess)
+    }
+
+    res.getOrElse(onError)
   }
 }

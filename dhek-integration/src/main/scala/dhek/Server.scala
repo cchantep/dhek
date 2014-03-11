@@ -30,7 +30,7 @@ object Server {
     this
   }
 
-  def run(host: String = "localhost", port: Int = 3000) {
+  def run(host: String = "localhost", port: Int = 3000): this.type = {
     val conn = new ServerConnector(inner)
 
     conn.setPort(port)
@@ -39,11 +39,30 @@ object Server {
     inner.addConnector(conn)
     inner.setStopAtShutdown(true)
     inner.start()
+    this
+  }
+
+  def stop(): this.type = {
+    inner.stop()
+    this
+  }
+
+  def destroy(): this.type = {
+    inner.destroy()
+    this
+  }
+
+  def join(): this.type = {
+    inner.join()
+    this
   }
 }
 
 object Main {
   def main(args: Array[String]) {
-    Server.filter(App).run()
+    val server = Server.filter(App).run()
+
+    readLine()
+    server.stop().destroy().join()
   }
 }
