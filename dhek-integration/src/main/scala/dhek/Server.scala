@@ -1,29 +1,49 @@
 package dhek
 
-import org.jboss.netty.channel.ChannelHandlerContext
-import unfiltered.netty.{ Http, async }
-import unfiltered.request.{ GET, POST, Path }
-import unfiltered.response.{ ResponseString, NotFound }
+import java.util.EnumSet
+import javax.servlet.{ Filter, DispatcherType }
 
-object Server extends async.Plan with Html {
-  def intent = {
-    case req @ GET(Path("/")) ⇒
-      req.respond(ResponseString(index))
-    case req @ POST(Path("/upload")) ⇒
+import org.eclipse.jetty.server.{ Server ⇒ JettyServer, Connector, Handler, ServerConnector }
+import org.eclipse.jetty.server.handler.{ ContextHandlerCollection }
+import org.eclipse.jetty.servlet.{ FilterHolder, ServletContextHandler, ServletHolder }
 
-    case req ⇒
-      req.respond(NotFound)
+object Server {
+  val inner = new JettyServer()
+
+  lazy val handlers = new ContextHandlerCollection()
+
+  lazy val contextHandler = {
+    val ctx = new ServletContextHandler(handlers, "/")
+    val holder = new ServletHolder(classOf[org.eclipse.jetty.servlet.DefaultServlet])
+
+    holder.setName("Servlet")
+    handlers.addHandler(ctx)
+    ctx
   }
 
-  def onException(ctx: ChannelHandlerContext, t: Throwable) {
-    print(t)
-    throw t
-    //ctx.getChannel.write(ResponseString("Oups ! Something bad happend"))
+  def filter(f: Filter): this.type = {
+    val holder = new FilterHolder(f)
+
+    holder.setName("Filter")
+    contextHandler.addFilter(holder, "/*", EnumSet.of(DispatcherType.REQUEST))
+
+    this
+  }
+
+  def run(host: String = "localhost", port: Int = 3000) {
+    val conn = new ServerConnector(inner)
+
+    conn.setPort(port)
+    conn.setHost(host)
+    inner.setHandler(handlers)
+    inner.addConnector(conn)
+    inner.setStopAtShutdown(true)
+    inner.start()
   }
 }
 
 object Main {
   def main(args: Array[String]) {
-    Http(3000).plan(Server).run()
+    Server.filter(App).run()
   }
 }
