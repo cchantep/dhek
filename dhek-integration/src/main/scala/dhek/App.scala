@@ -33,7 +33,10 @@ object App extends Filter with App {
 
 trait App extends Html {
   import java.io.InputStreamReader
+
   import argonaut._, Argonaut._
+  import com.itextpdf.text.{ Document, Image, BaseColor }
+  import com.itextpdf.text.pdf.{ PdfReader, PdfWriter }
 
   case class Rect(x: Int, y: Int, h: Int, w: Int, name: String, typ: String)
   case class Page(areas: Option[List[Rect]])
@@ -77,7 +80,34 @@ trait App extends Html {
       }
 
       def onJsonSuccess(m: Model) {
+        val document = new Document()
+        val reader = new PdfReader(pdfPart.getInputStream)
+        val writer = PdfWriter.getInstance(document, resp.getOutputStream)
 
+        resp.setContentType("application/pdf")
+
+        document.open()
+
+        m.pages.foldLeft(1) { (i, p) ⇒
+
+          val page = writer.getImportedPage(reader, i)
+
+          page.setLineWidth(2)
+          page.setColorStroke(BaseColor.RED)
+
+          for {
+            rects ← p.areas.toList
+            rect ← rects
+          } yield {
+            page.rectangle(rect.x, rect.y, rect.w, rect.h)
+          }
+
+          document.add(Image.getInstance(page))
+
+          i + 1
+        }
+
+        document.close()
       }
 
       val jsonReader = new InputStreamReader(jsonPart.getInputStream)

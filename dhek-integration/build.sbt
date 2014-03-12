@@ -17,3 +17,7 @@ libraryDependencies += "org.eclipse.jetty" % "jetty-continuation" % "9.1.3.v2014
 libraryDependencies += "io.argonaut" %% "argonaut" % "6.1-M2"
 
 libraryDependencies += "com.itextpdf" % "itextpdf" % "5.5.0"
+
+libraryDependencies += "org.bouncycastle" % "bcprov-jdk15on" % "1.50"
+
+libraryDependencies += "org.bouncycastle" % "bcpkix-jdk15on" % "1.50"
