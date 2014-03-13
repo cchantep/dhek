@@ -1,11 +1,13 @@
 package dhek
 
+import java.io.File
 import java.util.EnumSet
 import javax.servlet.{ Filter, DispatcherType }
 
 import org.eclipse.jetty.server.{ Server ⇒ JettyServer, Connector, Handler, ServerConnector }
 import org.eclipse.jetty.server.handler.{ ContextHandlerCollection }
 import org.eclipse.jetty.servlet.{ FilterHolder, ServletContextHandler, ServletHolder }
+import org.eclipse.jetty.servlets.MultiPartFilter
 
 object Server {
   val inner = new JettyServer()
@@ -14,9 +16,11 @@ object Server {
 
   lazy val contextHandler = {
     val ctx = new ServletContextHandler(handlers, "/")
-    val holder = new ServletHolder(classOf[org.eclipse.jetty.servlet.DefaultServlet])
+    ctx.getServletContext.setAttribute("javax.servlet.context.tempdir", new File("tmp"))
+    // val holder = new ServletHolder(classOf[org.eclipse.jetty.servlet.DefaultServlet])
 
-    holder.setName("Servlet")
+    // holder.setName("Servlet")
+    // ctx.addServlet(holder, "/")
     handlers.addHandler(ctx)
     ctx
   }
@@ -56,6 +60,10 @@ object Server {
     inner.join()
     this
   }
+
+  private val multiPartHolder = new FilterHolder(new MultiPartFilter())
+  contextHandler.addFilter(multiPartHolder, "/*", EnumSet.of(DispatcherType.REQUEST))
+
 }
 
 object Main {

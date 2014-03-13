@@ -10,6 +10,8 @@ libraryDependencies += "org.specs2" %% "specs2" % "2.3.2" % "test"
 
 libraryDependencies += "com.jsuereth" %% "scala-arm" % "1.3"
 
+libraryDependencies += "org.eclipse.jetty" % "jetty-servlets" % "9.1.3.v20140225"
+
 libraryDependencies += "org.eclipse.jetty" % "jetty-webapp" % "9.1.3.v20140225"
 
 libraryDependencies += "org.eclipse.jetty" % "jetty-continuation" % "9.1.3.v20140225"

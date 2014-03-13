@@ -4,9 +4,12 @@ import javax.servlet.{
   Filter,
   FilterConfig,
   FilterChain,
+  MultipartConfigElement,
   ServletRequest,
   ServletResponse
 }
+
+import scala.collection.JavaConversions._
 
 import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 
@@ -24,6 +27,11 @@ object App extends Filter with App {
       case "/" if hreq.getMethod == "GET" ⇒
         home(hreq, hresp)
       case "/upload" if hreq.getMethod == "POST" ⇒
+        req.getAttributeNames.foreach { n ⇒
+          println(s"name: $n, value: [${req.getAttribute(n)}]")
+        }
+
+        println(req.getParameter("pdf"))
         modelFusion(hreq, hresp)
       case _ ⇒
         chain.doFilter(req, resp)
@@ -49,7 +57,7 @@ trait App extends Html {
 
   object Page {
     implicit def pageCodecJson =
-      casecodec1(Page.apply, Page.unapply)("pages")
+      casecodec1(Page.apply, Page.unapply)("areas")
   }
 
   object Model {
@@ -57,21 +65,24 @@ trait App extends Html {
       casecodec2(Model.apply, Model.unapply)("format", "pages")
   }
 
+  val multipartConfigElement =
+    new MultipartConfigElement("tmp", 1048576, 1048576, 262144)
+
   def home(req: HttpServletRequest, resp: HttpServletResponse) {
     resp.getWriter.print(index)
   }
 
   def modelFusion(req: HttpServletRequest, resp: HttpServletResponse) {
-    val pdfOpt = Option(req.getPart("pdf"))
-    val jsonOpt = Option(req.getPart("json"))
+    val pdfOpt: Option[java.io.File] = Option(req.getAttribute("pdf").asInstanceOf[java.io.File])
+    val jsonOpt: Option[java.io.File] = Option(req.getAttribute("json").asInstanceOf[java.io.File])
     lazy val onError = {
       resp.setStatus(400)
       resp.getWriter.println("Submitted PDF or JSON are wrong")
     }
 
     val res = for {
-      pdfPart ← pdfOpt if pdfPart.getContentType == "application/pdf" && pdfPart.getSize > 0
-      jsonPart ← jsonOpt if jsonPart.getContentType == "application/json" && jsonPart.getSize >= 0
+      pdfPart ← pdfOpt //if pdfPart.getContentType == "application/pdf" && pdfPart.getSize > 0
+      jsonPart ← jsonOpt //  if jsonPart.getContentType == "application/json" && jsonPart.getSize >= 0
     } yield {
 
       def onJsonError(e: String) {
@@ -80,8 +91,10 @@ trait App extends Html {
       }
 
       def onJsonSuccess(m: Model) {
+        println(m)
+
         val document = new Document()
-        val reader = new PdfReader(pdfPart.getInputStream)
+        val reader = new PdfReader(new java.io.FileInputStream(pdfPart))
         val writer = PdfWriter.getInstance(document, resp.getOutputStream)
 
         resp.setContentType("application/pdf")
@@ -91,6 +104,7 @@ trait App extends Html {
         m.pages.foldLeft(1) { (i, p) ⇒
 
           val page = writer.getImportedPage(reader, i)
+          // val pageRect = reader.getPageSize(i)
 
           page.setLineWidth(2)
           page.setColorStroke(BaseColor.RED)
@@ -99,7 +113,13 @@ trait App extends Html {
             rects ← p.areas.toList
             rect ← rects
           } yield {
-            page.rectangle(rect.x, rect.y, rect.w, rect.h)
+            val over = writer.getDirectContent
+
+            over.saveState()
+            over.setColorStroke(BaseColor.RED)
+            over.rectangle(rect.x, rect.y, rect.w, rect.h)
+            over.stroke()
+            over.restoreState()
           }
 
           document.add(Image.getInstance(page))
@@ -108,9 +128,10 @@ trait App extends Html {
         }
 
         document.close()
+        reader.close()
       }
 
-      val jsonReader = new InputStreamReader(jsonPart.getInputStream)
+      val jsonReader = new java.io.FileReader(jsonPart)
 
       Parse.decodeEither[Model](loadReader(jsonReader)).fold(onJsonError, onJsonSuccess)
     }
