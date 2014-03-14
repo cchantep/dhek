@@ -72,6 +72,8 @@ trait App extends Html {
     resp.getWriter.print(index)
   }
 
+  val pixels = 4f / 3f
+
   def modelFusion(req: HttpServletRequest, resp: HttpServletResponse) {
     val pdfOpt: Option[java.io.File] = Option(req.getAttribute("pdf").asInstanceOf[java.io.File])
     val jsonOpt: Option[java.io.File] = Option(req.getAttribute("json").asInstanceOf[java.io.File])
@@ -104,7 +106,7 @@ trait App extends Html {
         m.pages.foldLeft(1) { (i, p) ⇒
 
           val page = writer.getImportedPage(reader, i)
-          // val pageRect = reader.getPageSize(i)
+          val pageRect = reader.getPageSize(i)
 
           page.setLineWidth(2)
           page.setColorStroke(BaseColor.RED)
@@ -117,7 +119,7 @@ trait App extends Html {
 
             over.saveState()
             over.setColorStroke(BaseColor.RED)
-            over.rectangle(rect.x, rect.y, rect.w, rect.h)
+            over.rectangle(rect.x * pixels, pageRect.getHeight - (rect.y * pixels), rect.w * pixels, rect.h * pixels)
             over.stroke()
             over.restoreState()
           }
