@@ -44,7 +44,7 @@ trait App extends Html {
 
   import argonaut._, Argonaut._
   import com.itextpdf.text.{ Document, Image, BaseColor }
-  import com.itextpdf.text.pdf.{ PdfReader, PdfWriter }
+  import com.itextpdf.text.pdf.{ PdfReader, PdfWriter, PdfStamper }
 
   case class Rect(x: Int, y: Int, h: Int, w: Int, name: String, typ: String)
   case class Page(areas: Option[List[Rect]])
@@ -95,41 +95,33 @@ trait App extends Html {
       def onJsonSuccess(m: Model) {
         println(m)
 
-        val document = new Document()
         val reader = new PdfReader(new java.io.FileInputStream(pdfPart))
-        val writer = PdfWriter.getInstance(document, resp.getOutputStream)
+        val stamper = new PdfStamper(reader, resp.getOutputStream)
 
         resp.setContentType("application/pdf")
 
-        document.open()
-
         m.pages.foldLeft(1) { (i, p) ⇒
 
-          val page = writer.getImportedPage(reader, i)
+          val page = stamper.getImportedPage(reader, i)
           val pageRect = reader.getPageSize(i)
-
-          page.setLineWidth(2)
-          page.setColorStroke(BaseColor.RED)
+          val over = stamper.getOverContent(i)
 
           for {
             rects ← p.areas.toList
             rect ← rects
           } yield {
-            val over = writer.getDirectContent
-
             over.saveState()
+            over.setLineWidth(2)
             over.setColorStroke(BaseColor.RED)
             over.rectangle(rect.x * pixels, pageRect.getHeight - (rect.y * pixels), rect.w * pixels, rect.h * pixels)
             over.stroke()
             over.restoreState()
           }
 
-          document.add(Image.getInstance(page))
-
           i + 1
         }
 
-        document.close()
+        stamper.close()
         reader.close()
       }
 
