@@ -27,11 +27,6 @@ object App extends Filter with App {
       case "/" if hreq.getMethod == "GET" ⇒
         home(hreq, hresp)
       case "/upload" if hreq.getMethod == "POST" ⇒
-        req.getAttributeNames.foreach { n ⇒
-          println(s"name: $n, value: [${req.getAttribute(n)}]")
-        }
-
-        println(req.getParameter("pdf"))
         modelFusion(hreq, hresp)
       case _ ⇒
         chain.doFilter(req, resp)
@@ -46,13 +41,16 @@ trait App extends Html {
   import com.itextpdf.text.{ Document, Image, BaseColor }
   import com.itextpdf.text.pdf.{ PdfReader, PdfWriter, PdfStamper }
 
+  import resource.managed
+
   case class Rect(x: Int, y: Int, h: Int, w: Int, name: String, typ: String)
   case class Page(areas: Option[List[Rect]])
   case class Model(format: String, pages: List[Page])
 
   object Rect {
     implicit def rectCodecJson =
-      casecodec6(Rect.apply, Rect.unapply)("x", "y", "height", "width", "name", "type")
+      casecodec6(Rect.apply, Rect.unapply)(
+        "x", "y", "height", "width", "name", "type")
   }
 
   object Page {
@@ -72,36 +70,26 @@ trait App extends Html {
     resp.getWriter.print(index)
   }
 
-  val pixels = 4f / 3f
+  private def onError(resp: HttpServletResponse)(e: String) {
+    resp.setStatus(400)
+    resp.getWriter.print(e)
+  }
 
   def modelFusion(req: HttpServletRequest, resp: HttpServletResponse) {
-    val pdfOpt: Option[java.io.File] = Option(req.getAttribute("pdf").asInstanceOf[java.io.File])
-    val jsonOpt: Option[java.io.File] = Option(req.getAttribute("json").asInstanceOf[java.io.File])
-    lazy val onError = {
-      resp.setStatus(400)
-      resp.getWriter.println("Submitted PDF or JSON are wrong")
-    }
+    val pdfOpt = Option(req.getAttribute("pdf").asInstanceOf[java.io.File])
+    val jsonOpt = Option(req.getAttribute("json").asInstanceOf[java.io.File])
 
-    val res = for {
+    lazy val res = for {
       pdfPart ← pdfOpt //if pdfPart.getContentType == "application/pdf" && pdfPart.getSize > 0
       jsonPart ← jsonOpt //  if jsonPart.getContentType == "application/json" && jsonPart.getSize >= 0
     } yield {
-
-      def onJsonError(e: String) {
-        resp.setStatus(400)
-        resp.getWriter.print(e)
-      }
-
-      def onJsonSuccess(m: Model) {
-        println(m)
-
+      def onJsonSuccess(m: Model) { // TODO: Scala-arm
         val reader = new PdfReader(new java.io.FileInputStream(pdfPart))
         val stamper = new PdfStamper(reader, resp.getOutputStream)
 
         resp.setContentType("application/pdf")
 
         m.pages.foldLeft(1) { (i, p) ⇒
-
           val page = stamper.getImportedPage(reader, i)
           val pageRect = reader.getPageSize(i)
           val over = stamper.getOverContent(i)
@@ -113,7 +101,7 @@ trait App extends Html {
             over.saveState()
             over.setLineWidth(2)
             over.setColorStroke(BaseColor.RED)
-            over.rectangle(rect.x * pixels, pageRect.getHeight - (rect.y * pixels), rect.w * pixels, rect.h * pixels)
+            over.rectangle(rect.x, pageRect.getHeight - rect.y - rect.h, rect.w, rect.h)
             over.stroke()
             over.restoreState()
           }
@@ -125,11 +113,12 @@ trait App extends Html {
         reader.close()
       }
 
-      val jsonReader = new java.io.FileReader(jsonPart)
+      lazy val jsonReader = new java.io.FileReader(jsonPart)
 
-      Parse.decodeEither[Model](loadReader(jsonReader)).fold(onJsonError, onJsonSuccess)
+      Parse.decodeEither[Model](loadReader(jsonReader)).
+        fold(onError(resp), onJsonSuccess)
     }
 
-    res.getOrElse(onError)
+    res.getOrElse(() => onError(resp)("Submitted PDF or JSON are wrong"))
   }
 }
