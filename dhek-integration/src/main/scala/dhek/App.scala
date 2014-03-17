@@ -13,6 +13,8 @@ import scala.collection.JavaConversions._
 
 import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 
+import Extractor.{ &, GET, POST, Path }
+
 object App extends Filter with App {
   def destroy() {}
   def init(config: FilterConfig) {}
@@ -23,13 +25,10 @@ object App extends Filter with App {
 
     hresp.setCharacterEncoding("UTF-8")
 
-    hreq.getRequestURI match {
-      case "/" if hreq.getMethod == "GET" ⇒
-        home(hreq, hresp)
-      case "/upload" if hreq.getMethod == "POST" ⇒
-        modelFusion(hreq, hresp)
-      case _ ⇒
-        chain.doFilter(req, resp)
+    hreq match {
+      case GET(Path("/"))        ⇒ home(hreq, hresp)
+      case POST(Path("/upload")) ⇒ modelFusion(hreq, hresp)
+      case _                     ⇒ chain.doFilter(req, resp)
     }
   }
 }
@@ -92,6 +91,9 @@ trait App extends Html {
         m.pages.foldLeft(1) { (i, p) ⇒
           val page = stamper.getImportedPage(reader, i)
           val pageRect = reader.getPageSize(i)
+
+          println(pageRect)
+
           val over = stamper.getOverContent(i)
 
           for {
@@ -119,6 +121,6 @@ trait App extends Html {
         fold(onError(resp), onJsonSuccess)
     }
 
-    res.getOrElse(() => onError(resp)("Submitted PDF or JSON are wrong"))
+    res.getOrElse(() ⇒ onError(resp)("Submitted PDF or JSON are wrong"))
   }
 }
