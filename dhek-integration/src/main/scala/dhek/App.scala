@@ -1,5 +1,6 @@
 package dhek
 
+import java.io.File
 import javax.servlet.{
   Filter,
   FilterConfig,
@@ -8,12 +9,9 @@ import javax.servlet.{
   ServletRequest,
   ServletResponse
 }
-
-import scala.collection.JavaConversions._
-
 import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 
-import Extractor.{ &, GET, POST, Path }
+import Extractor.{ &, Attributes, GET, POST, Path }
 
 object App extends Filter with App {
   def destroy() {}
@@ -26,9 +24,10 @@ object App extends Filter with App {
     hresp.setCharacterEncoding("UTF-8")
 
     hreq match {
-      case GET(Path("/"))        ⇒ home(hreq, hresp)
-      case POST(Path("/upload")) ⇒ modelFusion(hreq, hresp)
-      case _                     ⇒ chain.doFilter(req, resp)
+      case GET(Path("/")) ⇒ home(hreq, hresp)
+      case POST(Path("/upload")) & Attributes(Pdf(p) & Json(j)) ⇒
+        modelFusion(p, j, hresp)
+      case _ ⇒ chain.doFilter(req, resp)
     }
   }
 }
@@ -39,12 +38,21 @@ trait App extends Html {
   import argonaut._, Argonaut._
   import com.itextpdf.text.{ Document, Image, BaseColor }
   import com.itextpdf.text.pdf.{ PdfReader, PdfWriter, PdfStamper }
-
   import resource.managed
 
   case class Rect(x: Int, y: Int, h: Int, w: Int, name: String, typ: String)
   case class Page(areas: Option[List[Rect]])
   case class Model(format: String, pages: List[Page])
+
+  object Pdf {
+    def unapply(attrs: Map[String, Any]) =
+      attrs.get("pdf").map(_.asInstanceOf[File])
+  }
+
+  object Json {
+    def unapply(attrs: Map[String, Any]) =
+      attrs.get("json").map(_.asInstanceOf[File])
+  }
 
   object Rect {
     implicit def rectCodecJson =
@@ -74,53 +82,41 @@ trait App extends Html {
     resp.getWriter.print(e)
   }
 
-  def modelFusion(req: HttpServletRequest, resp: HttpServletResponse) {
-    val pdfOpt = Option(req.getAttribute("pdf").asInstanceOf[java.io.File])
-    val jsonOpt = Option(req.getAttribute("json").asInstanceOf[java.io.File])
+  def modelFusion(pdf: File, json: File, resp: HttpServletResponse) {
 
-    lazy val res = for {
-      pdfPart ← pdfOpt //if pdfPart.getContentType == "application/pdf" && pdfPart.getSize > 0
-      jsonPart ← jsonOpt //  if jsonPart.getContentType == "application/json" && jsonPart.getSize >= 0
-    } yield {
-      def onJsonSuccess(m: Model) { // TODO: Scala-arm
-        val reader = new PdfReader(new java.io.FileInputStream(pdfPart))
-        val stamper = new PdfStamper(reader, resp.getOutputStream)
+    def onJsonSuccess(m: Model) {
 
-        resp.setContentType("application/pdf")
+      managed(new PdfReader(new java.io.FileInputStream(pdf))).acquireAndGet { reader ⇒
+        managed(new PdfStamper(reader, resp.getOutputStream)).acquireAndGet { stamper ⇒
 
-        m.pages.foldLeft(1) { (i, p) ⇒
-          val page = stamper.getImportedPage(reader, i)
-          val pageRect = reader.getPageSize(i)
+          resp.setContentType("application/pdf")
 
-          println(pageRect)
+          m.pages.foldLeft(1) { (i, p) ⇒
+            val page = stamper.getImportedPage(reader, i)
+            val pageRect = reader.getPageSize(i)
+            val over = stamper.getOverContent(i)
 
-          val over = stamper.getOverContent(i)
+            for {
+              rects ← p.areas.toList
+              rect ← rects
+            } yield {
+              over.saveState()
+              over.setLineWidth(2)
+              over.setColorStroke(BaseColor.RED)
+              over.rectangle(rect.x, pageRect.getHeight - rect.y - rect.h, rect.w, rect.h)
+              over.stroke()
+              over.restoreState()
+            }
 
-          for {
-            rects ← p.areas.toList
-            rect ← rects
-          } yield {
-            over.saveState()
-            over.setLineWidth(2)
-            over.setColorStroke(BaseColor.RED)
-            over.rectangle(rect.x, pageRect.getHeight - rect.y - rect.h, rect.w, rect.h)
-            over.stroke()
-            over.restoreState()
+            i + 1
           }
-
-          i + 1
         }
-
-        stamper.close()
-        reader.close()
       }
-
-      lazy val jsonReader = new java.io.FileReader(jsonPart)
-
-      Parse.decodeEither[Model](loadReader(jsonReader)).
-        fold(onError(resp), onJsonSuccess)
     }
 
-    res.getOrElse(() ⇒ onError(resp)("Submitted PDF or JSON are wrong"))
+    lazy val jsonReader = new java.io.FileReader(json)
+
+    Parse.decodeEither[Model](loadReader(jsonReader)).
+      fold(onError(resp), onJsonSuccess)
   }
 }

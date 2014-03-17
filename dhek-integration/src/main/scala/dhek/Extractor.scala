@@ -25,4 +25,17 @@ object Extractor {
     def unapply(req: HttpServletRequest) =
       Some(req.getRequestURI)
   }
+
+  object Attributes {
+    import scala.collection.JavaConversions._
+
+    def unapply(req: HttpServletRequest): Option[Map[String, Any]] = {
+      val attrs =
+        req.getAttributeNames.foldLeft(Map[String, Any]()) { (map, name) ⇒
+          map + (name -> req.getAttribute(name))
+        }
+
+      Some(attrs)
+    }
+  }
 }
