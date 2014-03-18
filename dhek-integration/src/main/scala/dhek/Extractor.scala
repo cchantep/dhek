@@ -26,6 +26,14 @@ object Extractor {
       Some(req.getRequestURI)
   }
 
+  object Seg {
+    def unapply(path: String): Option[List[String]] =
+      path.split('/').toList match {
+        case Nil     ⇒ Some(Nil)
+        case _ :: xs ⇒ Some(xs)
+      }
+  }
+
   object Attributes {
     import scala.collection.JavaConversions._
 

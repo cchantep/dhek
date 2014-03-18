@@ -61,9 +61,11 @@ object Server {
     this
   }
 
+  private val resourcesHolder = new FilterHolder(Resources)
   private val multiPartHolder = new FilterHolder(new MultiPartFilter())
-  contextHandler.addFilter(multiPartHolder, "/*", EnumSet.of(DispatcherType.REQUEST))
 
+  contextHandler.addFilter(resourcesHolder, "/*", EnumSet.of(DispatcherType.REQUEST))
+  contextHandler.addFilter(multiPartHolder, "/*", EnumSet.of(DispatcherType.REQUEST))
 }
 
 object Main {

@@ -24,7 +24,11 @@ object App extends Filter with App {
     hresp.setCharacterEncoding("UTF-8")
 
     hreq match {
-      case GET(Path("/")) ⇒ home(hreq, hresp)
+      case GET(Path("/"))      ⇒ home(hreq, hresp)
+      case GET(Path("/step1")) ⇒ step1(hreq, hresp)
+      case GET(Path("/token")) ⇒
+        hresp.setContentType("application/json")
+        hresp.getWriter.print("""{"token":"fb096fd5-3254-47cb-8f46-128d8c1ae1f2"}""")
       case POST(Path("/upload")) & Attributes(Pdf(p) & Json(j)) ⇒
         modelFusion(p, j, hresp)
       case _ ⇒ chain.doFilter(req, resp)
@@ -74,6 +78,14 @@ trait App extends Html {
     new MultipartConfigElement("tmp", 1048576, 1048576, 262144)
 
   def home(req: HttpServletRequest, resp: HttpServletResponse) {
+    resp.setContentType("text/html")
+
+    resp.getWriter.print(login)
+  }
+
+  def step1(req: HttpServletRequest, resp: HttpServletResponse) {
+    resp.setContentType("text/html")
+
     resp.getWriter.print(index)
   }
 

@@ -1,6 +1,14 @@
 package dhek
 
-import java.io.{ BufferedReader, File, FileReader, Reader }
+import java.io.{
+  BufferedReader,
+  File,
+  FileReader,
+  Reader,
+  OutputStream,
+  FileInputStream,
+  InputStream
+}
 
 import resource.managed
 
@@ -27,5 +35,28 @@ trait Html {
     }
 
   lazy val index = loadFile("html/index.html")
+  lazy val login = loadFile("webui/login.html")
 
+  def writeTo(input: ⇒ InputStream, output: ⇒ OutputStream) {
+    managed(input).acquireAndGet { in ⇒
+      managed(output).acquireAndGet { out ⇒
+        val buffer = new Array[Byte](8192)
+
+        @annotation.tailrec
+        def loop: Unit = {
+          val read = in.read(buffer)
+
+          if (read > -1) {
+            out.write(buffer.slice(0, read))
+            loop
+          }
+        }
+
+        loop
+      }
+    }
+  }
+
+  def writeFileTo(path: String, output: ⇒ OutputStream) =
+    writeTo(new FileInputStream(path), output)
 }
