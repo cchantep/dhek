@@ -16,11 +16,8 @@ object Server {
 
   lazy val contextHandler = {
     val ctx = new ServletContextHandler(handlers, "/")
-    ctx.getServletContext.setAttribute("javax.servlet.context.tempdir", new File("tmp"))
-    // val holder = new ServletHolder(classOf[org.eclipse.jetty.servlet.DefaultServlet])
 
-    // holder.setName("Servlet")
-    // ctx.addServlet(holder, "/")
+    ctx.getServletContext.setAttribute("javax.servlet.context.tempdir", new File("tmp"))
     handlers.addHandler(ctx)
     ctx
   }
@@ -61,10 +58,8 @@ object Server {
     this
   }
 
-  private val resourcesHolder = new FilterHolder(Resources)
   private val multiPartHolder = new FilterHolder(new MultiPartFilter())
 
-  contextHandler.addFilter(resourcesHolder, "/*", EnumSet.of(DispatcherType.REQUEST))
   contextHandler.addFilter(multiPartHolder, "/*", EnumSet.of(DispatcherType.REQUEST))
 }
 

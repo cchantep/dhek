@@ -24,8 +24,6 @@ object App extends Filter with App {
     hresp.setCharacterEncoding("UTF-8")
 
     hreq match {
-      case GET(Path("/"))      ⇒ home(hreq, hresp)
-      case GET(Path("/step1")) ⇒ step1(hreq, hresp)
       case GET(Path("/token")) ⇒
         hresp.setContentType("application/json")
         hresp.getWriter.print("""{"token":"fb096fd5-3254-47cb-8f46-128d8c1ae1f2"}""")
@@ -36,7 +34,7 @@ object App extends Filter with App {
   }
 }
 
-trait App extends Html {
+trait App {
   import java.io.InputStreamReader
 
   import argonaut._, Argonaut._
@@ -77,18 +75,6 @@ trait App extends Html {
   val multipartConfigElement =
     new MultipartConfigElement("tmp", 1048576, 1048576, 262144)
 
-  def home(req: HttpServletRequest, resp: HttpServletResponse) {
-    resp.setContentType("text/html")
-
-    resp.getWriter.print(login)
-  }
-
-  def step1(req: HttpServletRequest, resp: HttpServletResponse) {
-    resp.setContentType("text/html")
-
-    resp.getWriter.print(index)
-  }
-
   private def onError(resp: HttpServletResponse)(e: String) {
     resp.setStatus(400)
     resp.getWriter.print(e)
@@ -128,7 +114,7 @@ trait App extends Html {
 
     lazy val jsonReader = new java.io.FileReader(json)
 
-    Parse.decodeEither[Model](loadReader(jsonReader)).
+    Parse.decodeEither[Model](Binaries.loadReader(jsonReader)).
       fold(onError(resp), onJsonSuccess)
   }
 }

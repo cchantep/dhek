@@ -1,7 +1,6 @@
 (function($) {
-    // TODO: Change Rest URL
     $(".btn.login").click(function() {
-        $._ajax("token", function(d) {
+        $._ajax("/rest/token", function(d) {
             if (!d || !d['token']) {
                 $("#dhek-message").
                     attr("class", "alert alert-warning").
@@ -10,7 +9,7 @@
                 return false
             }
 
-            window.location = "step1";
+            window.location = "/upload.html";
         })
 
         return false

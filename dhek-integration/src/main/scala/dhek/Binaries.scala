@@ -12,7 +12,7 @@ import java.io.{
 
 import resource.managed
 
-trait Html {
+object Binaries {
   def loadFile(path: String): String =
     loadReader(new FileReader(new File(path)))
 
