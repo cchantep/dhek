@@ -24,7 +24,7 @@ object App extends Filter with App {
     hresp.setCharacterEncoding("UTF-8")
 
     hreq match {
-      case GET(Path("/token")) ⇒ getToken(hresp)
+      case GET(Path("/token")) ⇒ getToken(hreq, hresp)
       case POST(Path("/upload")) & Attributes(Pdf(p) & Json(j)) ⇒
         modelFusion(p, j, hresp)
       case _ ⇒ chain.doFilter(req, resp)
@@ -40,6 +40,7 @@ trait App {
   import argonaut._, Argonaut._
   import com.itextpdf.text.{ Document, Image, BaseColor }
   import com.itextpdf.text.pdf.{ PdfReader, PdfWriter, PdfStamper }
+  import org.eclipse.jetty.continuation.ContinuationSupport
   import reactivemongo.api._
   import reactivemongo.bson._
   import resource.managed
@@ -81,20 +82,24 @@ trait App {
     resp.getWriter.print(e)
   }
 
-  def getToken(resp: HttpServletResponse) {
+  def getToken(req: HttpServletRequest, resp: HttpServletResponse) {
     val connection = driver.connection(List("localhost"))
     val db = connection("dhek")
     val tokens = db("tokens")
     val query = BSONDocument("name" -> "public")
     val filter = BSONDocument("token" -> 1)
+    val continuation = ContinuationSupport.getContinuation(req)
 
+    continuation.suspend(resp)
     tokens.find(query, filter).one[BSONDocument].foreach { res ⇒
       for {
         doc ← res
         token ← doc.getAs[String]("token")
       } yield {
-        resp.setContentType("application/json")
-        resp.getWriter.print(s"""{"token":"$token"}""")
+        val cresp = continuation.getServletResponse
+        cresp.setContentType("application/json")
+        cresp.getWriter.print(s"""{"token":"$token"}""")
+        continuation.complete()
       }
     }
   }

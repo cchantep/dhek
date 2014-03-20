@@ -68,6 +68,6 @@ object Main {
     val server = Server.filter(App).run()
 
     readLine()
-    server.stop().destroy().join()
+    server.destroy().join()
   }
 }
