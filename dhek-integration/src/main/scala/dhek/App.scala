@@ -24,9 +24,7 @@ object App extends Filter with App {
     hresp.setCharacterEncoding("UTF-8")
 
     hreq match {
-      case GET(Path("/token")) ⇒
-        hresp.setContentType("application/json")
-        hresp.getWriter.print("""{"token":"fb096fd5-3254-47cb-8f46-128d8c1ae1f2"}""")
+      case GET(Path("/token")) ⇒ getToken(hresp)
       case POST(Path("/upload")) & Attributes(Pdf(p) & Json(j)) ⇒
         modelFusion(p, j, hresp)
       case _ ⇒ chain.doFilter(req, resp)
@@ -37,14 +35,20 @@ object App extends Filter with App {
 trait App {
   import java.io.InputStreamReader
 
+  import scala.concurrent.ExecutionContext.Implicits.global
+
   import argonaut._, Argonaut._
   import com.itextpdf.text.{ Document, Image, BaseColor }
   import com.itextpdf.text.pdf.{ PdfReader, PdfWriter, PdfStamper }
+  import reactivemongo.api._
+  import reactivemongo.bson._
   import resource.managed
 
   case class Rect(x: Int, y: Int, h: Int, w: Int, name: String, typ: String)
   case class Page(areas: Option[List[Rect]])
   case class Model(format: String, pages: List[Page])
+
+  val driver = new MongoDriver
 
   object Pdf {
     def unapply(attrs: Map[String, Any]) =
@@ -72,12 +76,27 @@ trait App {
       casecodec2(Model.apply, Model.unapply)("format", "pages")
   }
 
-  val multipartConfigElement =
-    new MultipartConfigElement("tmp", 1048576, 1048576, 262144)
-
   private def onError(resp: HttpServletResponse)(e: String) {
     resp.setStatus(400)
     resp.getWriter.print(e)
+  }
+
+  def getToken(resp: HttpServletResponse) {
+    val connection = driver.connection(List("localhost"))
+    val db = connection("dhek")
+    val tokens = db("tokens")
+    val query = BSONDocument("name" -> "public")
+    val filter = BSONDocument("token" -> 1)
+
+    tokens.find(query, filter).one[BSONDocument].foreach { res ⇒
+      for {
+        doc ← res
+        token ← doc.getAs[String]("token")
+      } yield {
+        resp.setContentType("application/json")
+        resp.getWriter.print(s"""{"token":"$token"}""")
+      }
+    }
   }
 
   def modelFusion(pdf: File, json: File, resp: HttpServletResponse) {
