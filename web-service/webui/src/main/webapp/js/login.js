@@ -1,6 +1,6 @@
 (function($) {
     $(".btn.login").click(function() {
-        $._ajax("/rest/token", function(d) {
+        $._ajax($._login['validateUrl'], function(d) {
             if (!d || !d['token']) {
                 $("#dhek-message").
                     attr("class", "alert alert-warning").
@@ -9,7 +9,7 @@
                 return false
             }
 
-            window.location = "/upload.html";
+            window.location = "upload.gz.html";
         })
 
         return false
