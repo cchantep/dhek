@@ -1,0 +1,371 @@
+<?xml version="1.0"?><project>
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>fr.applicius.dhek</groupId>
+  <artifactId>webui</artifactId>
+  <packaging>jar</packaging>
+  <name>Dhek Web UI</name>
+  <version>1.0</version>
+
+  <profiles>
+    <profile><!-- Default profile for mockup_dev -->
+      <id>mockup</id>
+      <activation>
+        <property>
+          <name>dhek.staging</name>
+          <value>!true</value>
+        </property>
+      </activation>
+
+      <properties>
+        <dhek.validateCredUrl>login.json</dhek.validateCredUrl>
+      </properties>
+    </profile>
+
+    <profile><!-- Default profile for mockup_dev -->
+      <id>staging</id>
+      <activation>
+        <property>
+          <name>dhek.staging</name>
+          <value>true</value>
+        </property>
+      </activation>
+
+      <properties>
+        <dhek.validateCredUrl>rest/token</dhek.validateCredUrl>
+      </properties>
+    </profile>
+  </profiles>
+
+  <pluginRepositories>
+    <pluginRepository>
+      <id>applicius-snapshots</id>
+      <name>Applicius Maven2 Snapshots Repository</name>
+      <url>https://raw.github.com/applicius/mvn-repo/master/snapshots/</url>
+    </pluginRepository>
+  </pluginRepositories>
+  
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>2.6</version>
+        <executions>
+          <execution>
+            <id>copy-web</id>
+            <phase>process-sources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/web</outputDirectory>
+              <resources>
+                <resource>
+                  <filtering>false</filtering>
+                  <directory>${basedir}/src/main/webapp</directory>
+                  <excludes>
+                    <exclude>*.xhtml</exclude>
+
+                    <!-- exclude filtered -->
+                    <exclude>js/login-ajax.js</exclude>
+                  </excludes>
+                </resource>
+
+                <resource>
+                  <filtering>true</filtering>
+                  <directory>${basedir}/src/main/webapp</directory>
+                  <includes>
+                    <include>js/login-ajax.js</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>copy-web-mockup</id>
+            <phase>process-test-sources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>
+                ${project.build.directory}/test-web
+              </outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.build.directory}/web</directory>
+                </resource>
+                <resource>
+                  <directory>${basedir}/src/test/webapp</directory>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>xml-maven-plugin</artifactId>
+        <version>1.0</version>
+        <executions>
+          <execution>
+            <phase>process-sources</phase>
+            <goals>
+              <goal>transform</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <transformationSets>
+            <transformationSet>
+              <dir>src/main/webapp</dir>
+              <includes>
+                <include>login.xhtml</include>
+              </includes>
+              <stylesheet>${basedir}/src/main/xsl/saxy.xsl</stylesheet>
+              <outputDir>${project.build.directory}/web</outputDir>
+              <fileMappers>
+               <fileMapper implementation="org.codehaus.plexus.components.io.filemappers.MergeFileMapper"><!-- Login as default index -->
+                 <targetName>index.html</targetName>
+               </fileMapper>
+              </fileMappers>
+            </transformationSet>
+
+            <!-- Upload -->
+            <transformationSet>
+              <dir>src/main/webapp</dir>
+              <includes>
+                <include>upload.xhtml</include>
+              </includes>
+              <!-- TODO: Template with bootstrap -->
+              <stylesheet>${basedir}/src/main/xsl/saxy.xsl</stylesheet>
+              <!--
+              <parameters>
+                <parameter>
+                  <name>x</name>
+                  <value>y</value>
+                </parameter>
+              </parameters>
+              -->
+              <outputDir>${project.build.directory}/web</outputDir>
+             <fileMappers>
+                <fileMapper implementation="org.codehaus.plexus.components.io.filemappers.FileExtensionMapper">
+                  <targetExtension>.html</targetExtension>
+                </fileMapper>
+              </fileMappers>
+            </transformationSet>
+            <!-- endOf Home -->
+          </transformationSets>
+        </configuration>
+        <dependencies>
+          <dependency>
+            <groupId>net.sf.saxon</groupId>
+            <artifactId>saxon</artifactId>
+            <version>8.7</version>
+          </dependency>
+          <dependency>
+            <groupId>cchantep</groupId>
+            <artifactId>saxy</artifactId>
+            <version>1.0.0</version>
+          </dependency>
+        </dependencies>
+      </plugin>
+
+      <!-- Download external resource -->
+      <plugin>
+	<groupId>org.codehaus.mojo</groupId>
+        <artifactId>wagon-maven-plugin</artifactId>
+        <version>1.0-beta-3</version>
+
+        <executions>
+	  <execution>
+            <id>download-bootstrap-css</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>download-single</goal>
+            </goals>
+            <configuration>
+              <url>http://netdna.bootstrapcdn.com</url>
+              <fromFile>
+                bootstrap/3.1.1/css/bootstrap.min.css
+              </fromFile>
+              <toFile>
+                ${project.build.directory}/web/css/bootstrap.min.css
+              </toFile>
+            </configuration>
+          </execution>
+
+	  <execution>
+            <id>download-html5shiv</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>download-single</goal>
+            </goals>
+            <configuration>
+              <url>https://rawgithub.com/aFarkas</url>
+              <fromFile>html5shiv/master/dist/html5shiv.js</fromFile>
+              <toDir>${project.build.directory}/web/js</toDir>
+            </configuration>
+          </execution>
+
+	  <execution>
+            <id>download-respondjs</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>download-single</goal>
+            </goals>
+            <configuration>
+              <url>https://rawgithub.com/scottjehl/Respond</url>
+              <fromFile>master/dest/respond.min.js</fromFile>
+              <toDir>${project.build.directory}/web/js</toDir>
+            </configuration>
+          </execution>
+
+	  <execution>
+            <id>download-jquery-one-ten</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>download-single</goal>
+            </goals>
+            <configuration>
+              <url>http://codeorigin.jquery.com/</url>
+              <fromFile>jquery-1.10.2.min.js</fromFile>
+              <toDir>${project.build.directory}/web/js</toDir>
+            </configuration>
+          </execution>
+
+	  <execution>
+            <id>download-bootstrap-js</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>download-single</goal>
+            </goals>
+            <configuration>
+              <url>http://netdna.bootstrapcdn.com</url>
+              <fromFile>bootstrap/3.1.1/js/bootstrap.min.js</fromFile>
+              <toDir>${project.build.directory}/web/js</toDir>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- end Download -->
+
+      <plugin>
+        <groupId>com.samaxes.maven</groupId>
+        <artifactId>minify-maven-plugin</artifactId>
+        <version>1.7.2</version>
+        <configuration>
+          <webappTargetDir>${project.build.directory}/web</webappTargetDir>
+          <webappSourceDir>${project.build.directory}/web</webappSourceDir>
+        </configuration>
+
+        <executions>
+          <execution>
+            <id>login-css</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>minify</goal>
+            </goals>
+
+            <configuration>
+              <charset>UTF-8</charset>
+              <cssFinalFile>login-bundle.css</cssFinalFile>
+              <cssSourceFiles>
+                <cssSourceFile>bootstrap.min.css</cssSourceFile>
+                <cssSourceFile>dialog.css</cssSourceFile>
+                <cssSourceFile>login.css</cssSourceFile>
+              </cssSourceFiles>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>login-js</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>minify</goal>
+            </goals>
+
+            <configuration>
+              <charset>UTF-8</charset>
+              <jsFinalFile>login-merge.js</jsFinalFile>
+              <jsSourceFiles>
+                <jsSourceFile>jquery-1.10.2.min.js</jsSourceFile>
+                <jsSourceFile>bootstrap.min.js</jsSourceFile>
+                <jsSourceFile>ajax.js</jsSourceFile>
+                <jsSourceFile>login-ajax.js</jsSourceFile>
+                <jsSourceFile>login.js</jsSourceFile>
+              </jsSourceFiles>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- GZip minified -->
+      <plugin>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>1.7</version>
+        <executions>
+          <execution>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <tasks>
+                <property name="webdir" 
+                          value="${project.build.directory}/web" />
+
+                <property name="cssdir" value="${webdir}/css" />
+                <property name="jsdir" value="${webdir}/js" />
+
+                <delete>
+                  <fileset dir="${webdir}">
+                    <include name="*.gz.html" />
+                    <include name="css/*.gz.css" />
+                    <include name="js/*.gz.js" />
+                  </fileset>
+                </delete>
+
+                <gzip src="${cssdir}/login-bundle.min.css" 
+                      destfile="${cssdir}/login.gz.css" />
+
+                <gzip src="${jsdir}/html5shiv.js" 
+                      destfile="${jsdir}/html5shiv.gz.js" />
+
+                <gzip src="${jsdir}/respond.min.js" 
+                      destfile="${jsdir}/respond.gz.js" />
+
+                <gzip src="${jsdir}/login-merge.min.js" 
+                      destfile="${jsdir}/login.gz.js" />
+
+                <gzip src="${webdir}/index.html" 
+                      destfile="${webdir}/index.gz.html" />
+
+                <gzip src="${webdir}/upload.html" 
+                      destfile="${webdir}/upload.gz.html" />
+              </tasks>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- endOf GZip -->
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>2.4</version>
+        <configuration>
+          <classesDirectory>${project.build.directory}/web</classesDirectory>
+          <includes>
+            <include>*.gz.html</include>
+            <include>css/*.gz.css</include>
+            <include>js/*.gz.js</include>
+            <include>media/**</include>
+            <include>fonts/**</include>
+          </includes>
+        </configuration>
+      </plugin>      
+    </plugins>
+  </build>  
+</project>
