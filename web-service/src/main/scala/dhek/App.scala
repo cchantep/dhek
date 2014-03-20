@@ -13,7 +13,7 @@ import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 
 import Extractor.{ &, Attributes, GET, POST, Path }
 
-object App extends Filter with App {
+object Plan extends Filter with App {
   def destroy() {}
   def init(config: FilterConfig) {}
 
@@ -32,7 +32,7 @@ object App extends Filter with App {
   }
 }
 
-trait App {
+sealed trait App { // TODO: Separate each controller
   import java.io.InputStreamReader
 
   import scala.concurrent.ExecutionContext.Implicits.global

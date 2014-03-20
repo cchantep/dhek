@@ -9,36 +9,38 @@ import org.eclipse.jetty.server.handler.{ ContextHandlerCollection }
 import org.eclipse.jetty.servlet.{ FilterHolder, ServletContextHandler, ServletHolder }
 import org.eclipse.jetty.servlets.MultiPartFilter
 
-object Server {
-  val inner = new JettyServer()
+final class Server(
+  router: Filter, host: String = "localhost", port: Int = 3000) {
 
-  lazy val handlers = new ContextHandlerCollection()
+  private val inner = new JettyServer()
 
-  lazy val contextHandler = {
+  def run(): this.type = {
+    val handlers = new ContextHandlerCollection()
+
+    // Wrap router
+    val holder = new FilterHolder(router)
+    holder.setName("Router")
+
+    // Prepare context
     val ctx = new ServletContextHandler(handlers, "/")
+    ctx.getServletContext.
+      setAttribute("javax.servlet.context.tempdir", new File("tmp"))
 
-    ctx.getServletContext.setAttribute("javax.servlet.context.tempdir", new File("tmp"))
-    handlers.addHandler(ctx)
-    ctx
-  }
+    ctx.addFilter(holder, "/*", EnumSet.of(DispatcherType.REQUEST))
+    ctx.addFilter(new FilterHolder(new MultiPartFilter()), "/*", 
+      EnumSet.of(DispatcherType.REQUEST))
 
-  def filter(f: Filter): this.type = {
-    val holder = new FilterHolder(f)
+    handlers.addHandler(ctx) // register
 
-    holder.setName("Filter")
-    contextHandler.addFilter(holder, "/*", EnumSet.of(DispatcherType.REQUEST))
-
-    this
-  }
-
-  def run(host: String = "localhost", port: Int = 3000): this.type = {
+    // Prepare connector
     val conn = new ServerConnector(inner)
-
     conn.setPort(port)
     conn.setHost(host)
+
+    // Run Jetty server
     inner.setHandler(handlers)
     inner.addConnector(conn)
-    inner.setStopAtShutdown(true)
+    //inner.setStopAtShutdown(true)
     inner.start()
     this
   }
@@ -47,16 +49,11 @@ object Server {
     inner.stop()
     this
   }
-
-  // TODO: Move
-  private val multiPartHolder = new FilterHolder(new MultiPartFilter())
-
-  contextHandler.addFilter(multiPartHolder, "/*", EnumSet.of(DispatcherType.REQUEST))
 }
 
-object Main {
+object Runner {
   def main(args: Array[String]) {
-    val server = Server.filter(App).run()
+    val server = new Server(Plan).run()
 
     readLine() // wait any key to be pressed
     server.stop()
