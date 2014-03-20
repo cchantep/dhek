@@ -48,16 +48,7 @@ object Server {
     this
   }
 
-  def destroy(): this.type = {
-    inner.destroy()
-    this
-  }
-
-  def join(): this.type = {
-    inner.join()
-    this
-  }
-
+  // TODO: Move
   private val multiPartHolder = new FilterHolder(new MultiPartFilter())
 
   contextHandler.addFilter(multiPartHolder, "/*", EnumSet.of(DispatcherType.REQUEST))
@@ -67,7 +58,7 @@ object Main {
   def main(args: Array[String]) {
     val server = Server.filter(App).run()
 
-    readLine()
-    server.destroy().join()
+    readLine() // wait any key to be pressed
+    server.stop()
   }
 }

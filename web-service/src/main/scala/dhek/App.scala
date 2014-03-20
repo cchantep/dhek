@@ -49,8 +49,6 @@ trait App {
   case class Page(areas: Option[List[Rect]])
   case class Model(format: String, pages: List[Page])
 
-  val driver = new MongoDriver
-
   object Pdf {
     def unapply(attrs: Map[String, Any]) =
       attrs.get("pdf").map(_.asInstanceOf[File])
@@ -83,6 +81,7 @@ trait App {
   }
 
   def getToken(req: HttpServletRequest, resp: HttpServletResponse) {
+    val driver = new MongoDriver
     val connection = driver.connection(List("localhost"))
     val db = connection("dhek")
     val tokens = db("tokens")
