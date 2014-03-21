@@ -18,6 +18,7 @@
 
       <properties>
         <dhek.validateCredUrl>login.json</dhek.validateCredUrl>
+        <dhek.myTemplatesUrl>my-templates.json</dhek.myTemplatesUrl>
       </properties>
     </profile>
 
@@ -32,6 +33,7 @@
 
       <properties>
         <dhek.validateCredUrl>rest/token</dhek.validateCredUrl>
+        <dhek.myTemplatesUrl>rest/my-templates</dhek.myTemplatesUrl>
       </properties>
     </profile>
   </profiles>
@@ -67,6 +69,7 @@
 
                     <!-- exclude filtered -->
                     <exclude>js/login-ajax.js</exclude>
+                    <exclude>js/my-account-ajax.js</exclude>
                   </excludes>
                 </resource>
 
@@ -75,6 +78,7 @@
                   <directory>${basedir}/src/main/webapp</directory>
                   <includes>
                     <include>js/login-ajax.js</include>
+                    <include>js/my-account-ajax.js</include>
                   </includes>
                 </resource>
               </resources>
@@ -132,6 +136,31 @@
               </fileMappers>
             </transformationSet>
 
+            <!-- Manage user -->
+            <transformationSet>
+              <dir>src/main/webapp</dir>
+              <includes>
+                <include>my-account.xhtml</include>
+              </includes>
+              <!-- TODO: Template with bootstrap -->
+              <stylesheet>${basedir}/src/main/xsl/saxy.xsl</stylesheet>
+              <!--
+              <parameters>
+                <parameter>
+                  <name>x</name>
+                  <value>y</value>
+                </parameter>
+              </parameters>
+              -->
+              <outputDir>${project.build.directory}/web</outputDir>
+             <fileMappers>
+                <fileMapper implementation="org.codehaus.plexus.components.io.filemappers.FileExtensionMapper">
+                  <targetExtension>.html</targetExtension>
+                </fileMapper>
+              </fileMappers>
+            </transformationSet>
+            <!-- endOf Manage user -->
+
             <!-- Upload -->
             <transformationSet>
               <dir>src/main/webapp</dir>
@@ -155,7 +184,8 @@
                 </fileMapper>
               </fileMappers>
             </transformationSet>
-            <!-- endOf Home -->
+            <!-- endOf Upload -->
+
           </transformationSets>
         </configuration>
         <dependencies>
@@ -280,6 +310,24 @@
           </execution>
 
           <execution>
+            <id>commons-js</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>minify</goal>
+            </goals>
+
+            <configuration>
+              <charset>UTF-8</charset>
+              <jsFinalFile>dhek-commons.js</jsFinalFile>
+              <jsSourceFiles>
+                <jsSourceFile>jquery-1.10.2.min.js</jsSourceFile>
+                <jsSourceFile>bootstrap.min.js</jsSourceFile>
+                <jsSourceFile>ajax.js</jsSourceFile>
+              </jsSourceFiles>
+            </configuration>
+          </execution>
+
+          <execution>
             <id>login-js</id>
             <phase>generate-resources</phase>
             <goals>
@@ -290,11 +338,44 @@
               <charset>UTF-8</charset>
               <jsFinalFile>login-merge.js</jsFinalFile>
               <jsSourceFiles>
-                <jsSourceFile>jquery-1.10.2.min.js</jsSourceFile>
-                <jsSourceFile>bootstrap.min.js</jsSourceFile>
-                <jsSourceFile>ajax.js</jsSourceFile>
+                <jsSourceFile>dhek-commons.min.js</jsSourceFile>
                 <jsSourceFile>login-ajax.js</jsSourceFile>
                 <jsSourceFile>login.js</jsSourceFile>
+              </jsSourceFiles>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>my-account-css</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>minify</goal>
+            </goals>
+
+            <configuration>
+              <charset>UTF-8</charset>
+              <cssFinalFile>my-account-bundle.css</cssFinalFile>
+              <cssSourceFiles>
+                <cssSourceFile>bootstrap.min.css</cssSourceFile>
+                <cssSourceFile>my-account.css</cssSourceFile>
+              </cssSourceFiles>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>my-account-js</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>minify</goal>
+            </goals>
+
+            <configuration>
+              <charset>UTF-8</charset>
+              <jsFinalFile>my-account-merge.js</jsFinalFile>
+              <jsSourceFiles>
+                <jsSourceFile>dhek-commons.min.js</jsSourceFile>
+                <jsSourceFile>my-account-ajax.js</jsSourceFile>
+                <jsSourceFile>my-account.js</jsSourceFile>
               </jsSourceFiles>
             </configuration>
           </execution>
@@ -327,20 +408,29 @@
                   </fileset>
                 </delete>
 
-                <gzip src="${cssdir}/login-bundle.min.css" 
-                      destfile="${cssdir}/login.gz.css" />
-
                 <gzip src="${jsdir}/html5shiv.js" 
                       destfile="${jsdir}/html5shiv.gz.js" />
 
                 <gzip src="${jsdir}/respond.min.js" 
                       destfile="${jsdir}/respond.gz.js" />
 
+                <gzip src="${cssdir}/login-bundle.min.css" 
+                      destfile="${cssdir}/login.gz.css" />
+
                 <gzip src="${jsdir}/login-merge.min.js" 
                       destfile="${jsdir}/login.gz.js" />
 
                 <gzip src="${webdir}/index.html" 
                       destfile="${webdir}/index.gz.html" />
+
+                <gzip src="${cssdir}/my-account-bundle.min.css" 
+                      destfile="${cssdir}/my-account.gz.css" />
+
+                <gzip src="${jsdir}/my-account-merge.min.js" 
+                      destfile="${jsdir}/my-account.gz.js" />
+
+                <gzip src="${webdir}/my-account.html" 
+                      destfile="${webdir}/my-account.gz.html" />
 
                 <gzip src="${webdir}/upload.html" 
                       destfile="${webdir}/upload.gz.html" />
