@@ -9,7 +9,7 @@
                 return false
             }
 
-            window.location = "upload.gz.html";
+            window.location = "my-account.gz.html?t=" + d.token;
         })
 
         return false
