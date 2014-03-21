@@ -2,6 +2,7 @@ package dhek
 
 import java.io.{
   BufferedReader,
+  ByteArrayOutputStream,
   File,
   FileReader,
   Reader,
@@ -55,6 +56,13 @@ object Binaries {
         loop
       }
     }
+  }
+
+  def loadRawBytes(input: ⇒ InputStream): Array[Byte] = {
+    val output = new ByteArrayOutputStream
+
+    writeTo(input, output)
+    output.toByteArray
   }
 
   def writeFileTo(path: String, output: ⇒ OutputStream) =

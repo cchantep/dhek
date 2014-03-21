@@ -26,9 +26,9 @@ final class Server(
     ctx.getServletContext.
       setAttribute("javax.servlet.context.tempdir", new File("tmp"))
 
-    ctx.addFilter(holder, "/*", EnumSet.of(DispatcherType.REQUEST))
-    ctx.addFilter(new FilterHolder(new MultiPartFilter()), "/*", 
+    ctx.addFilter(new FilterHolder(new MultiPartFilter()), "/*",
       EnumSet.of(DispatcherType.REQUEST))
+    ctx.addFilter(holder, "/*", EnumSet.of(DispatcherType.REQUEST))
 
     handlers.addHandler(ctx) // register
 
@@ -52,8 +52,10 @@ final class Server(
 }
 
 object Runner {
+  import reactivemongo.api.MongoDriver
+
   def main(args: Array[String]) {
-    val server = new Server(Plan).run()
+    val server = new Server(Plan(new MongoDriver().connection(List("localhost")))).run()
 
     readLine() // wait any key to be pressed
     server.stop()

@@ -10,14 +10,14 @@ object Extractor {
   object GET {
     def unapply(req: HttpServletRequest) = req.getMethod match {
       case "GET" ⇒ Some(req)
-      case _     ⇒ None
+      case _ ⇒ None
     }
   }
 
   object POST {
     def unapply(req: HttpServletRequest) = req.getMethod match {
       case "POST" ⇒ Some(req)
-      case _      ⇒ None
+      case _ ⇒ None
     }
   }
 
@@ -29,7 +29,7 @@ object Extractor {
   object Seg {
     def unapply(path: String): Option[List[String]] =
       path.split('/').toList match {
-        case Nil     ⇒ Some(Nil)
+        case Nil ⇒ Some(Nil)
         case _ :: xs ⇒ Some(xs)
       }
   }

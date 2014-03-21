@@ -1,6 +1,6 @@
 package dhek
 
-import java.io.File
+import java.io.{ File, FileInputStream }
 import javax.servlet.{
   Filter,
   FilterConfig,
@@ -11,9 +11,11 @@ import javax.servlet.{
 }
 import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 
+import reactivemongo.api.MongoConnection
+
 import Extractor.{ &, Attributes, GET, POST, Path }
 
-object Plan extends Filter with App {
+case class Plan(connect: MongoConnection) extends Filter with App {
   def destroy() {}
   def init(config: FilterConfig) {}
 
@@ -25,21 +27,29 @@ object Plan extends Filter with App {
 
     hreq match {
       case GET(Path("/token")) ⇒ getToken(hreq, hresp)
-      case POST(Path("/upload")) & Attributes(Pdf(p) & Json(j)) ⇒
-        modelFusion(p, j, hresp)
+      case POST(Path("/upload") & Attributes(Pdf(p) & Json(j) & Font(f))) ⇒
+        modelFusion(p, j, f, hresp)
       case _ ⇒ chain.doFilter(req, resp)
     }
   }
 }
 
-sealed trait App { // TODO: Separate each controller
+sealed trait App { self: Plan ⇒ // TODO: Separate each controller
   import java.io.InputStreamReader
 
   import scala.concurrent.ExecutionContext.Implicits.global
 
   import argonaut._, Argonaut._
   import com.itextpdf.text.{ Document, Image, BaseColor }
-  import com.itextpdf.text.pdf.{ PdfReader, PdfWriter, PdfStamper }
+  import com.itextpdf.text.pdf.{
+    PdfDictionary,
+    PdfObject,
+    PdfName,
+    PdfReader,
+    PdfStream,
+    PdfWriter,
+    PdfStamper
+  }
   import org.eclipse.jetty.continuation.ContinuationSupport
   import reactivemongo.api._
   import reactivemongo.bson._
@@ -57,6 +67,11 @@ sealed trait App { // TODO: Separate each controller
   object Json {
     def unapply(attrs: Map[String, Any]) =
       attrs.get("json").map(_.asInstanceOf[File])
+  }
+
+  object Font {
+    def unapply(attrs: Map[String, Any]): Option[Option[File]] =
+      Some(attrs.get("font").map(_.asInstanceOf[File]))
   }
 
   object Rect {
@@ -81,9 +96,7 @@ sealed trait App { // TODO: Separate each controller
   }
 
   def getToken(req: HttpServletRequest, resp: HttpServletResponse) {
-    val driver = new MongoDriver
-    val connection = driver.connection(List("localhost"))
-    val db = connection("dhek")
+    val db = self.connect("dhek")
     val tokens = db("tokens")
     val query = BSONDocument("name" -> "public")
     val filter = BSONDocument("token" -> 1)
@@ -103,16 +116,47 @@ sealed trait App { // TODO: Separate each controller
     }
   }
 
-  def modelFusion(pdf: File, json: File, resp: HttpServletResponse) {
+  def modelFusion(pdf: File, json: File, font: Option[File], resp: HttpServletResponse) {
 
     def onJsonSuccess(m: Model) {
 
       managed(new PdfReader(new java.io.FileInputStream(pdf))).acquireAndGet { reader ⇒
         managed(new PdfStamper(reader, resp.getOutputStream)).acquireAndGet { stamper ⇒
 
+          def foreachObject[U](f: PdfObject ⇒ U) {
+            val objCount = reader.getXrefSize
+
+            @annotation.tailrec
+            def loop(cur: Int) {
+              if (cur < objCount) {
+                f(reader.getPdfObject(cur - 1))
+                loop(cur + 1)
+              }
+            }
+
+            loop(1)
+          }
+
           resp.setContentType("application/pdf")
 
+          font.foreach { ft ⇒
+            val stream = new PdfStream(Binaries.loadRawBytes(new FileInputStream(ft)))
+
+            foreachObject { obj ⇒
+              if (obj.isDictionary) {
+                val dict = obj.asInstanceOf[PdfDictionary]
+
+                if (PdfName.FONTDESCRIPTOR == dict.get(PdfName.TYPE)) {
+                  val ref = stamper.getWriter.addToBody(stream)
+
+                  dict.put(PdfName.FONTFILE2, ref.getIndirectReference)
+                }
+              }
+            }
+          }
+
           m.pages.foldLeft(1) { (i, p) ⇒
+
             val page = stamper.getImportedPage(reader, i)
             val pageRect = reader.getPageSize(i)
             val over = stamper.getOverContent(i)
