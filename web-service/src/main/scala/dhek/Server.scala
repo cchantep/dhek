@@ -55,7 +55,7 @@ object Runner {
   import reactivemongo.api.MongoDriver
 
   def main(args: Array[String]) {
-    val server = new Server(Plan(new MongoDriver().connection(List("localhost")))).run()
+    val server = new Server(new Plan(new MongoDriver().connection(List("localhost")))).run()
 
     readLine() // wait any key to be pressed
     server.stop()

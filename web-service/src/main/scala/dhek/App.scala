@@ -15,7 +15,11 @@ import reactivemongo.api.MongoConnection
 
 import Extractor.{ &, Attributes, GET, POST, Path }
 
-case class Plan(connect: MongoConnection) extends Filter with App {
+final class Plan(m: => MongoConnection) 
+    extends Filter with Controllers {
+
+  def mongo: MongoConnection = m
+
   def destroy() {}
   def init(config: FilterConfig) {}
 
@@ -34,7 +38,7 @@ case class Plan(connect: MongoConnection) extends Filter with App {
   }
 }
 
-sealed trait App { self: Plan ⇒ // TODO: Separate each controller
+sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
   import java.io.InputStreamReader
 
   import scala.concurrent.ExecutionContext.Implicits.global
@@ -96,7 +100,7 @@ sealed trait App { self: Plan ⇒ // TODO: Separate each controller
   }
 
   def getToken(req: HttpServletRequest, resp: HttpServletResponse) {
-    val db = self.connect("dhek")
+    val db = self.mongo("dhek")
     val tokens = db("tokens")
     val query = BSONDocument("name" -> "public")
     val filter = BSONDocument("token" -> 1)
