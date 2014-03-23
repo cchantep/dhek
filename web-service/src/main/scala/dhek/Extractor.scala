@@ -22,8 +22,7 @@ object Extractor {
   }
 
   object Path {
-    def unapply(req: HttpServletRequest) =
-      Some(req.getRequestURI)
+    def unapply(req: HttpServletRequest) = Option(req.getRequestURI)
   }
 
   object Seg {
@@ -37,13 +36,10 @@ object Extractor {
   object Attributes {
     import scala.collection.JavaConversions._
 
-    def unapply(req: HttpServletRequest): Option[Map[String, Any]] = {
-      val attrs =
-        req.getAttributeNames.foldLeft(Map[String, Any]()) { (map, name) ⇒
-          map + (name -> req.getAttribute(name))
-        }
-
-      Some(attrs)
+    def unapply(req: HttpServletRequest): Option[Map[String, Any]] = Option {
+      req.getAttributeNames.foldLeft(Map[String, Any]()) { (map, name) ⇒
+        map + (name -> req.getAttribute(name))
+      }
     }
   }
 }

@@ -64,7 +64,7 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
   case class Model(format: String, pages: List[Page])
 
   object Pdf {
-    def unapply(attrs: Map[String, Any]) =
+    def unapply(attrs: Map[String, Any]): Option[File] =
       attrs.get("pdf").map(_.asInstanceOf[File])
   }
 
