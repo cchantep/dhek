@@ -60,7 +60,7 @@ object Runner {
     managed(new MongoDriver()) acquireAndGet { md ⇒
       val config = ConfigFactory.parseFile(new File(".", "dhek.conf"))
       val secretKey = config.getString("dhek.secret.key")
-      val server = new Server(new Plan(new MongoDriver().connection(List("localhost")), secretKey)).run()
+      val server = new Server(new Plan(md.connection(List("localhost")), secretKey)).run()
 
       readLine() // wait any key to be pressed
       server.stop()
