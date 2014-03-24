@@ -52,12 +52,15 @@ final class Server(
 }
 
 object Runner {
+  import resource.managed
   import reactivemongo.api.MongoDriver
 
-  def main(args: Array[String]) {
-    val server = new Server(new Plan(new MongoDriver().connection(List("localhost")))).run()
+  def main(args: Array[String]): Unit = 
+    managed(new MongoDriver()) acquireAndGet { md =>
+      val server = new Server(new Plan(md.connection(List("localhost")))).run()
 
-    readLine() // wait any key to be pressed
-    server.stop()
-  }
+      readLine() // wait any key to be pressed
+      server.stop()
+    }
+
 }
