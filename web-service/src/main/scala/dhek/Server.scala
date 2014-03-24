@@ -10,7 +10,7 @@ import org.eclipse.jetty.servlet.{ FilterHolder, ServletContextHandler, ServletH
 import org.eclipse.jetty.servlets.MultiPartFilter
 
 final class Server(
-  router: Filter, host: String = "localhost", port: Int = 3000) {
+    router: Filter, host: String = "localhost", port: Int = 3000) {
 
   private val inner = new JettyServer()
 
@@ -53,14 +53,16 @@ final class Server(
 
 object Runner {
   import resource.managed
+  import com.typesafe.config.ConfigFactory
   import reactivemongo.api.MongoDriver
 
-  def main(args: Array[String]): Unit = 
-    managed(new MongoDriver()) acquireAndGet { md =>
-      val server = new Server(new Plan(md.connection(List("localhost")))).run()
+  def main(args: Array[String]): Unit =
+    managed(new MongoDriver()) acquireAndGet { md ⇒
+      val config = ConfigFactory.parseFile(new File(".", "dhek.conf"))
+      val secretKey = config.getString("dhek.secret.key")
+      val server = new Server(new Plan(new MongoDriver().connection(List("localhost")), secretKey)).run()
 
       readLine() // wait any key to be pressed
       server.stop()
     }
-
 }

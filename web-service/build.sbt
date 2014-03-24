@@ -19,5 +19,7 @@ libraryDependencies ++= Seq(
   "com.itextpdf" % "itextpdf" % "5.5.0",
   "org.bouncycastle" % "bcprov-jdk15on" % "1.50",
   "org.bouncycastle" % "bcpkix-jdk15on" % "1.50",
-  "org.reactivemongo" %% "reactivemongo" % "0.10.0"
+  "org.reactivemongo" %% "reactivemongo" % "0.10.0",
+  "com.typesafe" % "config" % "1.0.0",
+  "commons-codec" % "commons-codec" % "1.7"
 )
