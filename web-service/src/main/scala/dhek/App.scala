@@ -13,12 +13,13 @@ import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 
 import reactivemongo.api.MongoConnection
 
-import Extractor.{ &, Attributes, GET, POST, Path }
+import Extractor.{ &, Attributes, First, GET, POST, Params, Path }
 
-final class Plan(m: => MongoConnection) 
+final class Plan(m: ⇒ MongoConnection, key: String)
     extends Filter with Controllers {
 
   def mongo: MongoConnection = m
+  def secretKey: Array[Char] = key.toArray
 
   def destroy() {}
   def init(config: FilterConfig) {}
@@ -30,7 +31,8 @@ final class Plan(m: => MongoConnection)
     hresp.setCharacterEncoding("UTF-8")
 
     hreq match {
-      case GET(Path("/token")) ⇒ getToken(hreq, hresp)
+      case POST(Path("/auth")) & Login(email, passw) ⇒
+        auth(email, passw, hreq, hresp)
       case POST(Path("/upload") & Attributes(Pdf(p) & Json(j) & Font(f))) ⇒
         modelFusion(p, j, f, hresp)
       case _ ⇒ chain.doFilter(req, resp)
@@ -40,11 +42,19 @@ final class Plan(m: => MongoConnection)
 
 sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
   import java.io.InputStreamReader
+  import javax.crypto.Mac
+  import javax.crypto.spec.SecretKeySpec
 
   import scala.concurrent.ExecutionContext.Implicits.global
 
   import argonaut._, Argonaut._
-  import com.itextpdf.text.{ Document, Image, BaseColor }
+  import com.itextpdf.text.{
+    BaseColor,
+    Document,
+    FontFactory,
+    Image,
+    Paragraph
+  }
   import com.itextpdf.text.pdf.{
     PdfDictionary,
     PdfObject,
@@ -54,6 +64,8 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
     PdfWriter,
     PdfStamper
   }
+  import org.apache.commons.codec.binary.Hex
+  import org.apache.commons.codec.digest.DigestUtils
   import org.eclipse.jetty.continuation.ContinuationSupport
   import reactivemongo.api._
   import reactivemongo.bson._
@@ -94,33 +106,55 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
       casecodec2(Model.apply, Model.unapply)("format", "pages")
   }
 
+  object Login {
+    def unapply(req: HttpServletRequest): Option[(String, String)] = req match {
+      case Params(ps) ⇒ for {
+        email ← First("email", ps)
+        password ← First("password", ps)
+      } yield (email, password)
+      case _ ⇒ None
+    }
+  }
+
   private def onError(resp: HttpServletResponse)(e: String) {
     resp.setStatus(400)
     resp.getWriter.print(e)
   }
 
-  def getToken(req: HttpServletRequest, resp: HttpServletResponse) {
+  def auth(email: String, passw: String, req: HttpServletRequest, resp: HttpServletResponse) {
     val db = self.mongo("dhek")
-    val tokens = db("tokens")
-    val query = BSONDocument("name" -> "public")
-    val filter = BSONDocument("token" -> 1)
+    val users = db("users")
+    val query = BSONDocument("email" -> email)
+    val filter = BSONDocument("password" -> 1)
     val continuation = ContinuationSupport.getContinuation(req)
 
     continuation.suspend(resp)
-    tokens.find(query, filter).one[BSONDocument].foreach { res ⇒
+    users.find(query, filter).one[BSONDocument].foreach { res ⇒
       for {
         doc ← res
-        token ← doc.getAs[String]("token")
+        pwd ← doc.getAs[String]("password")
       } yield {
         val cresp = continuation.getServletResponse
-        cresp.setContentType("application/json")
-        cresp.getWriter.print(s"""{"token":"$token"}""")
+        val hcresp = cresp.asInstanceOf[HttpServletResponse]
+
+        if (pwd == DigestUtils.md5Hex(passw)) {
+          val sha1: Mac = Mac.getInstance("HmacSHA1")
+          sha1.init(new SecretKeySpec(Hex.decodeHex(self.secretKey), "HmacSHA1"))
+
+          val token = Hex.encodeHexString(sha1.doFinal(email.getBytes))
+
+          cresp.setContentType("application/json")
+          cresp.getWriter.print(s"""{"token":"$token"}""")
+        } else {
+          hcresp.setStatus(403)
+        }
+
         continuation.complete()
       }
     }
   }
 
-  def modelFusion(pdf: File, json: File, font: Option[File], resp: HttpServletResponse) {
+  def modelFusion(pdf: File, json: File, fontUrl: Option[File], resp: HttpServletResponse) {
 
     def onJsonSuccess(m: Model) {
 
@@ -142,22 +176,6 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
           }
 
           resp.setContentType("application/pdf")
-
-          font.foreach { ft ⇒
-            val stream = new PdfStream(Binaries.loadRawBytes(new FileInputStream(ft)))
-
-            foreachObject { obj ⇒
-              if (obj.isDictionary) {
-                val dict = obj.asInstanceOf[PdfDictionary]
-
-                if (PdfName.FONTDESCRIPTOR == dict.get(PdfName.TYPE)) {
-                  val ref = stamper.getWriter.addToBody(stream)
-
-                  dict.put(PdfName.FONTFILE2, ref.getIndirectReference)
-                }
-              }
-            }
-          }
 
           m.pages.foldLeft(1) { (i, p) ⇒
 
