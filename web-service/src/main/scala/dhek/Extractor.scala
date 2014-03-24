@@ -26,33 +26,18 @@ object Extractor {
   }
 
   object Seg {
-    def unapply(path: String): Option[List[String]] =
+    def unapply(path: String): Option[List[String]] = 
       path.split('/').toList match {
         case Nil     ⇒ Some(Nil)
         case _ :: xs ⇒ Some(xs)
       }
   }
 
-  object Attributes {
-    import scala.collection.JavaConversions._
-
-    def unapply(req: HttpServletRequest): Option[Map[String, Any]] = Option {
-      req.getAttributeNames.foldLeft(Map[String, Any]()) { (map, name) ⇒
-        map + (name -> req.getAttribute(name))
-      }
-    }
+  case class Attr(name: String) {
+    def unapply(req: HttpServletRequest) = Option(req getAttribute name)
   }
 
-  object Params {
-    import scala.collection.JavaConverters._
-
-    def unapply(req: HttpServletRequest): Option[Map[String, Array[String]]] = Option {
-      req.getParameterMap.asScala.toMap
-    }
-  }
-
-  object First {
-    def apply(name: String, ps: Map[String, Array[String]]): Option[String] =
-      ps.get(name).flatMap(_.headOption)
+  case class Param(name: String) {
+    def unapply(req: HttpServletRequest) = Option(req getParameter name)
   }
 }
