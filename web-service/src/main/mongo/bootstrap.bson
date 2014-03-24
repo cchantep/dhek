@@ -1,0 +1,4 @@
+use dhek
+
+db.createCollection("users")
+db.tokens.insert({'email':'test@applicius.fr','password':'test'})

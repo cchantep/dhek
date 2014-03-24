@@ -23,3 +23,4 @@ libraryDependencies ++= Seq(
   "com.typesafe" % "config" % "1.0.0",
   "commons-codec" % "commons-codec" % "1.7"
 )
+

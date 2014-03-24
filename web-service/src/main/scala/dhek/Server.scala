@@ -23,8 +23,8 @@ final class Server(
 
     // Prepare context
     val ctx = new ServletContextHandler(handlers, "/")
-    ctx.getServletContext.
-      setAttribute("javax.servlet.context.tempdir", new File("tmp"))
+    ctx.getServletContext.setAttribute("javax.servlet.context.tempdir", 
+      new File(System getProperty "java.io.tmpdir"))
 
     ctx.addFilter(new FilterHolder(new MultiPartFilter()), "/*",
       EnumSet.of(DispatcherType.REQUEST))
