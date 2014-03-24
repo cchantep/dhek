@@ -30,7 +30,7 @@ final class Plan(m: => MongoConnection)
     hresp.setCharacterEncoding("UTF-8")
 
     hreq match {
-      case GET(Path("/token")) ⇒ getToken(hreq, hresp)
+      case GET(Path("/token")) ⇒ auth(hreq, hresp)
       case POST(Path("/upload") & Attributes(Pdf(p) & Json(j) & Font(f))) ⇒
         modelFusion(p, j, f, hresp)
       case _ ⇒ chain.doFilter(req, resp)
@@ -41,6 +41,9 @@ final class Plan(m: => MongoConnection)
 sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
   import java.io.InputStreamReader
 
+  import scala.util.{ Failure, Success }
+  import scala.concurrent.{ Await, Future }
+  import scala.concurrent.duration.Duration
   import scala.concurrent.ExecutionContext.Implicits.global
 
   import argonaut._, Argonaut._
@@ -54,7 +57,7 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
     PdfWriter,
     PdfStamper
   }
-  import org.eclipse.jetty.continuation.ContinuationSupport
+  import org.eclipse.jetty.continuation.{ Continuation, ContinuationSupport }
   import reactivemongo.api._
   import reactivemongo.bson._
   import resource.managed
@@ -63,6 +66,7 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
   case class Page(areas: Option[List[Rect]])
   case class Model(format: String, pages: List[Page])
 
+  // Request attributes extractors
   object Pdf {
     def unapply(attrs: Map[String, Any]): Option[File] =
       attrs.get("pdf").map(_.asInstanceOf[File])
@@ -78,6 +82,7 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
       Some(attrs.get("font").map(_.asInstanceOf[File]))
   }
 
+  // JSON codecs
   object Rect {
     implicit def rectCodecJson =
       casecodec6(Rect.apply, Rect.unapply)(
@@ -94,29 +99,47 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
       casecodec2(Model.apply, Model.unapply)("format", "pages")
   }
 
-  private def onError(resp: HttpServletResponse)(e: String) {
+  // TODO: JSON Format in body {"exception":"message"}
+  private def jsonError(resp: HttpServletResponse)(e: String) {
     resp.setStatus(400)
     resp.getWriter.print(e)
   }
 
-  def getToken(req: HttpServletRequest, resp: HttpServletResponse) {
-    val db = self.mongo("dhek")
-    val tokens = db("tokens")
-    val query = BSONDocument("name" -> "public")
-    val filter = BSONDocument("token" -> 1)
-    val continuation = ContinuationSupport.getContinuation(req)
+  def auth(req: HttpServletRequest, resp: HttpServletResponse) {
+    val findTok = managed(self.mongo) map { con =>
+      val db = con("dhek")
+      val query = BSONDocument("name" -> "public")
+      val filter = BSONDocument("token" -> 1)
+      db("tokens").find(query, filter).one[BSONDocument]
+    }
 
-    continuation.suspend(resp)
-    tokens.find(query, filter).one[BSONDocument].foreach { res ⇒
-      for {
-        doc ← res
-        token ← doc.getAs[String]("token")
-      } yield {
-        val cresp = continuation.getServletResponse
-        cresp.setContentType("application/json")
-        cresp.getWriter.print(s"""{"token":"$token"}""")
-        continuation.complete()
-      }
+    val continuation = {
+      val cont = ContinuationSupport.getContinuation(req)
+      cont.setTimeout(5000) // TODO: configurable
+      cont.suspend(resp)
+      cont
+    }
+
+    findTok acquireAndGet { f =>
+      val find: Future[Option[BSONDocument]] = 
+        scala.concurrent.Await.ready(f, Duration("5 s")/* TODO: Configurable */)
+
+      val r = continuation.getServletResponse.asInstanceOf[HttpServletResponse]
+      r.setContentType("application/json")
+
+      val err = jsonError(r)(_)
+
+      find onComplete {
+        case Success(o) => 
+          o.fold[Unit](err("No matching token"))(t =>
+            managed(r.getWriter).acquireAndGet(_.print(s"""{"token":"TODO-SHA1-HMAC"}""")))
+          continuation.complete()
+
+        case Failure(e) =>
+          e.printStackTrace() // TODO: logging
+          err(s"Fails to check authentication: ${e.getMessage}")
+          continuation.complete()
+      } 
     }
   }
 
@@ -186,6 +209,6 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
     lazy val jsonReader = new java.io.FileReader(json)
 
     Parse.decodeEither[Model](Binaries.loadReader(jsonReader)).
-      fold(onError(resp), onJsonSuccess)
+      fold(jsonError(resp), onJsonSuccess)
   }
 }
