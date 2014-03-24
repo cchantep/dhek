@@ -13,7 +13,7 @@ import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 
 import reactivemongo.api.MongoConnection
 
-import Extractor.{ &, Attributes, First, GET, POST, Params, Path }
+import Extractor.{ &, Attr, GET, POST, Param, Path }
 
 final class Plan(m: ⇒ MongoConnection, key: String)
     extends Filter with Controllers {
@@ -31,10 +31,11 @@ final class Plan(m: ⇒ MongoConnection, key: String)
     hresp.setCharacterEncoding("UTF-8")
 
     hreq match {
-      case POST(Path("/auth")) & Login(email, passw) ⇒
-        auth(email, passw, hreq, hresp)
-      case POST(Path("/upload") & Attributes(Pdf(p) & Json(j) & Font(f))) ⇒
-        modelFusion(p, j, f, hresp)
+      case POST(Path("/auth")) & 
+          ~(Param("email"), email) & ~(Param("password"), password) ⇒
+        auth(email, password, hreq, hresp)
+      case POST(Path("/upload")) & ~(Attr("pdf"), pdf) & ~(Attr("json"), js) ⇒
+        modelFusion(pdf.asInstanceOf[File], js.asInstanceOf[File], hresp)
       case _ ⇒ chain.doFilter(req, resp)
     }
   }
@@ -51,6 +52,7 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
   import scala.concurrent.ExecutionContext.Implicits.global
 
   import argonaut._, Argonaut._
+  import argonaut.{ Json => ArgJson }
   import com.itextpdf.text.{
     BaseColor,
     Document,
@@ -67,33 +69,15 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
     PdfWriter,
     PdfStamper
   }
-  import org.eclipse.jetty.continuation.{ Continuation, ContinuationSupport }
   import org.apache.commons.codec.binary.Hex
   import org.apache.commons.codec.digest.DigestUtils
-  import org.eclipse.jetty.continuation.ContinuationSupport
-  import reactivemongo.api._
-  import reactivemongo.bson._
   import resource.managed
+  import org.eclipse.jetty.continuation.{ Continuation, ContinuationSupport }
+  import reactivemongo.bson.BSONDocument
 
   case class Rect(x: Int, y: Int, h: Int, w: Int, name: String, typ: String)
   case class Page(areas: Option[List[Rect]])
   case class Model(format: String, pages: List[Page])
-
-  // Request attributes extractors
-  object Pdf {
-    def unapply(attrs: Map[String, Any]): Option[File] =
-      attrs.get("pdf").map(_.asInstanceOf[File])
-  }
-
-  object Json {
-    def unapply(attrs: Map[String, Any]) =
-      attrs.get("json").map(_.asInstanceOf[File])
-  }
-
-  object Font {
-    def unapply(attrs: Map[String, Any]): Option[Option[File]] =
-      Some(attrs.get("font").map(_.asInstanceOf[File]))
-  }
 
   // JSON codecs
   object Rect {
@@ -112,28 +96,18 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
       casecodec2(Model.apply, Model.unapply)("format", "pages")
   }
 
-  object Login {
-    def unapply(req: HttpServletRequest): Option[(String, String)] = req match {
-      case Params(ps) ⇒ for {
-        email ← First("email", ps)
-        password ← First("password", ps)
-      } yield (email, password)
-      case _ ⇒ None
-    }
-  }
-
   // TODO: JSON Format in body {"exception":"message"}
-  private def jsonError(resp: HttpServletResponse)(e: String) {
-    resp.setStatus(400)
-    resp.getWriter.print(e)
+  private def jsonError(resp: HttpServletResponse)(s: Int, e: String) {
+    resp.setStatus(s)
+    resp.getWriter.print(ArgJson("exception" -> jString(e)).nospaces)
   }
 
   def auth(email: String, passw: String, req: HttpServletRequest, resp: HttpServletResponse) {
+    println(s"email = $email, password = $passw") // TODO: Logger (debug|info)
+
     val findTok = managed(self.mongo) map { con ⇒
       val db = con("dhek")
-      val query = BSONDocument("email" -> email)
-      val filter = BSONDocument("password" -> 1)
-      db("users").find(query, filter).one[BSONDocument]
+      db("users").find(BSONDocument("email" -> email)).one[BSONDocument]
     }
 
     val continuation = {
@@ -147,28 +121,29 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
       val find: Future[Option[BSONDocument]] =
         scala.concurrent.Await.ready(f, Duration("5 s") /* TODO: Configurable */ )
 
-      val err = jsonError(resp)(_)
+      def err(e: String, s: Int = 400) = jsonError(resp)(s, e)
 
       find onComplete {
-        case Success(res) ⇒
+        case Success(res) ⇒ 
           val action = for {
             doc ← res
             pwd ← doc.getAs[String]("password")
           } yield {
-            val cresp = continuation.getServletResponse
-            val hcresp = cresp.asInstanceOf[HttpServletResponse]
+            val resp = continuation.getServletResponse.
+              asInstanceOf[HttpServletResponse]
 
-            if (pwd == DigestUtils.md5Hex(passw)) {
+            if (pwd == DigestUtils.sha1Hex(passw)) {
               val sha1: Mac = Mac.getInstance("HmacSHA1")
-              sha1.init(new SecretKeySpec(Hex.decodeHex(self.secretKey), "HmacSHA1"))
+              sha1.init(new SecretKeySpec(
+                Hex.decodeHex(self.secretKey), "HmacSHA1"))
 
               val token = Hex.encodeHexString(sha1.doFinal(email.getBytes))
 
-              cresp.setContentType("application/json")
-              managed(cresp.getWriter).acquireAndGet(_.print(s"""{"token":"$token"}"""))
-            } else {
-              hcresp.setStatus(403)
-            }
+              resp.setContentType("application/json")
+              managed(resp.getWriter).acquireAndGet(_.
+                print(ArgJson("token" -> jString(token)).nospaces))
+
+            } else err("Authentication mismatch")
           }
 
           action.getOrElse(err("No matching token"))
@@ -181,7 +156,9 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
     }
   }
 
-  def modelFusion(pdf: File, json: File, fontUrl: Option[File], resp: HttpServletResponse) {
+  def modelFusion(pdf: File, json: File, resp: HttpServletResponse, fontUrl: Option[File] = None) {
+
+    println(s"pdf = $pdf, json = $json") // TODO: Logging (debug|info)
 
     def onJsonSuccess(m: Model) {
 
@@ -231,6 +208,6 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
     lazy val jsonReader = new java.io.FileReader(json)
 
     Parse.decodeEither[Model](Binaries.loadReader(jsonReader)).
-      fold(jsonError(resp), onJsonSuccess)
+      fold(jsonError(resp)(400, _), onJsonSuccess)
   }
 }

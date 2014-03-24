@@ -8,6 +8,12 @@ resolvers += "Sonatype Snapshots" at "http://oss.sonatype.org/content/repositori
 
 resolvers += "Typesafe repository releases" at "http://repo.typesafe.com/typesafe/releases/"
 
+autoCompilerPlugins := true
+
+addCompilerPlugin("org.eu.acolyte" %% "scalac-plugin" % "1.0.16")
+
+//scalacOptions += "-P:acolyte:debug"
+
 libraryDependencies ++= Seq(
   "org.scalaz"  %% "scalaz-core" % "7.1.0-M3",
   "org.specs2" %% "specs2" % "2.3.2" % "test",
