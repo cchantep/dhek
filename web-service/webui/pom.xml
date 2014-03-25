@@ -143,15 +143,25 @@
                 <include>my-account.xhtml</include>
               </includes>
               <!-- TODO: Template with bootstrap -->
-              <stylesheet>${basedir}/src/main/xsl/saxy.xsl</stylesheet>
-              <!--
+              <stylesheet>${basedir}/src/main/xsl/layout.xsl</stylesheet>
               <parameters>
                 <parameter>
-                  <name>x</name>
-                  <value>y</value>
+                  <name>page</name>
+                  <value>my-account</value>
+                </parameter>
+                <parameter>
+                  <name>title</name>
+                  <value>Manage my account</value>
+                </parameter>
+                <parameter>
+                  <name>cssBundle</name>
+                  <value>my-account.gz.css</value>
+                </parameter>
+                <parameter>
+                  <name>jsBundle</name>
+                  <value>my-account.gz.js</value>
                 </parameter>
               </parameters>
-              -->
               <outputDir>${project.build.directory}/web</outputDir>
              <fileMappers>
                 <fileMapper implementation="org.codehaus.plexus.components.io.filemappers.FileExtensionMapper">
@@ -161,22 +171,32 @@
             </transformationSet>
             <!-- endOf Manage user -->
 
-            <!-- Upload -->
+            <!-- Template -->
             <transformationSet>
               <dir>src/main/webapp</dir>
               <includes>
-                <include>upload.xhtml</include>
+                <include>template.xhtml</include>
               </includes>
               <!-- TODO: Template with bootstrap -->
-              <stylesheet>${basedir}/src/main/xsl/saxy.xsl</stylesheet>
-              <!--
+              <stylesheet>${basedir}/src/main/xsl/layout.xsl</stylesheet>
               <parameters>
                 <parameter>
-                  <name>x</name>
-                  <value>y</value>
+                  <name>page</name>
+                  <value>template</value>
+                </parameter>
+                <parameter>
+                  <name>title</name>
+                  <value>Edit template</value>
+                </parameter>
+                <parameter>
+                  <name>cssBundle</name>
+                  <value>bootstrap.min.css</value>
+                </parameter>
+                <parameter>
+                  <name>jsBundle</name>
+                  <value>template.gz.js</value>
                 </parameter>
               </parameters>
-              -->
               <outputDir>${project.build.directory}/web</outputDir>
              <fileMappers>
                 <fileMapper implementation="org.codehaus.plexus.components.io.filemappers.FileExtensionMapper">
@@ -184,7 +204,7 @@
                 </fileMapper>
               </fileMappers>
             </transformationSet>
-            <!-- endOf Upload -->
+            <!-- endOf Template -->
 
           </transformationSets>
         </configuration>
@@ -379,6 +399,23 @@
               </jsSourceFiles>
             </configuration>
           </execution>
+
+          <execution>
+            <id>template-js</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>minify</goal>
+            </goals>
+
+            <configuration>
+              <charset>UTF-8</charset>
+              <jsFinalFile>template-merge.js</jsFinalFile>
+              <jsSourceFiles>
+                <jsSourceFile>dhek-commons.min.js</jsSourceFile>
+                <jsSourceFile>template.js</jsSourceFile>
+              </jsSourceFiles>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
 
@@ -432,8 +469,11 @@
                 <gzip src="${webdir}/my-account.html" 
                       destfile="${webdir}/my-account.gz.html" />
 
-                <gzip src="${webdir}/upload.html" 
-                      destfile="${webdir}/upload.gz.html" />
+                <gzip src="${jsdir}/template-merge.min.js" 
+                      destfile="${jsdir}/template.gz.js" />
+
+                <gzip src="${webdir}/template.html" 
+                      destfile="${webdir}/template.gz.html" />
               </tasks>
             </configuration>
           </execution>

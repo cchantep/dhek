@@ -1,32 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <title>Manage my account</title>
-    <meta charset="utf-8"></meta>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-    <link href="css/my-account.gz.css" rel="stylesheet" />
-
-    <!--[if lt IE 9]>
-      <script src="js/html5shiv.gz.js"></script>
-      <script src="js/respond.gz.js"></script>
-    <![endif]-->
-  </head>
-  <body>
-    <div class="container">
-      <div class="page-header">
-        <h1>My account <small>Manage preferences</small></h1>
-      </div>
+<div class="container">
+  <div class="page-header">
+    <h1>My account <small>Manage preferences</small></h1>
+  </div>
+  
+  <div class="panel panel-default" id="my-templates">
+    <div class="panel-heading clearfix">
+      <h2 class="pull-left">Templates</h2>
       
-      <div class="panel panel-default" id="my-templates">
-        <div class="panel-heading">
-          <h2>Templates</h2>
-        </div>
-        <div class="panel-body list-group"></div>
+      <div role="menu" class="pull-right">
+        <button id="create-template" class="btn btn-default">
+          <i class="fa fa-asterisk"></i> New</button>
+        
+        <button class="btn btn-danger" id="remove-template">
+          <i class="fa fa-minus-circle"></i> Remove</button>
       </div>
-    </div><!-- /.container -->
-
-    <script src="js/my-account.gz.js"></script>
-  </body>
-</html>
+    </div>
+    
+    <div class="panel-body list-group"></div>
+  </div>
+</div><!-- /.container -->
