@@ -1,3 +1,5 @@
 .panel-heading > h2 { margin-top: 10px }
 
 .panel-heading .pull-right > button + button { margin-left: 1em }
+
+#remove-template .badge { margin-left: .5em }
