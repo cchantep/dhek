@@ -125,6 +125,7 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
 
       find onComplete {
         case Success(res) ⇒ 
+          // TODO: No exception as JSON on mismatch cases
           val action = for {
             doc ← res
             pwd ← doc.getAs[String]("password")
@@ -143,10 +144,10 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
               managed(resp.getWriter).acquireAndGet(_.
                 print(ArgJson("token" -> jString(token)).nospaces))
 
-            } else err("Authentication mismatch")
+            } else err("Authentication mismatch") // password mismatch
           }
 
-          action.getOrElse(err("No matching token"))
+          action.getOrElse(err("Authentication mismatch")/* user mismatch */)
           continuation.complete()
         case Failure(e) ⇒
           e.printStackTrace() // TODO: logging
@@ -160,54 +161,50 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
 
     println(s"pdf = $pdf, json = $json") // TODO: Logging (debug|info)
 
-    def onJsonSuccess(m: Model) {
+    def onJsonSuccess(m: Model): Unit = (for {
+      reader <- managed(new PdfReader(new java.io.FileInputStream(pdf)))
+      stamper <- managed(new PdfStamper(reader, resp.getOutputStream))
+    } yield {
+      def foreachObject[U](f: PdfObject ⇒ U) {
+        val objCount = reader.getXrefSize
 
-      managed(new PdfReader(new java.io.FileInputStream(pdf))).acquireAndGet { reader ⇒
-        managed(new PdfStamper(reader, resp.getOutputStream)).acquireAndGet { stamper ⇒
-
-          def foreachObject[U](f: PdfObject ⇒ U) {
-            val objCount = reader.getXrefSize
-
-            @annotation.tailrec
-            def loop(cur: Int) {
-              if (cur < objCount) {
-                f(reader.getPdfObject(cur - 1))
-                loop(cur + 1)
-              }
-            }
-
-            loop(1)
-          }
-
-          resp.setContentType("application/pdf")
-
-          m.pages.foldLeft(1) { (i, p) ⇒
-
-            val page = stamper.getImportedPage(reader, i)
-            val pageRect = reader.getPageSize(i)
-            val over = stamper.getOverContent(i)
-
-            for {
-              rects ← p.areas.toList
-              rect ← rects
-            } yield {
-              over.saveState()
-              over.setLineWidth(2)
-              over.setColorStroke(BaseColor.RED)
-              over.rectangle(rect.x, pageRect.getHeight - rect.y - rect.h, rect.w, rect.h)
-              over.stroke()
-              over.restoreState()
-            }
-
-            i + 1
+        @annotation.tailrec
+        def loop(cur: Int) {
+          if (cur < objCount) {
+            f(reader.getPdfObject(cur - 1))
+            loop(cur + 1)
           }
         }
+
+        loop(1)
       }
-    }
+
+      resp.setContentType("application/pdf")
+
+      m.pages.foldLeft(1) { (i, p) ⇒
+        val page = stamper.getImportedPage(reader, i)
+        val pageRect = reader.getPageSize(i)
+        val over = stamper.getOverContent(i)
+
+        for {
+          rects ← p.areas.toList
+          rect ← rects
+        } yield {
+          over.saveState()
+          over.setLineWidth(2)
+            over.setColorStroke(BaseColor.RED)
+          over.rectangle(rect.x, pageRect.getHeight - rect.y - rect.h, rect.w, rect.h)
+          over.stroke()
+          over.restoreState()
+        }
+
+        i + 1
+      }
+    }) acquireFor { _ => () }
 
     lazy val jsonReader = new java.io.FileReader(json)
 
     Parse.decodeEither[Model](Binaries.loadReader(jsonReader)).
-      fold(jsonError(resp)(400, _), onJsonSuccess)
+      fold(jsonError(resp)(400, _), onJsonSuccess(_))
   }
 }

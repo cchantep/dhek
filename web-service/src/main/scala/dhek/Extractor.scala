@@ -25,14 +25,6 @@ object Extractor {
     def unapply(req: HttpServletRequest) = Option(req.getRequestURI)
   }
 
-  object Seg {
-    def unapply(path: String): Option[List[String]] = 
-      path.split('/').toList match {
-        case Nil     ⇒ Some(Nil)
-        case _ :: xs ⇒ Some(xs)
-      }
-  }
-
   case class Attr(name: String) {
     def unapply(req: HttpServletRequest) = Option(req getAttribute name)
   }
