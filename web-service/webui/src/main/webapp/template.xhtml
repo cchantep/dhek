@@ -1,0 +1,26 @@
+<div class="container">
+  <div class="page-header">
+    <h1>Template <small>Choose resources</small></h1>
+    <a href="#back" title="My Account">
+      <i class="fa fa-arrow-left"></i> Back</a>
+  </div>
+
+  <form method="POST" role="form" action="/rest/upload" 
+        enctype="multipart/form-data">
+
+    <div class="form-group">
+      <label for="pdf" class="control-label">PDF document</label>
+      <input name="pdf" id="pdf" type="file" class="form-control" />
+    </div>
+
+    <!-- TODO: Split into 2 steps, so it can be checked that page number required by JSON template is compatible with previously selected PDF -->
+    <div class="form-group">
+      <label for="json" class="control-label">JSON/Dhek template</label>
+      <input name="json" id="json" type="file" class="form-control" />
+    </div>
+
+    <button class="btn btn-default">
+      Continue <i class="fa fa-arrow-right"></i>
+    </button>
+  </form>
+</div><!-- /.container -->
