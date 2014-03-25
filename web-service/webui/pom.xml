@@ -32,7 +32,7 @@
       </activation>
 
       <properties>
-        <dhek.validateCredUrl>rest/token</dhek.validateCredUrl>
+        <dhek.validateCredUrl>rest/auth</dhek.validateCredUrl>
         <dhek.myTemplatesUrl>rest/my-templates</dhek.myTemplatesUrl>
       </properties>
     </profile>

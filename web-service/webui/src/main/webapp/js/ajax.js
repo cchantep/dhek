@@ -29,7 +29,10 @@
             var url = ((typeof target == "object") && target['url']) 
             ? target.url : target;
 
-            $._displayUnexpectedError("<p>Unavailable : <em>" + url + "</em></p><pre>" + s + " - " + e + "</pre>")
+            var msg = (r['responseJSON'] && r.responseJSON['exception'])
+            ? r.responseJSON.exception : e;
+
+            $._displayUnexpectedError("<p>Unavailable : <em>" + url + "</em></p><pre>" + s + " - " + msg + "</pre>")
         }).always($._unlock)
     };
 
