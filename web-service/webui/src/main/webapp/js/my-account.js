@@ -18,6 +18,7 @@
         'url': $._myAccount['templatesUrl'],
         'type': "POST",
         'cache': false,
+        'data': 't=' + token,
         'dataType': "json"
     }, function(d) {
         if (!d || (typeof d) != "object" || !d['length']) {
