@@ -14,6 +14,14 @@
     var edit = function() {},
     itemAction = edit,
     templateList = function(d) {
+
+    $._ajax({
+        'url': $._myAccount['templatesUrl'],
+        'type': "POST",
+        'cache': false,
+        'data': 't=' + token,
+        'dataType': "json"
+    }, function(d) {
         if (!d || (typeof d) != "object" || !d['length']) {
             alert("No template");
             return false

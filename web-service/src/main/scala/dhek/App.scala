@@ -31,12 +31,14 @@ final class Plan(m: ⇒ MongoConnection, key: String)
     hresp.setCharacterEncoding("UTF-8")
 
     hreq match {
-      case POST(Path("/auth")) & 
+      case POST(Path("/auth")) &
           ~(Param("email"), email) & ~(Param("password"), password) ⇒
-        auth(email, password, hreq, hresp)
+         auth(email, password, hreq, hresp)
       case POST(Path("/upload")) & ~(Attr("pdf"), pdf) & ~(Attr("json"), js) ⇒
         modelFusion(pdf.asInstanceOf[File], js.asInstanceOf[File], hresp)
-      case _ ⇒ chain.doFilter(req, resp)
+      case POST(Path("/my-templates")) & ~(Param("t"), token) =>
+        myTemplates(token, hreq, hresp)
+     case _ ⇒ chain.doFilter(req, resp)
     }
   }
 }
@@ -78,6 +80,7 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
   case class Rect(x: Int, y: Int, h: Int, w: Int, name: String, typ: String)
   case class Page(areas: Option[List[Rect]])
   case class Model(format: String, pages: List[Page])
+  case class Template(id: String, name: String)
 
   // JSON codecs
   object Rect {
@@ -96,10 +99,20 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
       casecodec2(Model.apply, Model.unapply)("format", "pages")
   }
 
+  object Template {
+    implicit def templateCodecJson =
+      casecodec2(Template.apply, Template.unapply)("id", "name")
+  }
+
   // TODO: JSON Format in body {"exception":"message"}
   private def jsonError(resp: HttpServletResponse)(s: Int, e: String) {
     resp.setStatus(s)
     resp.getWriter.print(ArgJson("exception" -> jString(e)).nospaces)
+  }
+  val sha1: Mac = {
+    val tmp = Mac.getInstance("HmacSHA1")
+    tmp.init(new SecretKeySpec(Hex.decodeHex(self.secretKey), "HmacSHA1"))
+    tmp
   }
 
   def auth(email: String, passw: String, req: HttpServletRequest, resp: HttpServletResponse) {
@@ -124,7 +137,7 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
       def err(e: String, s: Int = 400) = jsonError(resp)(s, e)
 
       find onComplete {
-        case Success(res) ⇒ 
+        case Success(res) ⇒
           // TODO: No exception as JSON on mismatch cases
           val action = for {
             doc ← res
@@ -134,10 +147,6 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
               asInstanceOf[HttpServletResponse]
 
             if (pwd == DigestUtils.sha1Hex(passw)) {
-              val sha1: Mac = Mac.getInstance("HmacSHA1")
-              sha1.init(new SecretKeySpec(
-                Hex.decodeHex(self.secretKey), "HmacSHA1"))
-
               val token = Hex.encodeHexString(sha1.doFinal(email.getBytes))
 
               resp.setContentType("application/json")
@@ -206,5 +215,58 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
 
     Parse.decodeEither[Model](Binaries.loadReader(jsonReader)).
       fold(jsonError(resp)(400, _), onJsonSuccess(_))
+  }
+
+  def myTemplates(token: String, req: HttpServletRequest, resp: HttpServletResponse) {
+    def bsonToTemplate(b: BSONDocument): Template = {
+      val action = for {
+        id <- b.getAs[String]("id")
+        name <- b.getAs[String]("name")
+      } yield Template(id, name)
+
+      action.get // TODO: Handle error case
+    }
+
+    val findTemplates = managed(self.mongo) map { con ⇒
+      val db = con("dhek")
+      db("users").find(BSONDocument("adminToken" -> token)).one[BSONDocument]
+    }
+
+    val continuation = {
+      val cont = ContinuationSupport.getContinuation(req)
+      cont.setTimeout(5000) // TODO: configurable
+      cont.suspend(resp)
+      cont
+    }
+
+    findTemplates.acquireAndGet { f =>
+      val find: Future[Option[BSONDocument]] =
+        scala.concurrent.Await.ready(f, Duration("5 s") /* TODO: Configurable */ )
+
+      val hresp = continuation.getServletResponse.
+            asInstanceOf[HttpServletResponse]
+
+      find onComplete {
+        case Success(res) =>
+          val action = for {
+            doc <- res
+            tempsBSON <- doc.getAs[List[BSONDocument]]("templates").orElse(Some(Nil))
+            templates <- Some(tempsBSON.map(bsonToTemplate))
+          } yield templates
+
+          hresp.setContentType("application/json")
+          action match {
+            case None     => hresp.setStatus(404)
+            case Some(ts) =>
+              managed(hresp.getWriter).acquireAndGet(_.
+                print(ts.asJson.nospaces))
+          }
+          continuation.complete()
+        case Failure(e) =>
+          e.printStackTrace() // TODO: Log
+          jsonError(hresp)(500, "")
+          continuation.complete()
+      }
+    }
   }
 }
