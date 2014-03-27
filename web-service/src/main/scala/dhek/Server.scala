@@ -52,15 +52,19 @@ final class Server(
 }
 
 object Runner {
-  import resource.managed
+  import scala.concurrent.duration.Duration
+
   import com.typesafe.config.ConfigFactory
+  import resource.managed
   import reactivemongo.api.MongoDriver
 
   def main(args: Array[String]): Unit =
     managed(new MongoDriver()) acquireAndGet { md ⇒
       val config = ConfigFactory.parseFile(new File(".", "dhek.conf"))
-      val secretKey = config.getString("dhek.secret.key")
-      val server = new Server(new Plan(md.connection(List("localhost")), secretKey)).run()
+      val secretKey = config.getString("dhek.secret.key").toArray
+      val duration = Duration(config.getString("dhek.duration"))
+      val settings = Settings(secretKey, duration)
+      val server = new Server(new Plan(md.connection(List("localhost")), settings)).run()
 
       readLine() // wait any key to be pressed
       server.stop()

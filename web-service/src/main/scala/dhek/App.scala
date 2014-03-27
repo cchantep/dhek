@@ -15,11 +15,11 @@ import reactivemongo.api.MongoConnection
 
 import Extractor.{ &, Attr, GET, POST, Param, Path }
 
-final class Plan(m: ⇒ MongoConnection, key: String)
+final class Plan(m: ⇒ MongoConnection, s: Settings)
     extends Filter with Controllers {
 
   def mongo: MongoConnection = m
-  def secretKey: Array[Char] = key.toArray
+  def settings: Settings = s
 
   def destroy() {}
   def init(config: FilterConfig) {}
@@ -111,7 +111,7 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
   }
   val sha1: Mac = {
     val tmp = Mac.getInstance("HmacSHA1")
-    tmp.init(new SecretKeySpec(Hex.decodeHex(self.secretKey), "HmacSHA1"))
+    tmp.init(new SecretKeySpec(Hex.decodeHex(settings.secretKey), "HmacSHA1"))
     tmp
   }
 
@@ -125,14 +125,14 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
 
     val continuation = {
       val cont = ContinuationSupport.getContinuation(req)
-      cont.setTimeout(5000) // TODO: configurable
+      cont.setTimeout(settings.timeout.toMillis)
       cont.suspend(resp)
       cont
     }
 
     findTok acquireAndGet { f ⇒
       val find: Future[Option[BSONDocument]] =
-        scala.concurrent.Await.ready(f, Duration("5 s") /* TODO: Configurable */ )
+        scala.concurrent.Await.ready(f, settings.timeout)
 
       def err(e: String, s: Int = 400) = jsonError(resp)(s, e)
 
@@ -234,14 +234,14 @@ sealed trait Controllers { self: Plan ⇒ // TODO: Separate each controller
 
     val continuation = {
       val cont = ContinuationSupport.getContinuation(req)
-      cont.setTimeout(5000) // TODO: configurable
       cont.suspend(resp)
+      cont.setTimeout(settings.timeout.toMillis)
       cont
     }
 
     findTemplates.acquireAndGet { f =>
       val find: Future[Option[BSONDocument]] =
-        scala.concurrent.Await.ready(f, Duration("5 s") /* TODO: Configurable */ )
+        scala.concurrent.Await.ready(f, settings.timeout)
 
       val hresp = continuation.getServletResponse.
             asInstanceOf[HttpServletResponse]
