@@ -1,4 +1,4 @@
 use dhek
 
 db.createCollection("users")
-db.users.insert({'email':'test@applicius.fr','password':'test','adminToken':'xx','templates':[{ 'id': 'tmpl-1', 'name': 'Template #1' },{ 'id': '2.tmpl', 'name': 'Second template' }, { 'id': 'tmpl_3', 'name': 'The third one' }]})
+db.users.insert({'email':'test@applicius.fr','password':'secret-sha1','adminToken':'xx','templates':[{ 'id': 'tmpl-1', 'name': 'Template #1' },{ 'id': '2.tmpl', 'name': 'Second template' }, { 'id': 'tmpl_3', 'name': 'The third one' }]})
