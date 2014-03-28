@@ -7,23 +7,17 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import argonaut._, Argonaut._
 import reactivemongo.api.MongoConnection
 import reactivemongo.bson.BSONDocument
-import resource.ManagedResource
+import resource.managed
 import scalaz.std.list._
 import scalaz.std.option._
 import scalaz.syntax.traverse._
 
-import Extractor.Param
+import Extractor.{ Param, Path, POST, & }
 
 object TemplateController {
 
   sealed trait Action
-
-  case class GetTemplates(
-    token: String,
-    async: Async,
-    mongo: ManagedResource[MongoConnection],
-    settings: Settings
-  ) extends Action
+  case class GetTemplates(token: String) extends Action
 
   val routing = Routing(route, apply)
 
@@ -40,36 +34,26 @@ object TemplateController {
       } yield Template(id, name)
   }
 
-  def extractGetTemplates(ps: Route.Params) = ps match {
-    case ~(Param("t"), token) =>
-      for {
-        async    <- Route.getAsync
-        mongo    <- Route.getMongo
-        settings <- Route.getSettings
-      } yield GetTemplates(token, async, mongo, settings)
-    case _ => Route.failed[GetTemplates]
+  def route(env: Env): Option[Action] = env.req match {
+    case POST(Path("/my-templates")) & ~(Param("t"), t) =>
+      Some(GetTemplates(t))
+    case _ => None
   }
 
-  val route = for {
-    _  <- Route.isPOST
-    _  <- Route.hasURI("my-templates")
-    ps <- Route.getParams
-    a  <- extractGetTemplates(ps)
-  } yield a
-
-  def apply(action: Action): Unit = action match {
-    case GetTemplates(token, async, mongo, settings) =>
-      val findTemplates = mongo.map { con =>
+  def apply(action: Action, env: Env): Unit = action match {
+    case GetTemplates(token) =>
+      val findTemplates = env.mongo.map { con =>
         val db = con("dhek")
         db("users").find(BSONDocument("adminToken" -> token)).one[BSONDocument]
       }
 
-      async { (complete, resp, writer) =>
+      env.async { complete =>
         findTemplates.acquireAndGet { ft =>
           val find: Future[Option[BSONDocument]] =
-            Await.ready(ft, settings.timeout)
+            Await.ready(ft, env.settings.timeout)
 
-          resp.setContentType("application/json")
+          env.resp.setContentType("application/json")
+          val writer = managed(env.resp.getWriter)
 
           find.onComplete {
             case Success(res) =>
@@ -88,7 +72,7 @@ object TemplateController {
               }
             case Failure(e) =>
               e.printStackTrace()
-              resp.setStatus(500)
+              env.resp.setStatus(500)
               writer.acquireAndGet(_.print(e.getMessage))
               complete()
         }

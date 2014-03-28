@@ -21,15 +21,14 @@ import com.itextpdf.text.{
 
 import resource.{ ManagedResource, managed }
 
-import Extractor.{ Attr, & }
+import Extractor.{ Attr, Path, POST, & }
 
 object PdfController {
 
   case class Fusion(
     pdf: ManagedResource[FileInputStream],
     model: ManagedResource[FileReader],
-    font: Option[ManagedResource[FileInputStream]],
-    resp: HttpServletResponse
+    font: Option[ManagedResource[FileInputStream]]
   )
 
   case class Rect(x: Int, y: Int, h: Int, w: Int, name: String, typ: String)
@@ -55,31 +54,20 @@ object PdfController {
 
   val routing = Routing(route, apply)
 
-  def extractFusion(as: Route.Attrs) = as match {
-    case ~(Attr("pdf"), pdf) & ~(Attr("json"), json) =>
-      for {
-        resp   <- Route.getResponse
-      } yield Fusion(
-        managed(new FileInputStream(pdf.asInstanceOf[File])),
-        managed(new FileReader(json.asInstanceOf[File])),
-        None,
-        resp
-      )
-    case _ => Route.failed[Fusion]
+  def route(env: Env): Option[Fusion] = env.req match {
+    case POST(Path("/upload")) & ~(Attr("pdf"), pdf) & ~(Attr("json"), json) =>
+      val mpdf  = managed(new FileInputStream(pdf.asInstanceOf[File]))
+      val mjson = managed(new FileReader(json.asInstanceOf[File]))
+
+      Some(Fusion(mpdf, mjson, None))
+    case _ => None
   }
 
-  def route = for {
-    _  <- Route.isPOST
-    _  <- Route.hasURI("/upload")
-    as <- Route.getAttrs
-    fu <- extractFusion(as)
-  } yield fu
-
-  def apply(fusion: Fusion) {
+  def apply(fusion: Fusion, env: Env) {
     def jsonError(e: String) {
-      fusion.resp.setStatus(400)
-      fusion.resp.setContentType("application/json")
-      managed(fusion.resp.getWriter).acquireAndGet(
+      env.resp.setStatus(400)
+      env.resp.setContentType("application/json")
+      managed(env.resp.getWriter).acquireAndGet(
         _.print(ArgJson("exception" -> jString(e)).asJson.nospaces)
       )
     }
@@ -87,7 +75,7 @@ object PdfController {
     def jsonSuccess(m: Model): Unit = {
       val action = for {
         input   <- fusion.pdf
-        output  <- managed(fusion.resp.getOutputStream)
+        output  <- managed(env.resp.getOutputStream)
         reader  <- managed(new PdfReader(input))
         stamper <- managed(new PdfStamper(reader, output))
         } yield {
@@ -105,7 +93,7 @@ object PdfController {
             loop(1)
           }
 
-          fusion.resp.setContentType("application/pdf")
+          env.resp.setContentType("application/pdf")
 
           m.pages.foldLeft(1) { (i, p) ⇒
             val page = stamper.getImportedPage(reader, i)

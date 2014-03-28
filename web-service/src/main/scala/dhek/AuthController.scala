@@ -2,6 +2,7 @@ package dhek
 
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Await
 import scala.concurrent.Future
@@ -13,9 +14,9 @@ import org.apache.commons.codec.binary.Hex
 import org.apache.commons.codec.digest.DigestUtils
 import reactivemongo.api.MongoConnection
 import reactivemongo.bson.BSONDocument
-import resource.ManagedResource
+import resource.managed
 
-import Extractor.{ &, Param }
+import Extractor.{ &, POST, Param, Path }
 
 case class AuthController(secretKey: Array[Char]) {
 
@@ -28,48 +29,35 @@ case class AuthController(secretKey: Array[Char]) {
 
   case class Auth(
     email: String,
-    passw: String,
-    async: Async,
-    mongo: ManagedResource[MongoConnection],
-    settings: Settings
+    passw: String
   )
 
-  def extractAuth(ps: Route.Params) = ps match {
-    case ~(Param("email"), email) & ~(Param("password"), pwd) =>
-      for {
-        async    <- Route.getAsync
-        mongo    <- Route.getMongo
-        settings <- Route.getSettings
-      } yield Auth(email, pwd, async, mongo, settings)
-    case _ => Route.failed[Auth]
+  def route(env: Env): Option[Auth] = env.req match {
+    case POST(Path("/auth")) & ~(Param("email"), email) & ~(Param("password"), passw) =>
+      Some(Auth(email, passw))
+    case _ => None
   }
 
-  def route = for {
-    _  <- Route.isPOST
-    _  <- Route.hasURI("/auth")
-    ps <- Route.getParams
-    a  <- extractAuth(ps)
-  } yield a
-
-  def apply(auth: Auth) {
-    val findToken = auth.mongo.map { con =>
+  def apply(auth: Auth, env: Env) {
+    val findToken = env.mongo.map { con =>
       val db = con("dhek")
 
       db("users").find(BSONDocument("email" -> auth.email)).one[BSONDocument]
     }
 
-    auth.async { (complete, resp, writer) =>
+    env.async { complete =>
       findToken.acquireAndGet { ft =>
         val future: Future[Option[BSONDocument]] =
-          Await.ready(ft, auth.settings.timeout)
+          Await.ready(ft, env.settings.timeout)
 
-        resp.setContentType("application/json")
+        env.resp.setContentType("application/json")
+        val writer = managed(env.resp.getWriter)
 
         future.onComplete {
           case Success(res) =>
             val action = for {
-              doc ← res
-              pwd ← doc.getAs[String]("password")
+              doc <- res
+              pwd <- doc.getAs[String]("password")
            } yield (pwd == DigestUtils.sha1Hex(auth.passw))
 
            action match {
@@ -92,6 +80,7 @@ case class AuthController(secretKey: Array[Char]) {
             complete()
           case Failure(e) =>
             e.printStackTrace()
+            env.resp.setStatus(400)
             writer.acquireAndGet(
               _.print(ArgJson("exeption" -> jString(e.getMessage)).nospaces)
             )
