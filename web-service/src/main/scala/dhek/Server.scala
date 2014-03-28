@@ -62,7 +62,7 @@ object Runner {
     managed(new MongoDriver()) acquireAndGet { md ⇒
       val config = ConfigFactory.parseFile(new File(".", "dhek.conf"))
       val secretKey = config.getString("dhek.secret.key").toArray
-      val duration = Duration(config.getString("dhek.duration"))
+      val duration = Duration(config.getString("dhek.request.timeout"))
       val settings = Settings(secretKey, duration)
       val server = new Server(new Plan(md.connection(List("localhost")), settings)).run()
 
