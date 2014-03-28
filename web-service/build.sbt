@@ -15,7 +15,7 @@ addCompilerPlugin("org.eu.acolyte" %% "scalac-plugin" % "1.0.16")
 //scalacOptions += "-P:acolyte:debug"
 
 libraryDependencies ++= Seq(
-  "org.scalaz"  %% "scalaz-core" % "7.1.0-M3",
+  "org.scalaz"  %% "scalaz-core" % "7.1.0-M6",
   "org.specs2" %% "specs2" % "2.3.2" % "test",
   "com.jsuereth" %% "scala-arm" % "1.3",
   "org.eclipse.jetty" % "jetty-servlets" % "9.1.3.v20140225",
