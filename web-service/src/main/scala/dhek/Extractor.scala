@@ -26,10 +26,10 @@ object Extractor {
   }
 
   case class Attr(name: String) {
-    def unapply(req: HttpServletRequest) = Option(req getAttribute name)
+    def unapply(p: Route.Attrs) = p(name)
   }
 
   case class Param(name: String) {
-    def unapply(req: HttpServletRequest) = Option(req getParameter name)
+    def unapply(p: Route.Params) = p(name)
   }
 }
