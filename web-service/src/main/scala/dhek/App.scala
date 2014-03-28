@@ -1,5 +1,6 @@
 package dhek
 
+import java.io.{ File, FileInputStream, FileReader }
 import javax.servlet.{
   Filter,
   FilterConfig,
@@ -11,16 +12,14 @@ import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 import reactivemongo.api.MongoConnection
 import resource.managed
 
+import Extractor.{ POST, Path, Param, Attr, & }
+
 final class Plan(m: => MongoConnection, s: Settings) extends Filter {
 
   def destroy() {}
   def init(config: FilterConfig) {}
 
-  val routes: List[Routing] = List(
-    AuthController.routing(s.secretKey),
-    TemplateController.routing,
-    PdfController.routing
-  )
+  val auth = AuthController.make(s.secretKey)
 
   def doFilter(req: ServletRequest, resp: ServletResponse, chain: FilterChain) {
     val hreq = req.asInstanceOf[HttpServletRequest]
@@ -34,10 +33,16 @@ final class Plan(m: => MongoConnection, s: Settings) extends Filter {
 
     hresp.setCharacterEncoding("UTF-8")
 
-    val opt = routes.find { r =>
-      r.route(env).map(r.callback(_, env)).isDefined
-    }
+    hresp match {
+      case POST(Path("/auth")) & ~(Param("email"), email) & ~(Param("password"), passw) =>
+        auth(Auth(email, passw), env)
+      case POST(Path("/my-templates")) & ~(Param("t"), token) =>
+        TemplateController(GetTemplates(token), env)
+      case POST(Path("/upload")) & ~(Param("pdf"), pdf) & ~(Param("json"), json) =>
+        val mpdf  = managed(new FileInputStream(pdf.asInstanceOf[File]))
+        val mjson = managed(new FileReader(json.asInstanceOf[File]))
 
-    opt.fold(chain.doFilter(req, resp))(identity)
+        PdfController(Fusion(mpdf, mjson, None), env)
+    }
   }
 }

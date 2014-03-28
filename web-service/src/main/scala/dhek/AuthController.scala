@@ -2,7 +2,6 @@ package dhek
 
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Await
 import scala.concurrent.Future
@@ -12,30 +11,18 @@ import argonaut._, Argonaut._
 import argonaut.{ Json => ArgJson }
 import org.apache.commons.codec.binary.Hex
 import org.apache.commons.codec.digest.DigestUtils
-import reactivemongo.api.MongoConnection
 import reactivemongo.bson.BSONDocument
 import resource.managed
 
-import Extractor.{ &, POST, Param, Path }
+case class Auth( email: String, passw: String)
 
-case class AuthController(secretKey: Array[Char]) {
+case class AuthController private(secretKey: Array[Char]) {
 
   val sha1: Mac = {
     val tmp = Mac.getInstance("HmacSHA1")
 
     tmp.init(new SecretKeySpec(Hex.decodeHex(secretKey), "HmacSHA1"))
     tmp
-  }
-
-  case class Auth(
-    email: String,
-    passw: String
-  )
-
-  def route(env: Env): Option[Auth] = env.req match {
-    case POST(Path("/auth")) & ~(Param("email"), email) & ~(Param("password"), passw) =>
-      Some(Auth(email, passw))
-    case _ => None
   }
 
   def apply(auth: Auth, env: Env) {
@@ -92,9 +79,5 @@ case class AuthController(secretKey: Array[Char]) {
 }
 
 object AuthController {
-  def routing(secretKey: Array[Char]): Routing = {
-    val auth = AuthController(secretKey)
-
-    Routing(auth.route, auth.apply)
-  }
+  def make(secretKey: Array[Char]): AuthController = AuthController(secretKey)
 }

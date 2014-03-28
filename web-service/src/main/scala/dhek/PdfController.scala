@@ -23,13 +23,13 @@ import resource.{ ManagedResource, managed }
 
 import Extractor.{ Attr, Path, POST, & }
 
-object PdfController {
+case class Fusion(
+  pdf: ManagedResource[FileInputStream],
+  model: ManagedResource[FileReader],
+  font: Option[ManagedResource[FileInputStream]]
+)
 
-  case class Fusion(
-    pdf: ManagedResource[FileInputStream],
-    model: ManagedResource[FileReader],
-    font: Option[ManagedResource[FileInputStream]]
-  )
+object PdfController {
 
   case class Rect(x: Int, y: Int, h: Int, w: Int, name: String, typ: String)
   case class Page(areas: Option[List[Rect]])
@@ -50,17 +50,6 @@ object PdfController {
   object Model {
     implicit def modelCodecJson =
       casecodec2(Model.apply, Model.unapply)("format", "pages")
-  }
-
-  val routing = Routing(route, apply)
-
-  def route(env: Env): Option[Fusion] = env.req match {
-    case POST(Path("/upload")) & ~(Attr("pdf"), pdf) & ~(Attr("json"), json) =>
-      val mpdf  = managed(new FileInputStream(pdf.asInstanceOf[File]))
-      val mjson = managed(new FileReader(json.asInstanceOf[File]))
-
-      Some(Fusion(mpdf, mjson, None))
-    case _ => None
   }
 
   def apply(fusion: Fusion, env: Env) {

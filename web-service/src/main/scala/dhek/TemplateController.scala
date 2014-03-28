@@ -5,7 +5,6 @@ import scala.concurrent.{ Await, Future }
 import scala.concurrent.ExecutionContext.Implicits.global
 
 import argonaut._, Argonaut._
-import reactivemongo.api.MongoConnection
 import reactivemongo.bson.BSONDocument
 import resource.managed
 import scalaz.std.list._
@@ -14,12 +13,10 @@ import scalaz.syntax.traverse._
 
 import Extractor.{ Param, Path, POST, & }
 
+sealed trait Action
+case class GetTemplates(token: String) extends Action
+
 object TemplateController {
-
-  sealed trait Action
-  case class GetTemplates(token: String) extends Action
-
-  val routing = Routing(route, apply)
 
   case class Template(id: String, name: String)
 
@@ -32,12 +29,6 @@ object TemplateController {
         id   <- b.getAs[String]("id")
         name <- b.getAs[String]("name")
       } yield Template(id, name)
-  }
-
-  def route(env: Env): Option[Action] = env.req match {
-    case POST(Path("/my-templates")) & ~(Param("t"), t) =>
-      Some(GetTemplates(t))
-    case _ => None
   }
 
   def apply(action: Action, env: Env): Unit = action match {
