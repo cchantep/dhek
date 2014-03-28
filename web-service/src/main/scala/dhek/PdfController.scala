@@ -21,8 +21,6 @@ import com.itextpdf.text.{
 
 import resource.{ ManagedResource, managed }
 
-import Extractor.{ Attr, Path, POST, & }
-
 case class Fusion(
   pdf: ManagedResource[FileInputStream],
   model: ManagedResource[FileReader],
@@ -53,13 +51,6 @@ object PdfController {
   }
 
   def apply(fusion: Fusion, env: Env) {
-    def jsonError(e: String) {
-      env.resp.setStatus(400)
-      env.resp.setContentType("application/json")
-      managed(env.resp.getWriter).acquireAndGet(
-        _.print(ArgJson("exception" -> jString(e)).asJson.nospaces)
-      )
-    }
 
     def jsonSuccess(m: Model): Unit = {
       val action = for {
@@ -110,7 +101,7 @@ object PdfController {
 
     fusion.model.acquireAndGet { fm =>
       Parse.decodeEither[Model](Binaries.loadReader(fm)).
-        fold(jsonError, jsonSuccess)
+        fold(env.jsonError(400, _), jsonSuccess)
     }
   }
 }

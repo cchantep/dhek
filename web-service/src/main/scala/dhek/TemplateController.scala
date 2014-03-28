@@ -63,8 +63,7 @@ object TemplateController {
               }
             case Failure(e) =>
               e.printStackTrace()
-              env.resp.setStatus(500)
-              writer.acquireAndGet(_.print(e.getMessage))
+              env.jsonError(500, e.getMessage)
               complete()
         }
       }

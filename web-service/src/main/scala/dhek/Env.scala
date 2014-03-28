@@ -2,9 +2,10 @@ package dhek
 
 import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 
+import argonaut._, Argonaut._
 import org.eclipse.jetty.continuation.ContinuationSupport
 import reactivemongo.api.MongoConnection
-import resource.ManagedResource
+import resource.{ ManagedResource, managed }
 
 case class Env(
   settings: Settings,
@@ -20,5 +21,13 @@ case class Env(
     continuation.setTimeout(settings.timeout.toMillis)
     continuation.suspend()
     f(() => continuation.complete())
+  }
+
+  def jsonError(code: Int, msg: String) {
+    resp.setStatus(code)
+    resp.setContentType("application/json")
+    managed(resp.getWriter).acquireAndGet {
+      _.print(Json("exception" -> jString(msg)).asJson.nospaces)
+    }
   }
 }

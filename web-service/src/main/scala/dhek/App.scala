@@ -33,10 +33,10 @@ final class Plan(m: => MongoConnection, s: Settings) extends Filter {
 
     hresp.setCharacterEncoding("UTF-8")
 
-    hresp match {
+    hreq match {
       case POST(Path("/auth")) & ~(Param("email"), email) & ~(Param("password"), passw) =>
         auth(Auth(email, passw), env)
-      case POST(Path("/my-templates")) & ~(Param("t"), token) =>
+      case POST(Path("/my-templates")) & ~(Param("token"), token) =>
         TemplateController(GetTemplates(token), env)
       case POST(Path("/upload")) & ~(Param("pdf"), pdf) & ~(Param("json"), json) =>
         val mpdf  = managed(new FileInputStream(pdf.asInstanceOf[File]))
