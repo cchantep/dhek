@@ -12,7 +12,7 @@ import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 import reactivemongo.api.MongoConnection
 import resource.managed
 
-import Extractor.{ POST, Path, Param, Attr, & }
+import Extractor.{ POST, Path, Param, Params, Attr, & }
 
 final class Plan(m: => MongoConnection, s: Settings) extends Filter {
 
@@ -43,6 +43,9 @@ final class Plan(m: => MongoConnection, s: Settings) extends Filter {
         val mjson = managed(new FileReader(json.asInstanceOf[File]))
 
         PdfController(Fusion(mpdf, mjson, None), env)
+      case POST(Path("/rm-templates")) & ~(Param("token"), token) & ~(Params("template[]"), tps) =>
+        TemplateController(DeleteTemplates(token, tps), env)
+      case _ => chain.doFilter(req, resp)
     }
   }
 }
