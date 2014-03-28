@@ -20,6 +20,7 @@
         <dhek.validateCredUrl>login.json</dhek.validateCredUrl>
         <dhek.myTemplatesUrl>my-templates.json</dhek.myTemplatesUrl>
         <dhek.rmTemplatesUrl>rm-templates.json</dhek.rmTemplatesUrl>
+        <dhek.saveTemplateUrl>save-template.txt</dhek.saveTemplateUrl>
       </properties>
     </profile>
 
@@ -36,6 +37,7 @@
         <dhek.validateCredUrl>rest/auth</dhek.validateCredUrl>
         <dhek.myTemplatesUrl>rest/my-templates</dhek.myTemplatesUrl>
         <dhek.rmTemplatesUrl>rest/rm-templates</dhek.rmTemplatesUrl>
+        <dhek.saveTemplateUrl>rest/save-template</dhek.saveTemplateUrl>
       </properties>
     </profile>
   </profiles>
@@ -72,6 +74,7 @@
                     <!-- exclude filtered -->
                     <exclude>js/login-ajax.js</exclude>
                     <exclude>js/my-account-ajax.js</exclude>
+                    <exclude>js/template-ajax.js</exclude>
                   </excludes>
                 </resource>
 
@@ -81,6 +84,7 @@
                   <includes>
                     <include>js/login-ajax.js</include>
                     <include>js/my-account-ajax.js</include>
+                    <include>js/template-ajax.js</include>
                   </includes>
                 </resource>
               </resources>
@@ -192,7 +196,7 @@
                 </parameter>
                 <parameter>
                   <name>cssBundle</name>
-                  <value>bootstrap.min.css</value>
+                  <value>template.gz.css</value>
                 </parameter>
                 <parameter>
                   <name>jsBundle</name>
@@ -414,8 +418,27 @@
               <jsFinalFile>template-merge.js</jsFinalFile>
               <jsSourceFiles>
                 <jsSourceFile>dhek-commons.min.js</jsSourceFile>
+                <jsSourceFile>template-ajax.js</jsSourceFile>
                 <jsSourceFile>template.js</jsSourceFile>
               </jsSourceFiles>
+            </configuration>
+          </execution>
+
+          <execution>
+            <id>template-css</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>minify</goal>
+            </goals>
+
+            <configuration>
+              <charset>UTF-8</charset>
+              <cssFinalFile>template-bundle.css</cssFinalFile>
+              <cssSourceFiles>
+                <cssSourceFile>bootstrap.min.css</cssSourceFile>
+                <cssSourceFile>dialog.css</cssSourceFile>
+                <cssSourceFile>template.css</cssSourceFile>
+              </cssSourceFiles>
             </configuration>
           </execution>
         </executions>
@@ -473,6 +496,9 @@
 
                 <gzip src="${jsdir}/template-merge.min.js" 
                       destfile="${jsdir}/template.gz.js" />
+
+                <gzip src="${cssdir}/template-bundle.min.css" 
+                      destfile="${cssdir}/template.gz.css" />
 
                 <gzip src="${webdir}/template.html" 
                       destfile="${webdir}/template.gz.html" />

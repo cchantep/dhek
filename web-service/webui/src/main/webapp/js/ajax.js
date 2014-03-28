@@ -1,11 +1,13 @@
 (function ($) {
     "use strict";
 
-    $._lock = function() {
+    $._progress = function(m, p) {
         if ($("#dhek-lock").length > 0) return false;
         
-        $('<div aria-hidden="true" aria-labelledby="dhek-load-message" role="dialog" class="modal fade" id="dhek-lock"><div class="modal-dialog"><div class="modal-content alert alert-block alert-info"><div class="modal-body"><p class="lead">Loading ...</p><div class="progress progress-striped active"><div style="width: 90%" aria-valuemax="100" aria-valuemin="0" aria-valuenow="90" role="progressbar" class="progress-bar"><span class="sr-only">90%</span></div></div></div></div></div></div>').appendTo("body").modal({ keyboard: false }).on("hidden.bs.modal", function() { $("#dhek-lock").remove() });
+        $('<div aria-hidden="true" aria-labelledby="dhek-load-message" role="dialog" class="modal fade" id="dhek-lock"><div class="modal-dialog"><div class="modal-content alert alert-block alert-info"><div class="modal-body"><p class="lead">'+m+'</p><div class="progress progress-striped active"><div style="width: '+p+'%" aria-valuemax="100" aria-valuemin="0" aria-valuenow="90" role="progressbar" class="progress-bar"><span class="sr-only">'+p+'%</span></div></div></div></div></div></div>').appendTo("body").modal({ keyboard: false }).on("hidden.bs.modal", function() { $("#dhek-lock").remove() });
     };
+
+    $._lock = function() { $._progress("Loading...", 90) };
 
     $._unlock = function() { $("#dhek-lock").modal('hide') };
 
