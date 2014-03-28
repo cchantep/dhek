@@ -32,4 +32,9 @@ object Extractor {
   case class Param(name: String) {
     def unapply(r: HttpServletRequest) = Option(r getParameter name)
   }
+
+  case class Params(name: String) {
+    def unapply(r: HttpServletRequest) =
+      Option(r.getParameterValues(name)).map(_.toList)
+  }
 }
