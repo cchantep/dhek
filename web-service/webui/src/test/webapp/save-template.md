@@ -9,5 +9,5 @@ parameters:
 - json (file)
        
 # Response
-- Status 400 with error message as text/plain
-- Else: Status 400 with "OK:id" as text/plain (`id` = ID of created/updated template)
+- Status 200 with error message as text/plain
+- Else: Status 200 with "OK:id" as text/plain (`id` = ID of created/updated template)
