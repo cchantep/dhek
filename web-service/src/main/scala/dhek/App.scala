@@ -14,7 +14,7 @@ import resource.managed
 
 import Extractor.{ POST, Path, Param, Params, Attr, & }
 
-final class Plan(m: => MongoConnection, s: Settings) extends Filter {
+final class Plan(m: ⇒ MongoConnection, s: Settings) extends Filter {
 
   def destroy() {}
   def init(config: FilterConfig) {}
@@ -24,28 +24,32 @@ final class Plan(m: => MongoConnection, s: Settings) extends Filter {
   def doFilter(req: ServletRequest, resp: ServletResponse, chain: FilterChain) {
     val hreq = req.asInstanceOf[HttpServletRequest]
     val hresp = resp.asInstanceOf[HttpServletResponse]
-    val env = Env (
-      req      = hreq,
-      resp     = hresp,
-      mongo    = managed(m),
+    val env = Env(
+      req = hreq,
+      resp = hresp,
+      mongo = managed(m),
       settings = s
     )
 
     hresp.setCharacterEncoding("UTF-8")
 
     hreq match {
-      case POST(Path("/auth")) & ~(Param("email"), email) & ~(Param("password"), passw) =>
+      case POST(Path("/auth")) & ~(Param("email"), email) & ~(Param("password"), passw) ⇒
         auth(Auth(email, passw), env)
-      case POST(Path("/my-templates")) & ~(Param("token"), token) =>
-        TemplateController(GetTemplates(token), env)
-      case POST(Path("/upload")) & ~(Param("pdf"), pdf) & ~(Param("json"), json) =>
-        val mpdf  = managed(new FileInputStream(pdf.asInstanceOf[File]))
+
+      case POST(Path("/my-templates")) & ~(Param("token"), token) ⇒
+        TemplateController.myTemplates(env)(token)
+
+      case POST(Path("/rm-templates")) & ~(Param("token"), token) & ~(Params("template[]"), ids) ⇒
+        TemplateController.removeTemplates(env)(token, ids)
+
+      case POST(Path("/upload")) & ~(Param("pdf"), pdf) & ~(Param("json"), json) ⇒
+        val mpdf = managed(new FileInputStream(pdf.asInstanceOf[File]))
         val mjson = managed(new FileReader(json.asInstanceOf[File]))
 
         PdfController(Fusion(mpdf, mjson, None), env)
-      case POST(Path("/rm-templates")) & ~(Param("token"), token) & ~(Params("template[]"), tps) =>
-        TemplateController(DeleteTemplates(token, tps), env)
-      case _ => chain.doFilter(req, resp)
+
+      case _ ⇒ chain.doFilter(req, resp)
     }
   }
 }
