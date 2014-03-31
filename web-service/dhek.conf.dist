@@ -1,1 +1,3 @@
 dhek.secret.key = secret
+dhek.request.timeout = 1 s
+dhek.repository = repo

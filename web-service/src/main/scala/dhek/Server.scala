@@ -23,7 +23,7 @@ final class Server(
 
     // Prepare context
     val ctx = new ServletContextHandler(handlers, "/")
-    ctx.getServletContext.setAttribute("javax.servlet.context.tempdir", 
+    ctx.getServletContext.setAttribute("javax.servlet.context.tempdir",
       new File(System getProperty "java.io.tmpdir"))
 
     ctx.addFilter(new FilterHolder(new MultiPartFilter()), "/*",
@@ -63,7 +63,8 @@ object Runner {
       val config = ConfigFactory.parseFile(new File(".", "dhek.conf"))
       val secretKey = config.getString("dhek.secret.key").toArray
       val duration = Duration(config.getString("dhek.request.timeout"))
-      val settings = Settings(secretKey, duration)
+      val repo = config.getString("dhek.repository")
+      val settings = Settings(secretKey, duration, repo)
       val server = new Server(new Plan(md.connection(List("localhost")), settings)).run()
 
       readLine() // wait any key to be pressed
