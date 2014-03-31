@@ -14,14 +14,23 @@
     var edit = function() {},
     itemAction = edit,
     templateList = function(d) {
+        var l = $("#my-templates .list-group").empty(),
+        b = $("#remove-template");
+
         if (!d || (typeof d) != "object" || !d['length']) {
-            alert("No template");
+            b.removeClass("btn-danger").addClass("btn-default").
+                attr("disabled", "disabled");
+
+            l.append('<div class="text-muted">No template</div>');
+
             return false
         }
         
         // ---
-        
-        var l = $("#my-templates .list-group").empty();
+
+        b.removeClass("btn-default").addClass("btn-danger").
+            removeAttr("disabled");
+
         $.each(d, function(i,t) {
             $('<a href="#'+t.id+'" class="list-group-item"><span class="name">' 
               + t.name + '</span> <span class="label label-default">'
