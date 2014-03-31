@@ -45,7 +45,7 @@ case class AuthController private (secretKey: Array[Char]) {
           case Success(res) ⇒
             val token: Option[String] = for {
               doc ← res
-              pwd ← doc.getAs[String]("password") if pwd != sha1Hex(auth.passw)
+              pwd ← doc.getAs[String]("password") if pwd == sha1Hex(auth.passw)
               tok ← doc.getAs[String]("adminToken")
             } yield tok
 
