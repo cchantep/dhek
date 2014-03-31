@@ -46,7 +46,7 @@
         $("#dhek-controls strong").remove();
 
         if (r && r.substring(0, 3) == "OK:") {
-            token = r.substring(3);
+            $("#id").val(r.substring(3));
             $('<strong class="text-success">Template is now saved</strong>').appendTo("#dhek-controls");
         } else $._displayUnexpectedError(r);
     });
