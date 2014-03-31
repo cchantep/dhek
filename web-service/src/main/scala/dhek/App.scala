@@ -49,6 +49,19 @@ final class Plan(m: ⇒ MongoConnection, s: Settings) extends Filter {
 
         PdfController(Fusion(mpdf, mjson, None), env)
 
+      case POST(Path("/save-template")) &
+        ~(Param("token"), token) &
+        ~(Param("pdf"), pdfName) &
+        ~(Param("json"), jsonName) &
+        ~(Param("name"), name) &
+        ~(Attr("pdf"), pdfFile) &
+        ~(Attr("json"), jsonFile) ⇒
+
+        val pdf = FileInfo(pdfName, managed(new FileInputStream(pdfFile.asInstanceOf[File])))
+        val json = FileInfo(jsonName, managed(new FileInputStream(jsonFile.asInstanceOf[File])))
+
+        TemplateController.saveTemplate(env)(token, name, pdf, json)
+
       case _ ⇒ chain.doFilter(req, resp)
     }
   }
