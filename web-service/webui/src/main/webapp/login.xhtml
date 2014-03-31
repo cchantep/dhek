@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <title>Login</title>
+    <title>Dhek</title>
     <meta charset="utf-8"></meta>
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <link href="css/login.gz.css" rel="stylesheet" />
+    <link href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.min.css" rel="stylesheet" />
 
     <!--[if lt IE 9]>
       <script src="js/html5shiv.gz.js"></script>
@@ -14,18 +15,41 @@
     <![endif]-->
   </head>
   <body>
-    <div class="container">
-      <form class="form-signin" role="form">
-        <h2 class="form-signin-heading">Dhek</h2>
-        <input type="email" id="email" name="email" 
-               class="form-control" placeholder="Email" />
-        <input type="password" id="password" name="password" 
-               class="form-control" placeholder="Password" />
-        <button class="btn btn-lg btn-primary btn-block login" 
-                type="submit">Connect</button>
-      </form>
-      <div id="dhek-message"></div>
+    <div class="jumbotron text-center">
+      <h1>Welcome to Dhek</h1>
+
+      <p>This service allow you to manage PDF templates that can be merged from any Web form using Dhek.</p>
     </div>
+
+    <div class="container">
+      <div class="row">
+        <form id="signIn" class="col-sm-12 col-md-6" role="form">
+          <h2><i class="fa fa-sign-in"></i> Sign in</h2>
+
+          <input type="email" name="email" 
+                 class="form-control email" placeholder="Email" />
+          <input type="password" name="password" 
+                 class="form-control password" placeholder="Password" />
+
+          <button class="btn btn-default btn-lg btn-block" disabled="disabled" 
+                  type="submit">Connect</button>
+        </form>
+        
+        <form id="register" class="col-sm-12 col-md-6" role="form">
+          <h2><i class="fa fa-star"></i> Register</h2>
+
+          <input type="email" name="email" 
+                 class="form-control email" placeholder="Email" />
+          <input type="password" name="password" 
+                 class="form-control password" placeholder="Password" />
+
+          <button class="btn btn-default btn-lg btn-block" disabled="disabled" 
+                  type="submit">New account</button>
+          
+        </form>
+      </div><!-- /.row -->
+      <div id="dhek-message"></div>
+    </div><!-- /.container -->
 
     <script src="js/login.gz.js"></script>
   </body>

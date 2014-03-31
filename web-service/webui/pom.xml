@@ -17,7 +17,8 @@
       </activation>
 
       <properties>
-        <dhek.validateCredUrl>login.json</dhek.validateCredUrl>
+        <dhek.signInUrl>signin.json</dhek.signInUrl>
+        <dhek.registerUrl>register.json</dhek.registerUrl>
         <dhek.myTemplatesUrl>my-templates.json</dhek.myTemplatesUrl>
         <dhek.rmTemplatesUrl>rm-templates.json</dhek.rmTemplatesUrl>
         <dhek.saveTemplateUrl>save-template.txt</dhek.saveTemplateUrl>
@@ -34,7 +35,8 @@
       </activation>
 
       <properties>
-        <dhek.validateCredUrl>rest/auth</dhek.validateCredUrl>
+        <dhek.signInUrl>rest/auth</dhek.signInUrl>
+        <dhek.registerUrl>rest/register</dhek.registerUrl>
         <dhek.myTemplatesUrl>rest/my-templates</dhek.myTemplatesUrl>
         <dhek.rmTemplatesUrl>rest/rm-templates</dhek.rmTemplatesUrl>
         <dhek.saveTemplateUrl>rest/save-template</dhek.saveTemplateUrl>

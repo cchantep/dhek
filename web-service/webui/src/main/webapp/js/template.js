@@ -16,7 +16,7 @@
         return false
     });
 
-    $("#name, #pdf, #json").change(function() {
+    $("#name, #pdf, #json").on("keyup change", function() {
         var n = $.trim($("#name").val()),
         j = $("#json").val(), p = $("#pdf").val(),
         b = $("#save");
