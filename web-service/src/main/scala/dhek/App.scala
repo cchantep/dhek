@@ -14,6 +14,7 @@ import resource.managed
 
 import Extractor.{ POST, Path, Param, Params, Attr, & }
 
+// TODO: Rename file to Plan.scala
 final class Plan(m: ⇒ MongoConnection, s: Settings) extends Filter {
 
   def destroy() {}
@@ -34,14 +35,12 @@ final class Plan(m: ⇒ MongoConnection, s: Settings) extends Filter {
     hresp.setCharacterEncoding("UTF-8")
 
     hreq match {
-      case POST(Path("/auth")) & ~(Param("email"), email) & ~(Param("password"), passw) ⇒
-        auth(Auth(email, passw), env)
+      case POST(Path("/auth")) & ~(Param("email"), email) & ~(Param("password"), passw) ⇒ auth(Auth(email, passw), env)
 
       case POST(Path("/my-templates")) & ~(Param("token"), token) ⇒
         TemplateController.myTemplates(env)(token)
 
-      case POST(Path("/rm-templates")) & ~(Param("token"), token) & ~(Params("template[]"), ids) ⇒
-        TemplateController.removeTemplates(env)(token, ids)
+      case POST(Path("/rm-templates")) & ~(Param("token"), token) & ~(Params("template[]"), ids) ⇒ TemplateController.removeTemplates(env)(token, ids)
 
       case POST(Path("/upload")) & ~(Param("pdf"), pdf) & ~(Param("json"), json) ⇒
         val mpdf = managed(new FileInputStream(pdf.asInstanceOf[File]))
@@ -57,12 +56,13 @@ final class Plan(m: ⇒ MongoConnection, s: Settings) extends Filter {
         ~(Attr("pdf"), pdfFile) &
         ~(Attr("json"), jsonFile) ⇒
 
-        val pdf = FileInfo(pdfName, managed(new FileInputStream(pdfFile.asInstanceOf[File])))
-        val json = FileInfo(jsonName, managed(new FileInputStream(jsonFile.asInstanceOf[File])))
+        val pdf = FileInfo(pdfName, pdfFile.asInstanceOf[File])
+        val json = FileInfo(jsonName, jsonFile.asInstanceOf[File])
 
         TemplateController.saveTemplate(env)(token, name, pdf, json)
 
-      case _ ⇒ chain.doFilter(req, resp)
+      case _ ⇒ 
+        chain.doFilter(req, resp)
     }
   }
 }

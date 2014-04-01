@@ -7,6 +7,7 @@ import scala.concurrent.{ Await, Future }
 import scala.concurrent.ExecutionContext.Implicits.global
 
 import argonaut._, Argonaut._
+import reactivemongo.core.commands.LastError
 import reactivemongo.api.collections.default.BSONCollection
 import reactivemongo.bson.{ BSONDocument, BSONObjectID }
 import resource.{ ManagedResource, managed }
@@ -43,15 +44,15 @@ object TemplateController {
   }
 
   def myTemplates(env: Env)(token: String): Unit = {
-    val findTemplates = env.mongo.map { con ⇒
+    val findUser = env.mongo.map { con ⇒
       val db = con("dhek")
       db("users").find(BSONDocument("adminToken" -> token)).one[BSONDocument]
     }
 
     env async { complete ⇒
-      findTemplates acquireAndGet { ft ⇒
+      findUser acquireAndGet { fu ⇒
         val find: Future[Option[BSONDocument]] =
-          Await.ready(ft, env.settings.timeout)
+          Await.ready(fu, env.settings.timeout)
 
         env.resp.setContentType("application/json")
         val writer = managed(env.resp.getWriter)
@@ -73,28 +74,15 @@ object TemplateController {
     }
   }
 
-  private def getUser(users: BSONCollection, token: String): Future[Option[BSONDocument]] =
-    users.find(BSONDocument("adminToken" -> token)).one[BSONDocument]
+  private def getUser(users: BSONCollection, token: String): Future[Option[BSONDocument]] = users.find(BSONDocument("adminToken" -> token)).one[BSONDocument]
 
   private def getTemplates(user: BSONDocument): List[Template] = {
-    val action = for {
+    val templates = for {
       bsons ← user.getAs[List[BSONDocument]]("templates")
       tps ← bsons.traverse(Template.fromBSON)
     } yield tps
 
-    action.getOrElse(Nil)
-  }
-
-  private def addTemplate(users: BSONCollection, t: Template)(user: BSONDocument): Future[Unit] = {
-    val ts = getTemplates(user)
-    val newTs = (t :: ts).map(Template.toBSON)
-    val res = user.getAs[BSONObjectID]("_id").traverse { id ⇒
-      val modifier = BSONDocument("$set" -> BSONDocument("templates" -> newTs))
-
-      users.update(BSONDocument("_id" -> id), modifier)
-    }
-
-    res.map(_ ⇒ ())
+    templates.getOrElse(Nil)
   }
 
   private def updateTemplates(users: BSONCollection)(user: BSONDocument, tps: List[Template]): Future[Option[List[Template]]] =
@@ -103,6 +91,7 @@ object TemplateController {
         val change = BSONDocument("$set" ->
           BSONDocument("templates" -> tps.map(Template.toBSON)))
 
+        // TODO: Check LastError
         users.update(BSONDocument("_id" -> id), change).map(_ ⇒ Option(tps))
 
       case _ ⇒ Future(None)
@@ -144,6 +133,8 @@ object TemplateController {
   }
 
   def saveTemplate(env: Env)(token: String, name: String, pdf: FileInfo, json: FileInfo) {
+    println(s"token = $token, name = $name") // TODO: Logging
+
     val collection = env.mongo.map { con ⇒
       val db = con("dhek")
       db("users")
@@ -151,26 +142,40 @@ object TemplateController {
 
     env async { complete ⇒
       collection.acquireAndGet { users ⇒
-        val id = UUID.randomUUID.toString
-        val newTemplate = Template(id, name, json.filename, pdf.filename)
-        val future = for {
-          user ← getUser(users, token)
-          _ ← user.traverse(addTemplate(users, newTemplate))
-        } yield ()
+        val res: Future[String] = for {
+          u ← getUser(users, token)
+          r ← u.fold[Future[String]](
+            Future.failed(new Throwable(s"No user: $token"))) { usr ⇒
+              pdf.file.renameTo(new File(env.settings.repo, pdf.filename))
+              json.file.renameTo(new File(env.settings.repo, json.filename))
 
-        Await.ready(future, env.settings.timeout) onComplete {
-          case Success(_) ⇒
-            pdf.file.acquireAndGet(
-              Binaries.writeToFile(_, s"${env.settings.repo}/${pdf.filename}"))
-            json.file.acquireAndGet(
-              Binaries.writeToFile(_, s"${env.settings.repo}/${json.filename}"))
+              val ts = usr.getAs[List[BSONDocument]]("templates").getOrElse(Nil)
+              val id = UUID.randomUUID.toString
+              val t = BSONDocument("id" -> id, "name" -> name,
+                "pdf" -> pdf.filename, "json" -> json.filename)
 
-            env.resp.setContentType("text/plain")
+              val change = BSONDocument("$set" ->
+                BSONDocument("templates" -> (ts :+ t)))
+
+              users.update(
+                BSONDocument("adminToken" -> token), change) flatMap {
+                  case LastError(true, _, _, _, _, 1, _) ⇒ Future(id)
+                  case err ⇒
+                    Future.failed(err.fillInStackTrace)
+                }
+            }
+        } yield r
+
+        env.resp.setContentType("text/plain")
+
+        Await.ready(res, env.settings.timeout) onComplete {
+          case Success(id) ⇒
             managed(env.resp.getWriter).acquireAndGet(_.print(s"OK:$id"))
             complete()
+
           case Failure(e) ⇒
             e.printStackTrace()
-            env.jsonError(500, e.getMessage)
+            managed(env.resp.getWriter).acquireAndGet(_.print(e.getMessage))
             complete()
         }
       }

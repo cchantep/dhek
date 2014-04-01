@@ -1,7 +1,5 @@
 package dhek
 
-import java.io.FileInputStream
+import java.io.File
 
-import resource.ManagedResource
-
-case class FileInfo(filename: String, file: ManagedResource[FileInputStream])
+case class FileInfo(filename: String, file: File)

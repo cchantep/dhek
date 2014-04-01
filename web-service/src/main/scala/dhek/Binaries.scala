@@ -59,9 +59,6 @@ object Binaries {
     }
   }
 
-  def writeToFile(input: ⇒ InputStream, path: String) =
-    writeTo(input, new FileOutputStream(path))
-
   def loadRawBytes(input: ⇒ InputStream): Array[Byte] = {
     val output = new ByteArrayOutputStream
 
