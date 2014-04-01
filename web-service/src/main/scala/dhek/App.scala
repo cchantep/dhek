@@ -9,6 +9,7 @@ import javax.servlet.{
   ServletResponse
 }
 import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
+
 import reactivemongo.api.MongoConnection
 import resource.managed
 
@@ -20,7 +21,7 @@ final class Plan(m: ⇒ MongoConnection, s: Settings) extends Filter {
   def destroy() {}
   def init(config: FilterConfig) {}
 
-  val auth = AuthController.make(s.secretKey)
+  val auth = AuthController.make(s.appSecretKey, s.secretKey)
 
   def doFilter(req: ServletRequest, resp: ServletResponse, chain: FilterChain) {
     val hreq = req.asInstanceOf[HttpServletRequest]
@@ -42,11 +43,10 @@ final class Plan(m: ⇒ MongoConnection, s: Settings) extends Filter {
 
       case POST(Path("/rm-templates")) & ~(Param("token"), token) & ~(Params("template[]"), ids) ⇒ TemplateController.removeTemplates(env)(token, ids)
 
-      case POST(Path("/upload")) & ~(Param("pdf"), pdf) & ~(Param("json"), json) ⇒
-        val mpdf = managed(new FileInputStream(pdf.asInstanceOf[File]))
-        val mjson = managed(new FileReader(json.asInstanceOf[File]))
+      case POST(Path("/merge")) & ~(Param("dhek_token"), appToken) & ~(Param("dhek_template"), templateId) ⇒
+        val func: String ⇒ Boolean = p ⇒ Option(req.getParameter(p)).isDefined
 
-        PdfController(Fusion(mpdf, mjson, None), env)
+        PdfController.merge(env, appToken, templateId, func)
 
       case POST(Path("/save-template")) &
         ~(Param("token"), token) &

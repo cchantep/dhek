@@ -4,6 +4,7 @@ import scala.concurrent.duration.Duration
 
 case class Settings(
   secretKey: Array[Char],
+  appSecretKey: Array[Char],
   timeout: Duration,
   repo: String,
   dbName: String,

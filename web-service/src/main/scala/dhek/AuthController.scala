@@ -18,7 +18,7 @@ import resource.managed
 
 case class Auth(email: String, passw: String)
 
-case class AuthController private (secretKey: Array[Char]) {
+case class AuthController private (appSecretKey: Array[Char], secretKey: Array[Char]) {
 
   def apply(auth: Auth, env: Env) {
     val findToken = env.mongo.map { con ⇒
@@ -55,10 +55,17 @@ case class AuthController private (secretKey: Array[Char]) {
     }
   }
 
-  val sha1: Mac = {
+  val adminMac: Mac = {
     val tmp = Mac.getInstance("HmacSHA1")
 
     tmp.init(new SecretKeySpec(Hex.decodeHex(secretKey), "HmacSHA1"))
+    tmp
+  }
+
+  val appMac: Mac = {
+    val tmp = Mac.getInstance("HmacSHA1")
+
+    tmp.init(new SecretKeySpec(Hex.decodeHex(appSecretKey), "HmacSHA1"))
     tmp
   }
 
@@ -71,16 +78,21 @@ case class AuthController private (secretKey: Array[Char]) {
           users.find(BSONDocument("email" -> email)).one[BSONDocument]
 
         def createUser: Future[String] = {
-          val token = Hex.encodeHexString(sha1.doFinal(email.getBytes("UTF-8")))
+          val emailBytes = email.getBytes("UTF-8")
+          val adminToken =
+            Hex.encodeHexString(adminMac.doFinal(emailBytes))
+          val appToken =
+            Hex.encodeHexString(appMac.doFinal(emailBytes))
           val user = BSONDocument(
             "email" -> email,
             "password" -> sha1Hex(passw),
-            "adminToken" -> token
+            "adminToken" -> adminToken,
+            "appToken" -> appToken
           )
 
           users.insert(user) flatMap {
             case e if e.inError ⇒ Future.failed(e.fillInStackTrace)
-            case _              ⇒ Future(token)
+            case _              ⇒ Future(adminToken)
           }
         }
 
@@ -114,5 +126,6 @@ case class AuthController private (secretKey: Array[Char]) {
 }
 
 object AuthController {
-  def make(secretKey: Array[Char]): AuthController = AuthController(secretKey)
+  def make(appSecretKey: Array[Char], secretKey: Array[Char]): AuthController =
+    AuthController(appSecretKey, secretKey)
 }
