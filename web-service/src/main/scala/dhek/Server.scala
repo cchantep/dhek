@@ -64,7 +64,9 @@ object Runner {
       val secretKey = config.getString("dhek.secret.key").toArray
       val duration = Duration(config.getString("dhek.request.timeout"))
       val repo = config.getString("dhek.repository")
-      val settings = Settings(secretKey, duration, repo)
+      val dbname = config.getString("dhek.db.name")
+      val userCollection = config.getString("dhek.db.users.name")
+      val settings = Settings(secretKey, duration, repo, dbname, userCollection)
       val server = new Server(new Plan(md.connection(List("localhost")), settings)).run()
 
       readLine() // wait any key to be pressed

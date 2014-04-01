@@ -2,10 +2,12 @@ package dhek
 
 import java.io.{ OutputStream, PrintWriter }
 import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
+import scala.concurrent.ExecutionContext.Implicits.global
 
 import argonaut._, Argonaut._
 import org.eclipse.jetty.continuation.ContinuationSupport
 import reactivemongo.api.MongoConnection
+import reactivemongo.api.collections.default.BSONCollection
 import resource.{ ManagedResource, managed }
 
 case class Env(
@@ -37,4 +39,10 @@ case class Env(
 
   def outputStream: ManagedResource[OutputStream] =
     managed(resp.getOutputStream)
+
+  def withUsers: ManagedResource[BSONCollection] = mongo.map { con ⇒
+    val db = con(settings.dbName)
+
+    db(settings.dbUsersName)
+  }
 }

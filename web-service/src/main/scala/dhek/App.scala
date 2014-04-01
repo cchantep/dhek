@@ -61,7 +61,9 @@ final class Plan(m: ⇒ MongoConnection, s: Settings) extends Filter {
 
         TemplateController.saveTemplate(env)(token, name, pdf, json)
 
-      case _ ⇒ 
+      case POST(Path("/register")) & ~(Param("email"), email) & ~(Param("password"), passw) ⇒ auth.register(env, email, passw)
+
+      case _ ⇒
         chain.doFilter(req, resp)
     }
   }
