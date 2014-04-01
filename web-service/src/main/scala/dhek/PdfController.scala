@@ -4,7 +4,7 @@ import java.io.{ File, FileInputStream, FileReader, OutputStream, PrintWriter }
 import javax.servlet.http.HttpServletResponse
 
 import argonaut._, Argonaut._
-import argonaut.{ Json => ArgJson }
+import argonaut.{ Json ⇒ ArgJson }
 import com.itextpdf.text.pdf.{
   PdfDictionary,
   PdfObject,
@@ -24,8 +24,7 @@ import resource.{ ManagedResource, managed }
 case class Fusion(
   pdf: ManagedResource[FileInputStream],
   model: ManagedResource[FileReader],
-  font: Option[ManagedResource[FileInputStream]]
-)
+  font: Option[ManagedResource[FileInputStream]])
 
 object PdfController {
 
@@ -54,52 +53,52 @@ object PdfController {
 
     def jsonSuccess(m: Model): Unit = {
       val action = for {
-        input   <- fusion.pdf
-        output  <- managed(env.resp.getOutputStream)
-        reader  <- managed(new PdfReader(input))
-        stamper <- managed(new PdfStamper(reader, output))
-        } yield {
-          def foreachObject[U](f: PdfObject ⇒ U) {
-            val objCount = reader.getXrefSize
+        input ← fusion.pdf
+        output ← env.outputStream
+        reader ← managed(new PdfReader(input))
+        stamper ← managed(new PdfStamper(reader, output))
+      } yield {
+        def foreachObject[U](f: PdfObject ⇒ U) {
+          val objCount = reader.getXrefSize
 
-            @annotation.tailrec
-            def loop(cur: Int) {
-              if (cur < objCount) {
-                f(reader.getPdfObject(cur - 1))
-                loop(cur + 1)
-              }
+          @annotation.tailrec
+          def loop(cur: Int) {
+            if (cur < objCount) {
+              f(reader.getPdfObject(cur - 1))
+              loop(cur + 1)
             }
-
-            loop(1)
           }
 
-          env.resp.setContentType("application/pdf")
+          loop(1)
+        }
 
-          m.pages.foldLeft(1) { (i, p) ⇒
-            val page = stamper.getImportedPage(reader, i)
-            val pageRect = reader.getPageSize(i)
-            val over = stamper.getOverContent(i)
+        env.resp.setContentType("application/pdf")
 
-            for {
-              rects <- p.areas.toList
-              rect  <- rects
-              } yield {
-                over.saveState()
-                over.setLineWidth(2)
-                over.setColorStroke(BaseColor.RED)
-                over.rectangle(rect.x, pageRect.getHeight - rect.y - rect.h, rect.w, rect.h)
-                over.stroke()
-                over.restoreState()
-              }
+        m.pages.foldLeft(1) { (i, p) ⇒
+          val page = stamper.getImportedPage(reader, i)
+          val pageRect = reader.getPageSize(i)
+          val over = stamper.getOverContent(i)
 
-            i + 1
+          for {
+            rects ← p.areas.toList
+            rect ← rects
+          } yield {
+            over.saveState()
+            over.setLineWidth(2)
+            over.setColorStroke(BaseColor.RED)
+            over.rectangle(rect.x, pageRect.getHeight - rect.y - rect.h, rect.w, rect.h)
+            over.stroke()
+            over.restoreState()
+          }
+
+          i + 1
         }
       }
 
       action.acquireAndGet(identity)
     }
 
-    fusion.model.acquireAndGet { fm =>
+    fusion.model.acquireAndGet { fm ⇒
       Parse.decodeEither[Model](Binaries.loadReader(fm)).
         fold(env.jsonError(400, _), jsonSuccess)
     }

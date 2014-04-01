@@ -1,5 +1,6 @@
 package dhek
 
+import java.io.{ OutputStream, PrintWriter }
 import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 
 import argonaut._, Argonaut._
@@ -8,19 +9,19 @@ import reactivemongo.api.MongoConnection
 import resource.{ ManagedResource, managed }
 
 case class Env(
-  settings: Settings,
-  req: HttpServletRequest,
-  resp:HttpServletResponse,
-  mongo: ManagedResource[MongoConnection]) {
+    settings: Settings,
+    req: HttpServletRequest,
+    resp: HttpServletResponse,
+    mongo: ManagedResource[MongoConnection]) {
 
-  type Complete = () => Unit
+  type Complete = () ⇒ Unit
 
-  def async(f: Complete => Unit): Unit = {
+  def async(f: Complete ⇒ Unit): Unit = {
     val continuation = ContinuationSupport.getContinuation(req)
 
     continuation.setTimeout(settings.timeout.toMillis)
     continuation.suspend()
-    f(() => continuation.complete())
+    f(() ⇒ continuation.complete())
   }
 
   def jsonError(code: Int, msg: String) {
@@ -30,4 +31,10 @@ case class Env(
       _.print(Json("exception" -> jString(msg)).asJson.nospaces)
     }
   }
+
+  def writer: ManagedResource[PrintWriter] =
+    managed(resp.getWriter)
+
+  def outputStream: ManagedResource[OutputStream] =
+    managed(resp.getOutputStream)
 }

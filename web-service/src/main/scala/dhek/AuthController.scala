@@ -39,7 +39,6 @@ case class AuthController private (secretKey: Array[Char]) {
           Await.ready(ft, env.settings.timeout)
 
         env.resp.setContentType("application/json")
-        val writer = managed(env.resp.getWriter)
 
         future.onComplete {
           case Success(res) ⇒
@@ -49,7 +48,7 @@ case class AuthController private (secretKey: Array[Char]) {
               tok ← doc.getAs[String]("adminToken")
             } yield tok
 
-            writer.acquireAndGet(_.print(token.fold[String]("null")(tok ⇒
+            env.writer.acquireAndGet(_.print(token.fold[String]("null")(tok ⇒
               ArgJson("token" -> jString(tok)).nospaces)))
 
             complete()

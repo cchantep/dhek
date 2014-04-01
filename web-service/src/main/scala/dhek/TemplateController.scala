@@ -55,13 +55,12 @@ object TemplateController {
           Await.ready(fu, env.settings.timeout)
 
         env.resp.setContentType("application/json")
-        val writer = managed(env.resp.getWriter)
 
         find onComplete {
           case Success(user) ⇒
             val templates: Option[List[Template]] = user.map(getTemplates)
 
-            writer.acquireAndGet { w ⇒
+            env.writer.acquireAndGet { w ⇒
               w.print(templates.fold("null")(_.asJson.nospaces))
               complete()
             }
@@ -117,11 +116,10 @@ object TemplateController {
         } yield up
 
         env.resp.setContentType("application/json")
-        val writer = managed(env.resp.getWriter)
 
         Await.ready(deletion, env.settings.timeout) onComplete {
           case Success(tps) ⇒
-            writer.acquireAndGet(_.print(tps.fold("null")(_.asJson.nospaces)))
+            env.writer.acquireAndGet(_.print(tps.fold("null")(_.asJson.nospaces)))
             complete()
           case Failure(e) ⇒
             e.printStackTrace()
@@ -170,12 +168,12 @@ object TemplateController {
 
         Await.ready(res, env.settings.timeout) onComplete {
           case Success(id) ⇒
-            managed(env.resp.getWriter).acquireAndGet(_.print(s"OK:$id"))
+            env.writer.acquireAndGet(_.print(s"OK:$id"))
             complete()
 
           case Failure(e) ⇒
             e.printStackTrace()
-            managed(env.resp.getWriter).acquireAndGet(_.print(e.getMessage))
+            env.writer.acquireAndGet(_.print(e.getMessage))
             complete()
         }
       }
