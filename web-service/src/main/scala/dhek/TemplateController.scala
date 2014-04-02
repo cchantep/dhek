@@ -41,32 +41,26 @@ object TemplateController {
       )
   }
 
-  def myTemplates(env: Env)(token: String): Unit = {
-    val findUser = env.mongo.map { con ⇒
-      val db = con("dhek")
-      db("users").find(BSONDocument("adminToken" -> token)).one[BSONDocument]
-    }
+  def myTemplates(env: Env)(token: String): Unit = env async { complete ⇒
+    env.withUsers.map(_.find(BSONDocument("adminToken" -> token)).
+      one[BSONDocument]) acquireAndGet { fu ⇒
+      val find: Future[Option[BSONDocument]] =
+        Await.ready(fu, env.settings.timeout)
 
-    env async { complete ⇒
-      findUser acquireAndGet { fu ⇒
-        val find: Future[Option[BSONDocument]] =
-          Await.ready(fu, env.settings.timeout)
+      env.resp.setContentType("application/json")
 
-        env.resp.setContentType("application/json")
+      find onComplete {
+        case Success(user) ⇒
+          val templates: Option[List[Template]] = user.map(getTemplates)
 
-        find onComplete {
-          case Success(user) ⇒
-            val templates: Option[List[Template]] = user.map(getTemplates)
-
-            env.writer.acquireAndGet { w ⇒
-              w.print(templates.fold("null")(_.asJson.nospaces))
-              complete()
-            }
-          case Failure(e) ⇒
-            e.printStackTrace()
-            env.jsonError(500, e.getMessage)
+          env.writer.acquireAndGet { w ⇒
+            w.print(templates.fold("null")(_.asJson.nospaces))
             complete()
-        }
+          }
+        case Failure(e) ⇒
+          e.printStackTrace()
+          env.jsonError(500, e.getMessage)
+          complete()
       }
     }
   }
@@ -94,14 +88,9 @@ object TemplateController {
       case _ ⇒ Future(None)
     }
 
-  def removeTemplates(env: Env)(token: String, tpids: List[String]): Unit = {
-    val collection = env.mongo.map { con ⇒
-      val db = con("dhek")
-      db("users")
-    }
-
+  def removeTemplates(env: Env)(token: String, tpids: List[String]): Unit =
     env async { complete ⇒
-      collection.acquireAndGet { coll ⇒
+      env.withUsers.acquireAndGet { coll ⇒
         val deletion: Future[Option[List[Template]]] = for {
           u ← coll.find(BSONDocument("adminToken" -> token)).one[BSONDocument]
           up ← u.fold[Future[Option[List[Template]]]](Future(None)) { user ⇒
@@ -126,18 +115,12 @@ object TemplateController {
         }
       }
     }
-  }
 
   def saveTemplate(env: Env)(token: String, name: String, pdf: FileInfo, json: FileInfo) {
     println(s"token = $token, name = $name") // TODO: Logging
 
-    val collection = env.mongo.map { con ⇒
-      val db = con("dhek")
-      db("users")
-    }
-
     env async { complete ⇒
-      collection.acquireAndGet { users ⇒
+      env.withUsers.acquireAndGet { users ⇒
         val res: Future[String] = for {
           u ← getUser(users, token)
           r ← u.fold[Future[String]](

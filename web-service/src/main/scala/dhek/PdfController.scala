@@ -2,6 +2,9 @@ package dhek
 
 import java.io.{ File, FileInputStream, FileReader, OutputStream, PrintWriter }
 import javax.servlet.http.HttpServletResponse
+import scala.concurrent.{ Await, Future }
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{ Failure, Success }
 
 import argonaut._, Argonaut._
 import argonaut.{ Json ⇒ ArgJson }
@@ -18,13 +21,8 @@ import com.itextpdf.text.{
   BaseColor,
   FontFactory
 }
-
+import reactivemongo.bson.BSONDocument
 import resource.{ ManagedResource, managed }
-
-case class Fusion(
-  pdf: ManagedResource[FileInputStream],
-  model: ManagedResource[FileReader],
-  font: Option[ManagedResource[FileInputStream]])
 
 object PdfController {
 
@@ -49,58 +47,109 @@ object PdfController {
       casecodec2(Model.apply, Model.unapply)("format", "pages")
   }
 
-  def apply(fusion: Fusion, env: Env) {
+  object TemplateNotFound extends Exception
+  object UserNotFound extends Exception
+  case class ArgonautError(msg: String) extends Exception {
+    override def toString = s"Argonaut error: $msg"
+  }
 
-    def jsonSuccess(m: Model): Unit = {
-      val action = for {
-        input ← fusion.pdf
-        output ← env.outputStream
-        reader ← managed(new PdfReader(input))
-        stamper ← managed(new PdfStamper(reader, output))
-      } yield {
-        def foreachObject[U](f: PdfObject ⇒ U) {
-          val objCount = reader.getXrefSize
+  def merge(env: Env, appToken: String, templateId: String, hasParam: String ⇒ Boolean) {
 
-          @annotation.tailrec
-          def loop(cur: Int) {
-            if (cur < objCount) {
-              f(reader.getPdfObject(cur - 1))
-              loop(cur + 1)
-            }
+    env async { complete ⇒
+      env.withUsers.acquireAndGet { users ⇒
+
+        def lookupTemplateInfo(user: BSONDocument): Future[(String, String)] = {
+          val templates =
+            user.getAs[List[BSONDocument]]("templates").getOrElse(Nil)
+
+          val templateOpt = templates.find { t ⇒
+            t.getAs[String]("id").filter(_ == templateId).isDefined
           }
 
-          loop(1)
+          val infoOpt = for {
+            t ← templateOpt
+            jsonName ← t.getAs[String]("json")
+            pdfName ← t.getAs[String]("pdf")
+          } yield (jsonName, pdfName)
+
+          infoOpt.fold(
+            Future.failed[(String, String)](TemplateNotFound))(Future(_))
         }
 
-        env.resp.setContentType("application/pdf")
+        def loadModel(jsonName: String): Future[Model] = {
+          val res =
+            Parse.decodeEither[Model](
+              Binaries.loadFile(s"${env.settings.repo}/$jsonName"))
 
-        m.pages.foldLeft(1) { (i, p) ⇒
-          val page = stamper.getImportedPage(reader, i)
-          val pageRect = reader.getPageSize(i)
-          val over = stamper.getOverContent(i)
+          res.fold(e ⇒ Future.failed(ArgonautError(e)), Future(_))
+        }
 
-          for {
-            rects ← p.areas.toList
-            rect ← rects
-          } yield {
-            over.saveState()
-            over.setLineWidth(2)
-            over.setColorStroke(BaseColor.RED)
-            over.rectangle(rect.x, pageRect.getHeight - rect.y - rect.h, rect.w, rect.h)
-            over.stroke()
-            over.restoreState()
-          }
+        val future: Future[(Model, String)] = for {
+          uOpt ← users.find(BSONDocument("appToken" -> appToken)).one[BSONDocument]
+          user ← uOpt.fold(Future.failed[BSONDocument](UserNotFound))(Future(_))
+          (jsonName, pdfName) ← lookupTemplateInfo(user)
+          model ← loadModel(jsonName)
+        } yield (model, pdfName)
 
-          i + 1
+        Await.ready(future, env.settings.timeout) onComplete {
+          case Success((model, pdfName)) ⇒
+            val action = for {
+              output ← env.outputStream
+              reader ← managed(new PdfReader(s"${env.settings.repo}/$pdfName"))
+              stamper ← managed(new PdfStamper(reader, output))
+            } yield {
+              def foreachObject[U](f: PdfObject ⇒ U) {
+                val objCount = reader.getXrefSize
+
+                @annotation.tailrec
+                def loop(cur: Int) {
+                  if (cur < objCount) {
+                    f(reader.getPdfObject(cur - 1))
+                    loop(cur + 1)
+                  }
+                }
+
+                loop(1)
+              }
+
+              env.resp.setContentType("application/pdf")
+
+              model.pages.foldLeft(1) { (i, p) ⇒
+                val page = stamper.getImportedPage(reader, i)
+                val pageRect = reader.getPageSize(i)
+                val over = stamper.getOverContent(i)
+
+                for {
+                  rects ← p.areas.toList
+                  rect ← rects if hasParam(rect.name)
+                } yield {
+                  over.saveState()
+                  over.setLineWidth(2)
+                  over.setColorStroke(BaseColor.RED)
+                  over.rectangle(rect.x, pageRect.getHeight - rect.y - rect.h, rect.w, rect.h)
+                  over.stroke()
+                  over.restoreState()
+                }
+
+                i + 1
+              }
+            }
+
+            action.acquireAndGet(identity)
+            complete()
+          case Failure(e) ⇒
+            e match {
+              case UserNotFound     ⇒ env.jsonError(403, "dhek_token not found")
+              case TemplateNotFound ⇒ env.jsonError(400, "dhek_template not found")
+              case ArgonautError(e) ⇒ env.jsonError(500, s"model json error: $e")
+              case e ⇒
+                e.printStackTrace()
+                env.jsonError(500, e.getMessage)
+            }
+
+            complete()
         }
       }
-
-      action.acquireAndGet(identity)
-    }
-
-    fusion.model.acquireAndGet { fm ⇒
-      Parse.decodeEither[Model](Binaries.loadReader(fm)).
-        fold(env.jsonError(400, _), jsonSuccess)
     }
   }
 }
