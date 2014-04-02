@@ -9,6 +9,7 @@ import scala.util.{ Failure, Success }
 import argonaut._, Argonaut._
 import argonaut.{ Json ⇒ ArgJson }
 import com.itextpdf.text.pdf.{
+  BaseFont,
   PdfDictionary,
   PdfObject,
   PdfName,
@@ -53,7 +54,7 @@ object PdfController {
     override def toString = s"Argonaut error: $msg"
   }
 
-  def merge(env: Env, appToken: String, templateId: String, hasParam: String ⇒ Boolean) {
+  def merge(env: Env, appToken: String, templateId: String, getParam: String ⇒ Option[String]) {
 
     env async { complete ⇒
       env.withUsers.acquireAndGet { users ⇒
@@ -98,19 +99,6 @@ object PdfController {
               reader ← managed(new PdfReader(s"${env.settings.repo}/$pdfName"))
               stamper ← managed(new PdfStamper(reader, output))
             } yield {
-              def foreachObject[U](f: PdfObject ⇒ U) {
-                val objCount = reader.getXrefSize
-
-                @annotation.tailrec
-                def loop(cur: Int) {
-                  if (cur < objCount) {
-                    f(reader.getPdfObject(cur - 1))
-                    loop(cur + 1)
-                  }
-                }
-
-                loop(1)
-              }
 
               env.resp.setContentType("application/pdf")
 
@@ -118,16 +106,43 @@ object PdfController {
                 val page = stamper.getImportedPage(reader, i)
                 val pageRect = reader.getPageSize(i)
                 val over = stamper.getOverContent(i)
+                // val direct = stamper.getWriter.getDirectContent
 
                 for {
                   rects ← p.areas.toList
-                  rect ← rects if hasParam(rect.name)
+                  rect ← rects
+                  param ← getParam(rect.name).toList
                 } yield {
+                  lazy val isChecked = {
+                    val lower = param.toLowerCase
+                    lower == "yes" || lower == "y" || lower == "on"
+                  }
+                  val normalizedY = pageRect.getHeight - rect.y - rect.h
                   over.saveState()
                   over.setLineWidth(2)
                   over.setColorStroke(BaseColor.RED)
-                  over.rectangle(rect.x, pageRect.getHeight - rect.y - rect.h, rect.w, rect.h)
-                  over.stroke()
+                  rect.typ match {
+                    case "text" ⇒
+                      val font = BaseFont.createFont()
+                      over.rectangle(rect.x, normalizedY, rect.w, rect.h)
+                      over.stroke()
+                      over.beginText()
+                      over.moveText(rect.x, normalizedY)
+                      over.setRGBColorFill(0, 0, 255)
+                      over.setFontAndSize(font, 11)
+                      over.showText(param)
+                      over.endText()
+                    case "checkbox" if isChecked ⇒
+                      over.moveTo(rect.x, normalizedY)
+                      over.lineTo(rect.x + rect.w, normalizedY + rect.h)
+                      over.stroke()
+                      over.moveTo(rect.x + rect.w, normalizedY)
+                      over.lineTo(rect.x, normalizedY + rect.h)
+                      over.stroke()
+                    case "checkbox" ⇒
+                      over.rectangle(rect.x, normalizedY, rect.w, rect.h)
+                      over.stroke()
+                  }
                   over.restoreState()
                 }
 
