@@ -18,7 +18,7 @@ import resource.managed
 
 case class Auth(email: String, passw: String)
 
-final class AuthController private (secretKey: Array[Char]) {
+final class AuthController private (appSecretKey: Array[Char], secretKey: Array[Char]) {
   def apply(auth: Auth, env: Env) = env.async { complete ⇒
     env.withUsers.map(_.find(BSONDocument("email" -> auth.email)).
       one[BSONDocument]).acquireAndGet { ft ⇒
@@ -48,59 +48,77 @@ final class AuthController private (secretKey: Array[Char]) {
     }
   }
 
-  private val sha1: Mac = {
+  private val adminMac: Mac = {
     val tmp = Mac.getInstance("HmacSHA1")
 
     tmp.init(new SecretKeySpec(Hex.decodeHex(secretKey), "HmacSHA1"))
     tmp
   }
 
+  val appMac: Mac = {
+    val tmp = Mac.getInstance("HmacSHA1")
+
+    tmp.init(new SecretKeySpec(Hex.decodeHex(appSecretKey), "HmacSHA1"))
+    tmp
+  }
+
   object EmailAlreadyExists extends Exception
 
-  def register(env: Env, email: String, passw: String) = env async { complete ⇒
-    env.withUsers.acquireAndGet { users ⇒
-      def createUser: Future[String] = {
-        val token = Hex.encodeHexString(sha1.doFinal(email.getBytes("UTF-8")))
-        val user = BSONDocument(
-          "email" -> email,
-          "password" -> sha1Hex(passw),
-          "adminToken" -> token
-        )
+  def register(env: Env, email: String, passw: String) {
+    env async { complete ⇒
+      env.withUsers.acquireAndGet { users ⇒
+        def userByEmail: Future[Option[BSONDocument]] =
+          users.find(BSONDocument("email" -> email)).one[BSONDocument]
 
-        users.insert(user) flatMap {
-          case e if e.inError ⇒ Future.failed(e.fillInStackTrace)
-          case _              ⇒ Future(token)
-        }
-      }
+        def createUser: Future[String] = {
+          val emailBytes = email.getBytes("UTF-8")
+          val adminToken =
+            Hex.encodeHexString(adminMac.doFinal(emailBytes))
+          val appToken =
+            Hex.encodeHexString(appMac.doFinal(emailBytes))
+          val user = BSONDocument(
+            "email" -> email,
+            "password" -> sha1Hex(passw),
+            "adminToken" -> adminToken,
+            "appToken" -> appToken
+          )
 
-      val token: Future[String] = for {
-        u ← users.find(BSONDocument("email" -> email)).one[BSONDocument]
-        tok ← u.fold(createUser)(_ ⇒ Future.failed(EmailAlreadyExists))
-      } yield tok
-
-      env.resp.setContentType("application/json")
-
-      Await.ready(token, env.settings.timeout) onComplete {
-        case Success(token) ⇒
-          env.writer.acquireAndGet(
-            _.print(ArgJson("token" -> jString(token)).nospaces))
-          complete()
-        case Failure(e) ⇒
-          e match {
-            case EmailAlreadyExists ⇒
-              env.resp.setStatus(400)
-              env.writer.acquireAndGet(
-                _.print(ArgJson("exception" -> jString("Email already exists"))))
-            case e ⇒
-              e.printStackTrace()
-              env.jsonError(500, e.getMessage)
+          users.insert(user) flatMap {
+            case e if e.inError ⇒ Future.failed(e.fillInStackTrace)
+            case _              ⇒ Future(adminToken)
           }
-          complete()
+        }
+
+        val token: Future[String] = for {
+          u ← users.find(BSONDocument("email" -> email)).one[BSONDocument]
+          tok ← u.fold(createUser)(_ ⇒ Future.failed(EmailAlreadyExists))
+        } yield tok
+
+        env.resp.setContentType("application/json")
+
+        Await.ready(token, env.settings.timeout) onComplete {
+          case Success(token) ⇒
+            env.writer.acquireAndGet(
+              _.print(ArgJson("token" -> jString(token)).nospaces))
+            complete()
+          case Failure(e) ⇒
+            e match {
+              case EmailAlreadyExists ⇒
+                env.resp.setStatus(400)
+                env.writer.acquireAndGet(
+                  _.print(ArgJson("exception" -> jString("Email already exists"))))
+              case e ⇒
+                e.printStackTrace()
+                env.jsonError(500, e.getMessage)
+            }
+            complete()
+        }
       }
     }
   }
 }
 
 object AuthController {
-  def make(secretKey: Array[Char]) = new AuthController(secretKey)
+  def make(appSecretKey: Array[Char], secretKey: Array[Char]) =
+    new AuthController(appSecretKey, secretKey)
 }

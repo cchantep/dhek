@@ -1,4 +1,5 @@
 dhek.secret.key = secret
+dhek.app.secret.key = app-secret
 dhek.request.timeout = 1 s
 dhek.repository = repo
 dhek.db.name = my-dhek
