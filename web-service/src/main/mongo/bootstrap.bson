@@ -1,4 +1,6 @@
 use dhek
 
+// dhek.secret.key=a5ed165459c945429274c8c035b043e9
+// dhek.app.secret.key=346ad5bf77d9457cb3d28c79cfc4571b
 db.createCollection("users")
-db.users.insert({'email':'test@applicius.fr','password':'secret-sha1','adminToken':'xx','templates':[{ 'id': 'tmpl-1', 'name': 'Template #1' },{ 'id': '2.tmpl', 'name': 'Second template' }, { 'id': 'tmpl_3', 'name': 'The third one' }]})
+db.users.insert({"email": "demo@applicius.fr", "password": "ef02f92e64b1b7e90767cf84814c4527f820d390", "adminToken": "c64ca212064c8588b9c5f4a2d9165399b99aa83c", "appToken" : "a610e9b1048499110433bb790489303a07182aac", "templates" : [{"id": "ca62e08d-2082-4cd4-837c-d46a362091e3", "name": "Example", "pdf" : "form_fr.pdf", "json": "form_fr.json"}]})
