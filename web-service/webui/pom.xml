@@ -35,11 +35,11 @@
       </activation>
 
       <properties>
-        <dhek.signInUrl>rest/auth</dhek.signInUrl>
-        <dhek.registerUrl>rest/register</dhek.registerUrl>
-        <dhek.myTemplatesUrl>rest/my-templates</dhek.myTemplatesUrl>
-        <dhek.rmTemplatesUrl>rest/rm-templates</dhek.rmTemplatesUrl>
-        <dhek.saveTemplateUrl>rest/save-template</dhek.saveTemplateUrl>
+        <dhek.signInUrl>api/auth</dhek.signInUrl>
+        <dhek.registerUrl>api/register</dhek.registerUrl>
+        <dhek.myTemplatesUrl>api/my-templates</dhek.myTemplatesUrl>
+        <dhek.rmTemplatesUrl>api/rm-templates</dhek.rmTemplatesUrl>
+        <dhek.saveTemplateUrl>api/save-template</dhek.saveTemplateUrl>
       </properties>
     </profile>
   </profiles>
