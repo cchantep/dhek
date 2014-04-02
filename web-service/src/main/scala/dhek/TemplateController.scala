@@ -16,8 +16,6 @@ import scalaz.std.option._
 import scalaz.std.scalaFuture._
 import scalaz.syntax.traverse._
 
-import Extractor.{ Param, Path, POST, & }
-
 object TemplateController {
 
   case class Template(id: String, name: String, json: String, pdf: String)

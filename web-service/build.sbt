@@ -4,9 +4,10 @@ scalaVersion := "2.10.3"
 
 organization := "fr.applicius.dhek"
 
-resolvers += "Sonatype Snapshots" at "http://oss.sonatype.org/content/repositories/snapshots/"
-
-resolvers += "Typesafe repository releases" at "http://repo.typesafe.com/typesafe/releases/"
+resolvers ++= Seq(
+  "Sonatype Snapshots" at "http://oss.sonatype.org/content/repositories/snapshots/",
+  "Typesafe repository releases" at "http://repo.typesafe.com/typesafe/releases/",
+  "Applicius Snapshots" at "https://raw.github.com/applicius/mvn-repo/master/snapshots/")
 
 autoCompilerPlugins := true
 
@@ -27,6 +28,7 @@ libraryDependencies ++= Seq(
   "org.bouncycastle" % "bcpkix-jdk15on" % "1.50",
   "org.reactivemongo" %% "reactivemongo" % "0.10.0",
   "com.typesafe" % "config" % "1.0.0",
-  "commons-codec" % "commons-codec" % "1.7"
+  "commons-codec" % "commons-codec" % "1.7",
+  "scaptcha" %% "scaptcha" % "1.1-SNAPSHOT"
 )
 
