@@ -84,3 +84,21 @@ In previous example, following options are used:
   - If dictionary is given, each key should match an area key defined in template, or it's ignored (considered undefined).
 
 If you want to have not editable value merged using such jQuery plugin, you can either add hidden (`<input type="hidden" name="area_key" value="uneditable_value" />`) or readonly (`<input type="text" readonly="readonly" name="area_key" value="uneditable_value" />`) field, when specifying data as form selector, or adding an hardcoded/static entry if using dictionary.
+
+> jQuery must be available to use this plugin.
+
+### Tumblr
+
+Form can be added to your [Tumblr](http://www.tumblr.com) blog, *adding Text post* with *HTML enabled* in content editor. There you can add HTML code for form in post content.
+
+![HTML post in Tumblr blog](./tumblr-html.png)
+
+(see code sample for [HTML/plain form submission](#htmlplain-form-submission))
+
+Thanks to Tumblr customization features, you can also call merge API using **[Javascript](#javascript)**.
+
+![Tumblr customization](./tumblr-customize1.png)
+
+On customization screen, click to edit your blog HTML, to add `<script src="http://url/to/jquery-dhek.js"></script>` add end of header (before `</head>`).
+
+![Edit Tumblr HTML](./tumblr-customize2.png)
