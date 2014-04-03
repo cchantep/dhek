@@ -1,4 +1,22 @@
 (function($) {
+    var withCaptcha = function(f) {
+        $._ajax({ 
+            'url': $._captcha['temporalUrl'], 'type': "POST" 
+        }, function(d) {
+            if ((typeof d) != "object") return false;
+
+            // ---
+
+            return f('<div class="row dhek-passphrase"><div class="col-md-4 col-sm-12"><img src="'+$._captcha['imageUrl']+'/'+d.value+'.png" alt="'+d.code+'" /></div><div class="col-md-8 col-sm-12"><input type="text" class="form-control passphrase" name="passphrase" placeholder="Passphrase" /></div></div>');
+
+        });
+    }, checkCaptcha = function(c, t, f) {
+        $.ajax({
+            'url': $._captcha['checkUrl'], 'type': "POST",
+            'data': { 'code': c, 'text': t }
+        }).done(f)
+    };
+    
     var sb = $("#signIn .btn"), rb = $("#register .btn"),
     toggle = function(a, b, v) {
         if (v) { // valid
@@ -26,10 +44,6 @@
     // Sign in
     var se = $("#signIn .email"), sp = $("#signIn .password");
     
-    $("#signIn input").on("keyup change", function() {
-        toggle(sb, rb, $.trim(se.val()) != "" && $.trim(sp.val()) != "")
-    });
-
     sb.click(function() {
         $._ajax({
             url: $._login['signInUrl'],
@@ -40,6 +54,34 @@
         }, authed);
 
         return false
+    });
+
+    withCaptcha(function(c) { 
+        $(c).insertBefore("#signIn .btn");
+
+        var i = $("#signIn .dhek-passphrase img"),
+        x = i.attr("alt"), t = $("#signIn .passphrase"),
+        e = t.parent();
+
+        $("#signIn input").on("keyup change", function() {
+            if ($.trim(t.val()) == "") {
+                e.removeClass("has-error"); // empty: no error but blocks
+                toggle(sb, rb, false) 
+            } else {
+                checkCaptcha(x, t.val(), function(d) {
+                    if (!d) {
+                        e.addClass("has-error");
+                        return toggle(sb, rb, false)
+                    }
+
+                    // ---
+                    
+                    e.removeClass("has-error");
+                    toggle(sb, rb, 
+                           $.trim(se.val()) != "" && $.trim(sp.val()) != "")
+                })
+            }
+        })
     });
 
     // Register
@@ -59,5 +101,33 @@
         }, authed);
 
         return false
+    });
+
+    withCaptcha(function(c) { 
+        $(c).insertBefore("#register .btn");
+
+        var i = $("#register .dhek-passphrase img"),
+        x = i.attr("alt"), t = $("#register .passphrase"),
+        e = t.parent();
+
+        $("#register input").on("keyup change", function() {
+            if ($.trim(t.val()) == "") {
+                e.removeClass("has-error"); // empty: no error but blocks
+                toggle(rb, sb, false) 
+            } else {
+                checkCaptcha(x, t.val(), function(d) {
+                    if (!d) {
+                        e.addClass("has-error");
+                        return toggle(rb, sb, false)
+                    }
+
+                    // ---
+                    
+                    e.removeClass("has-error");
+                    toggle(rb, sb, 
+                           $.trim(re.val()) != "" && $.trim(rp.val()) != "")
+                })
+            }
+        })
     })
 })(jQuery);
