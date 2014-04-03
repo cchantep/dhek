@@ -17,6 +17,9 @@
       </activation>
 
       <properties>
+        <dhek.temporalCaptchaUrl>temporal-captcha.json</dhek.temporalCaptchaUrl>
+        <dhek.captchaImageUrl>captcha</dhek.captchaImageUrl>
+        <dhek.captchaCheckUrl>check-captcha.json</dhek.captchaCheckUrl>
         <dhek.signInUrl>signin.json</dhek.signInUrl>
         <dhek.registerUrl>register.json</dhek.registerUrl>
         <dhek.myTemplatesUrl>my-templates.json</dhek.myTemplatesUrl>
@@ -35,6 +38,9 @@
       </activation>
 
       <properties>
+        <dhek.temporalCaptchaUrl>api/temporal-captcha</dhek.temporalCaptchaUrl>
+        <dhek.captchaImageUrl>api/captcha</dhek.captchaImageUrl>
+        <dhek.captchaCheckUrl>check-captcha</dhek.captchaCheckUrl>
         <dhek.signInUrl>api/auth</dhek.signInUrl>
         <dhek.registerUrl>api/register</dhek.registerUrl>
         <dhek.myTemplatesUrl>api/my-templates</dhek.myTemplatesUrl>
@@ -74,6 +80,7 @@
                     <exclude>*.xhtml</exclude>
 
                     <!-- exclude filtered -->
+                    <exclude>js/captcha-ajax.js</exclude>
                     <exclude>js/login-ajax.js</exclude>
                     <exclude>js/my-account-ajax.js</exclude>
                     <exclude>js/template-ajax.js</exclude>
@@ -84,6 +91,7 @@
                   <filtering>true</filtering>
                   <directory>${basedir}/src/main/webapp</directory>
                   <includes>
+                    <include>js/captcha-ajax.js</include>
                     <include>js/login-ajax.js</include>
                     <include>js/my-account-ajax.js</include>
                     <include>js/template-ajax.js</include>
@@ -367,6 +375,7 @@
               <jsFinalFile>login-merge.js</jsFinalFile>
               <jsSourceFiles>
                 <jsSourceFile>dhek-commons.min.js</jsSourceFile>
+                <jsSourceFile>captcha-ajax.js</jsSourceFile>
                 <jsSourceFile>login-ajax.js</jsSourceFile>
                 <jsSourceFile>login.js</jsSourceFile>
               </jsSourceFiles>

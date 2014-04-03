@@ -31,4 +31,6 @@ input[type="password"] {
   border-top-right-radius: 0;
 }
 
+.dhek-passphrase { margin-bottom:1em }
+
 #dhek-message { display: none }
