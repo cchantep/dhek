@@ -6,7 +6,7 @@ organization := "fr.applicius.dhek"
 
 resolvers ++= Seq(
   "Sonatype Snapshots" at "http://oss.sonatype.org/content/repositories/snapshots/",
-  "Typesafe repository releases" at "http://repo.typesafe.com/typesafe/releases/",
+  "Typesafe Releases" at "http://repo.typesafe.com/typesafe/releases/",
   "Applicius Snapshots" at "https://raw.github.com/applicius/mvn-repo/master/snapshots/")
 
 autoCompilerPlugins := true
