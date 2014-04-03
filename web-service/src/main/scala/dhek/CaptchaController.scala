@@ -1,12 +1,18 @@
 package dhek
 
+import argonaut._, Argonaut._
+import argonaut.{ Json ⇒ ArgJson }
+
 object CaptchaController {
   /** Returns captcha information */
   def info(env: Env): Unit = env async { complete ⇒
     env.resp.setContentType("application/json")
 
     env.writer acquireAndGet { w ⇒
-      w.print(captcha(env).temporalCaptcha(8) /* TODO: As JSON */ )
+      val info = captcha(env).temporalCaptcha(8)
+      w.print(ArgJson(
+        "code" -> info.code.asJson,
+        "value" -> info.value.asJson).nospaces)
       complete()
     }
   }
@@ -15,9 +21,8 @@ object CaptchaController {
   def image(env: Env)(text: String): Unit = env async { complete ⇒
     env.resp.setContentType("image/png")
 
-    env.writer acquireAndGet { w ⇒
-      val in: java.io.InputStream = captcha(env).textImage(text)
-      sys.error("TODO: Write `in` to `w`")
+    env.outputStream acquireAndGet { o ⇒
+      Binaries.writeTo(captcha(env).textImage(text), o)
       complete()
     }
   }

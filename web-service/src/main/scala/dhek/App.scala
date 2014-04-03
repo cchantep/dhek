@@ -13,7 +13,7 @@ import javax.servlet.http.{ HttpServletRequest, HttpServletResponse }
 import reactivemongo.api.MongoConnection
 import resource.managed
 
-import Extractor.{ POST, Path, Param, Params, Attr, & }
+import Extractor.{ POST, Path, Seg, Param, Params, Attr, ToInt, & }
 
 // TODO: Rename file to Plan.scala
 final class Plan(m: ⇒ MongoConnection, s: Settings) extends Filter {
@@ -63,6 +63,15 @@ final class Plan(m: ⇒ MongoConnection, s: Settings) extends Filter {
 
       case POST(Path("/register")) & ~(Param("email"), email) & ~(Param("password"), passw) ⇒ auth.register(env, email, passw)
 
+      case POST(Path("/temporal-captcha")) ⇒ CaptchaController.info(env)
+
+      case POST(Path(Seg("captcha" :: image :: Nil))) ⇒
+        CaptchaController.image(env)(image.dropRight(4))
+
+      case POST(Path("/check-captcha")) & ~(Param("code"), ToInt(c)) & ~(Param("text"), text) ⇒ c match {
+        case ToInt(code) ⇒ CaptchaController.matches(env)(code, text)
+        case _           ⇒ env.jsonError(400, "code is not an integer")
+      }
       case _ ⇒
         chain.doFilter(req, resp)
     }

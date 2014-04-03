@@ -1,6 +1,7 @@
 package dhek
 
 import javax.servlet.http.HttpServletRequest
+import scala.util.control.Exception.allCatch
 
 object Extractor {
   object & {
@@ -25,6 +26,10 @@ object Extractor {
     def unapply(req: HttpServletRequest) = Option(req.getRequestURI)
   }
 
+  object Seg {
+    def unapply(uri: String) = Some(uri.split("/").toList.tail)
+  }
+
   case class Attr(name: String) {
     def unapply(r: HttpServletRequest) = Option(r getAttribute name)
   }
@@ -36,5 +41,9 @@ object Extractor {
   case class Params(name: String) {
     def unapply(r: HttpServletRequest) =
       Option(r.getParameterValues(name)).map(_.toList)
+  }
+
+  object ToInt {
+    def unapply(s: String) = allCatch.opt(s.toInt)
   }
 }
