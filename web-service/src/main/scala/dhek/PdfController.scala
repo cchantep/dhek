@@ -27,15 +27,16 @@ import resource.{ ManagedResource, managed }
 
 object PdfController {
 
-  case class Rect(x: Int, y: Int, h: Int, w: Int, name: String, typ: String)
-  case class Page(areas: Option[List[Rect]])
   case class Model(format: String, pages: List[Page])
+  case class Page(areas: Option[List[Area]])
+  case class Area(x: Int, y: Int, h: Int, w: Int,
+    name: String, typ: String, value: Option[String] /* required for radio */ )
 
   // JSON codecs
-  object Rect {
+  object Area {
     implicit def rectCodecJson =
-      casecodec6(Rect.apply, Rect.unapply)(
-        "x", "y", "height", "width", "name", "type")
+      casecodec7(Area.apply, Area.unapply)(
+        "x", "y", "height", "width", "name", "type", "value")
   }
 
   object Page {
@@ -55,6 +56,8 @@ object PdfController {
   }
 
   def merge(env: Env, appToken: String, templateId: String, getParam: String ⇒ Option[String]): Unit = env async { complete ⇒
+    println(s"token = $appToken, templateId = $templateId") // TODO: logging
+
     env.withUsers.acquireAndGet { users ⇒
 
       def lookupTemplateInfo(user: BSONDocument): Future[(String, String)] = {
@@ -99,37 +102,53 @@ object PdfController {
               val page = stamper.getImportedPage(reader, i)
               val pageRect = reader.getPageSize(i)
               val over = stamper.getOverContent(i)
-              // val direct = stamper.getWriter.getDirectContent
 
               for {
-                rects ← p.areas.toList
-                rect ← rects
-                param ← getParam(rect.name).toList
+                areas ← p.areas.toList
+                area ← areas
               } yield {
-                lazy val isChecked = {
-                  val lower = param.toLowerCase
+                val param = getParam(area.name)
+
+                @inline def matches(f: String ⇒ Boolean) = param.fold(false)(f)
+                @inline def checked = matches { v ⇒
+                  val lower = v.toLowerCase
                   lower == "yes" || lower == "y" || lower == "on"
                 }
-                val normalizedY = pageRect.getHeight - rect.y - rect.h
+                @inline def selected =
+                  matches(v ⇒ area.value.fold(false)(_ == v))
+
+                val normalizedY = pageRect.getHeight - area.y - area.h
                 over.saveState()
-                rect.typ match {
+                area.typ match {
                   case "text" ⇒
                     val font = BaseFont.createFont()
                     over.beginText()
-                    over.moveText(rect.x, normalizedY)
+                    over.moveText(area.x, normalizedY)
                     over.setRGBColorFill(0, 0, 255)
                     over.setFontAndSize(font, 11)
-                    over.showText(param)
+                    over.showText(param getOrElse "")
                     over.endText()
-                  case "checkbox" if isChecked ⇒
+
+                  case "checkbox" if checked ⇒
                     over.setLineWidth(2)
                     over.setColorStroke(BaseColor.RED)
-                    over.moveTo(rect.x, normalizedY)
-                    over.lineTo(rect.x + rect.w, normalizedY + rect.h)
+                    over.moveTo(area.x, normalizedY)
+                    over.lineTo(area.x + area.w, normalizedY + area.h)
                     over.stroke()
-                    over.moveTo(rect.x + rect.w, normalizedY)
-                    over.lineTo(rect.x, normalizedY + rect.h)
+                    over.moveTo(area.x + area.w, normalizedY)
+                    over.lineTo(area.x, normalizedY + area.h)
                     over.stroke()
+
+                  case "radio" if selected ⇒
+                    over.setLineWidth(2)
+                    over.setColorStroke(BaseColor.RED)
+                    over.moveTo(area.x, normalizedY)
+                    over.lineTo(area.x + area.w, normalizedY + area.h)
+                    over.stroke()
+                    over.moveTo(area.x + area.w, normalizedY)
+                    over.lineTo(area.x, normalizedY + area.h)
+                    over.stroke()
+
                   case _ ⇒ // nothing to do
                 }
                 over.restoreState()

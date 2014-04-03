@@ -44,9 +44,8 @@ final class Plan(m: ⇒ MongoConnection, s: Settings) extends Filter {
       case POST(Path("/rm-templates")) & ~(Param("token"), token) & ~(Params("template[]"), ids) ⇒ TemplateController.removeTemplates(env)(token, ids)
 
       case POST(Path("/merge")) & ~(Param("dhek_token"), appToken) & ~(Param("dhek_template"), templateId) ⇒
-        val func = (x: String) ⇒ Option(req.getParameter(x))
-
-        PdfController.merge(env, appToken, templateId, func)
+        PdfController.merge(env, appToken, templateId,
+          { k ⇒ Option(req.getParameter(k)) })
 
       case POST(Path("/save-template")) &
         ~(Param("token"), token) &
