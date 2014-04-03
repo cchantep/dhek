@@ -27,6 +27,35 @@ Following parameters are passed to merge URL (http://dhek.applicius.fr/api/merge
 
 > As for parameter provided for checkbox area, following case insensitive values area considered true: `yes`, `y` or `on`.
 
+### HTML/plain form submission
+
+Anywhere you can manage a HTML form, you can update it so that it submit data to Dhek merge API.
+
+```html
+<form action="http://dhek.applicius.fr/api/merge" method="POST">
+  <!-- Replace value by your appToken -->
+  <input type="hidden" name="dhek_token" value="a610e9b1048499110433bb790489303a07182aac" />
+
+  <!-- Replace value by ID of your template -->
+  <input type="hidden" name="dhek_template" value="ca62e08d-2082-4cd4-837c-d46a362091e3" />
+
+  <p>First name: <input type="text" name="firstName" /></p>
+  <p>Last name: <input type="text" name="lastName" /></p>
+  <p>Activated? <input type="checkbox" name="case" value="yes" /></p>
+
+  <button>Merge to PDF</button>
+</form>
+```
+
+In previous example:
+- (Mandatory) Attribute `action` of `form` tag references merge API, and attribute `method` is set to (HTTP) `POST`.
+- (Mandatory) Hidden fields (`<input type="hidden" ... />`) are defined for required merge parameters `dhek_token` (appToken) and `dhek_template` (ID of template).
+- For each key of areas defined in Dhek template (here `firstName`, `lastName` and `case`), corresponding fields are added to firm (here `<input type="text" ... />` and `<input type="checkbox" ... />`).
+- Finally, `button` allow visitor to submit this form.
+
+> There is no form validation with such integration.
+> Plain form submission can be used where you can't call custom Javascript, or where validation/custom processing is not required.
+
 ### Javascript
 
 PDF merge can be called directly on your pages with JS, using AJAX/XHR features. Doing so you can check data as you want before pushing them into PDF.
