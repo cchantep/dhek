@@ -119,13 +119,9 @@ object PdfController {
                   }
                   val normalizedY = pageRect.getHeight - rect.y - rect.h
                   over.saveState()
-                  over.setLineWidth(2)
-                  over.setColorStroke(BaseColor.RED)
                   rect.typ match {
                     case "text" ⇒
                       val font = BaseFont.createFont()
-                      over.rectangle(rect.x, normalizedY, rect.w, rect.h)
-                      over.stroke()
                       over.beginText()
                       over.moveText(rect.x, normalizedY)
                       over.setRGBColorFill(0, 0, 255)
@@ -133,15 +129,15 @@ object PdfController {
                       over.showText(param)
                       over.endText()
                     case "checkbox" if isChecked ⇒
+                      over.setLineWidth(2)
+                      over.setColorStroke(BaseColor.RED)
                       over.moveTo(rect.x, normalizedY)
                       over.lineTo(rect.x + rect.w, normalizedY + rect.h)
                       over.stroke()
                       over.moveTo(rect.x + rect.w, normalizedY)
                       over.lineTo(rect.x, normalizedY + rect.h)
                       over.stroke()
-                    case "checkbox" ⇒
-                      over.rectangle(rect.x, normalizedY, rect.w, rect.h)
-                      over.stroke()
+                    case _ ⇒ // nothing to do
                   }
                   over.restoreState()
                 }
