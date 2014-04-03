@@ -1,5 +1,10 @@
 # Dhek web service
 
+## Setup
+
+- MongoDB
+- Java 1.7
+
 ## Configuration
 
 Expecting a file name `dhek.conf` in runtime directory (CWD):
