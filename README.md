@@ -86,7 +86,7 @@ Anyway, for people working on crippled Operating Systems, we've already packaged
 
 Dhek mappings are saved in JSON files. Struture is the following:
 
-```javascript
+```json
 {
   "pages": [
     { /* mappings for first page, index 0 */
@@ -108,96 +108,6 @@ Dhek mappings are saved in JSON files. Struture is the following:
 }
 ```
 
-These mappings can be used to merge dynamic data with original PDF,
-in order to generate a new PDF document.
+These mappings can be used to merge dynamic data with original PDF, in order to generate a new PDF document.
 
-#### PHP integration
-
-Dhek mappings can be used in PHP using [FPDF](http://www.fpdf.org/) library:
-
-```php
-<?php
-function monospace($pdf, $x, $y, $height, $width, $count, $txt) {
-  $pdf->SetFont("Courier", "", $fontSize); // monospace font
-
-  //$cw = $width / $count;
-  $cw = 12.85;
-
-  $xi = $x + 1;
-  $i = 0;
-  foreach (str_split($txt) as $c) {
-    $pdf->SetXY($xi, $y);
-    $pdf->Cell($cw, $height, $c, true, "C");
-
-    $xi += $cw + 1;
-
-    if (++$i == $count) {
-      break;
-    }
-  }
-}
-
-$json = json_decode(file_get_contents("test.json"));
-
-require("fpdf/fpdf/fpdf.php");
-require("fpdf/fpdi/fpdi.php");
-
-$pdfSrcPath = "test.pdf";
-
-$pdf = new FPDI("P", //L=>Landscape / P=>Portrait
-		"pt" /* point */);
-
-$fontSize = 14;
-
-$pagecount = $pdf->setSourceFile($pdfSrcPath);
-$testText = "abcdefghijklmnopqrstuvwxyz0123456789";
-
-for ($i = 0; $i < $pagecount; $i++) {
-  $pdf->AddPage();
-  $tplIdx = $pdf->importPage($i+1);
-  $pdf->useTemplate($tplIdx, 0, 0, 0 ,0, true);
-
-  if (isset($json->pages[$i]) && isset($json->pages[$i]->areas)) {
-    for ($j = 0; $j < count($json->pages[$i]->areas); $j++) {
-      $area = $json->pages[$i]->areas[$j];
-      $x = $area->x;
-      $y = $area->y;
-      $w = $area->width;
-      $h = $area->height;
-
-      // Draw blue rect at bounds
-      $pdf->SetDrawColor(0,0,255);
-      $pdf->SetLineWidth(0.2835);	
-      $pdf->Rect($x, $y, $w, $h);
-
-      if ($area->type == "checkbox") {
-        $pdf->SetDrawColor(0,255,0);
-        $pdf->SetLineWidth(2.0);
-        $pdf->Line($x, $y, $x+$w, $y+$h);
-        $pdf->Line($x, $y+$h, $x+$w, $y);
-      } else if ($area->type == "monospaceText") {
-        $pdf->SetDrawColor(0,255,0);
-        monospace($pdf, $x, $y, 
-          $h, $w, $area->cellCount,
-          strtoupper($testText));
-
-      } else {
-        // 'Free' text
-        $pdf->SetLineWidth(1.0); // border
-        
-        $iw = $w - 2/* 2 x 1 */;
-        $v = utf8_decode($area->name);
-        $overflow = ($pdf->GetStringWidth($v) > $iw);
-        while ($pdf->GetStringWidth($v) > $iw) { $v = substr($v, 0, -1); }
-        if ($overflow) { $v = substr($v, 0, -1) . "\\"; }
-        
-        $pdf->SetXY($x, $y);
-        $pdf->MultiCell($w, intval($h), $v, true);
-      }
-    }
-  } 
-}
-
-$pdf->Output("test-dhek.pdf", "F");
-?>
-```
+Dhek is using UTF-8 character set, so so there is not issue to use space, ponctuation signs or accentuated character while preparing template (e.g. in area name).
