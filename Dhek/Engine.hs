@@ -826,7 +826,7 @@ createJsonImportDialog win = do
 
 windowParams :: [Gtk.AttrOp Gtk.Window]
 windowParams =
-    [Gtk.windowTitle          := "Dhek PDF Viewer"
+    [Gtk.windowTitle          := "Dhek PDF templating"
     ,Gtk.windowDefaultWidth   := 800
     ,Gtk.windowDefaultHeight  := 600
     ,Gtk.containerBorderWidth := 10]

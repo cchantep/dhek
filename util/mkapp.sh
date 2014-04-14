@@ -1,8 +1,11 @@
 #! /bin/sh
+
+APPNAME="Dhek"
+
+# Path to previously built binary
+BINPATH=`dirname $0`/../dist/build/dhek/dhek
  
-BUILDDIR=`dirname $0`/dist
-APPNAME="$1"
-BINPATH="$2"
+BUILDDIR=`dirname $0`/../dist
 BINFILE=`basename "$BINPATH"`
  
 mkdir -p "$BUILDDIR/$APPNAME.app/Contents/MacOS/lib"
