@@ -19,30 +19,22 @@ port install pango poppler cairo gtk2
 
 ```
 cabal update
-cabal install gtk2hs-buildtools
-cabal install gtk
+cabal install alex happy gtk2hs-buildtools gtk
 ```
 
-#### Other (from sources or package manager)
-
-```
-cabal update
-cabal install alex
-cabal install happy
-cabal install gtk2hs-buildtools
-cabal install gtk
-```
-
---
+#### Dhek sources
 
 In order to build Dhek:
+
 ```
 cabal install --only-dependencies
 cabal configure
 cabal build
 ```
 
-You can produce an executable by doing:
+In case of linking error about `_iconv`, re-run `cabal configure` with `--extra-lib-dir=/usr/lib` to enforce system version of libiconv is used.
+
+You can install an executable by doing:
 
 ```
 cabal install
