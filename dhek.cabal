@@ -8,7 +8,7 @@ author:              Applicius
 -- copyright:cab
 category:            GUI
 build-type:          Custom
-cabal-version:       >=1.8
+cabal-version:       >=1.10
 
 executable dhek
   main-is: Main.hs
@@ -16,10 +16,12 @@ executable dhek
                  Dhek.Draw
                  Dhek.Engine
                  Dhek.File
+                 Dhek.I18N
                  Dhek.Move
                  Dhek.Property
                  Dhek.Types
                  Dhek.Utils
+  default-extensions:  TemplateHaskell
   build-depends:       base          == 4.7.*
                        , gtk         >= 0.12.4
                        , poppler     == 0.12.3
@@ -33,3 +35,8 @@ executable dhek
                        , lens        == 4.1.*
                        , vector      >= 0.7.1
                        , free        >= 3.1.1    && < 5
+                       , shakespeare >= 2.0.0    && < 2.1.0
+                       , text
+                       , Cabal == 1.18.*
+                       , process
+ default-language: Haskell2010

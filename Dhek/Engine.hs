@@ -45,6 +45,7 @@ import qualified Graphics.UI.Gtk.Poppler.Page     as Poppler
 import Dhek.Types
 import Dhek.Utils (takeFileName, trimString)
 import Dhek.Instr
+import Dhek.I18N
 
 type EngineCallback a = a -> RWST EngineEnv () EngineState IO ()
 
@@ -151,24 +152,25 @@ gtkEngineNew = do
 engineStart :: Engine -> IO ()
 engineStart eng = do
     Gtk.initGUI
+    msgStr   <- mkI18N
     iRef     <- newIORef (error "impossible situation")
     window   <- Gtk.windowNew
     wvbox    <- Gtk.vBoxNew False 10
-    fdialog  <- createPdfChooserDialog window
-    jdialog  <- createJsonChooserDialog window
-    idialog  <- createJsonImportDialog window
+    fdialog  <- createPdfChooserDialog msgStr  window
+    jdialog  <- createJsonChooserDialog msgStr window
+    idialog  <- createJsonImportDialog msgStr window
     mbar     <- Gtk.menuBarNew
     malign   <- Gtk.alignmentNew 0 0 1 0
-    fitem    <- Gtk.menuItemNewWithLabel "File"
-    oitem    <- Gtk.menuItemNewWithLabel "Open PDF"
-    iitem    <- Gtk.menuItemNewWithLabel "Load mappings"
-    sitem    <- Gtk.menuItemNewWithLabel "Save mappings"
-    citem    <- Gtk.checkMenuItemNewWithLabel "Enable overlapping areas"
-    prev     <- Gtk.buttonNewWithLabel "Previous"
-    next     <- Gtk.buttonNewWithLabel "Next"
+    fitem    <- Gtk.menuItemNewWithLabel $ msgStr MsgFile
+    oitem    <- Gtk.menuItemNewWithLabel $ msgStr MsgOpenPDF
+    iitem    <- Gtk.menuItemNewWithLabel $ msgStr MsgLoadMappings
+    sitem    <- Gtk.menuItemNewWithLabel $ msgStr MsgSaveMappings
+    citem    <- Gtk.checkMenuItemNewWithLabel $ msgStr MsgEnableOverlap
+    prev     <- Gtk.buttonNewWithLabel $ msgStr MsgPrevious
+    next     <- Gtk.buttonNewWithLabel $ msgStr MsgNext
     minus    <- Gtk.buttonNewWithLabel "-"
     plus     <- Gtk.buttonNewWithLabel "+"
-    rem      <- Gtk.buttonNewWithLabel "Remove"
+    rem      <- Gtk.buttonNewWithLabel $ msgStr MsgRemove
     store    <- Gtk.listStoreNew ([] :: [Rect])
     treeV    <- Gtk.treeViewNewWithModel store
     sel      <- Gtk.treeViewGetSelection treeV
@@ -196,8 +198,8 @@ engineStart eng = do
     pEntry   <- Gtk.entryNew
     pCombo   <- Gtk.comboBoxNew
     atable   <- Gtk.tableNew 3 3 False
-    nlabel   <- Gtk.labelNew (Just "Name")
-    tlabel   <- Gtk.labelNew (Just "Type")
+    nlabel   <- Gtk.labelNew (Just $ msgStr MsgName)
+    tlabel   <- Gtk.labelNew (Just $ msgStr MsgType)
     salign   <- Gtk.alignmentNew 0 0 1 0
     ualign   <- Gtk.alignmentNew 0.5 0 0 0
     nalign   <- Gtk.alignmentNew 0 0.5 0 0
@@ -249,7 +251,7 @@ engineStart eng = do
     Gtk.boxPackStart hbox vbox Gtk.PackGrow 0
     Gtk.boxPackStart hbox vleft Gtk.PackNatural 0
     col <- Gtk.treeViewColumnNew
-    Gtk.treeViewColumnSetTitle col "Areas"
+    Gtk.treeViewColumnSetTitle col $ msgStr $ MsgAreas
     trenderer <- Gtk.cellRendererTextNew
     Gtk.cellLayoutPackStart col trenderer False
     let mapping r = [Gtk.cellText := r ^. rectName]
@@ -258,8 +260,8 @@ engineStart eng = do
     Gtk.scrolledWindowAddWithViewport tswin treeV
     Gtk.scrolledWindowSetPolicy tswin Gtk.PolicyAutomatic Gtk.PolicyAutomatic
     -- Properties --
-    nlabel <- Gtk.labelNew (Just "Name")
-    tlabel <- Gtk.labelNew (Just "Type")
+    nlabel <- Gtk.labelNew (Just $ msgStr MsgName)
+    tlabel <- Gtk.labelNew (Just $ msgStr MsgType)
     ualign <- Gtk.alignmentNew 0.5 0 0 0
     nalign <- Gtk.alignmentNew 0 0.5 0 0
     talign <- Gtk.alignmentNew 0 0.5 0 0
@@ -772,7 +774,7 @@ engineStart eng = do
                 draw
         liftIO $ interpret x x action
     Gtk.containerAdd window wvbox
-    Gtk.set window windowParams
+    Gtk.set window (windowParams msgStr)
     Gtk.onDestroy window Gtk.mainQuit
     Gtk.widgetShowAll window
     Gtk.mainGUI
@@ -781,8 +783,8 @@ engineStart eng = do
         v <- loadPdf uri
         return v
 
-createPdfChooserDialog :: Gtk.Window -> IO Gtk.FileChooserDialog
-createPdfChooserDialog win = do
+createPdfChooserDialog :: (DhekMessage -> String) -> Gtk.Window -> IO Gtk.FileChooserDialog
+createPdfChooserDialog msgStr win = do
   ch   <- Gtk.fileChooserDialogNew title
           (Just win) Gtk.FileChooserActionOpen responses
   filt <- Gtk.fileFilterNew
@@ -791,42 +793,42 @@ createPdfChooserDialog win = do
   Gtk.fileChooserAddFilter ch filt
   return ch
     where
-      responses = [("Open", Gtk.ResponseOk)
-                  ,("Cancel", Gtk.ResponseCancel)]
-      title = Just "Open a PDF file"
+      responses = [(msgStr MsgOpen, Gtk.ResponseOk)
+                  ,(msgStr MsgCancel, Gtk.ResponseCancel)]
+      title = Just $ msgStr MsgOpenPDF
 
-createJsonChooserDialog :: Gtk.Window -> IO Gtk.FileChooserDialog
-createJsonChooserDialog win = do
+createJsonChooserDialog :: (DhekMessage -> String) -> Gtk.Window -> IO Gtk.FileChooserDialog
+createJsonChooserDialog msgStr win = do
   ch   <- Gtk.fileChooserDialogNew title (Just win)
           Gtk.FileChooserActionSave responses
   filt <- Gtk.fileFilterNew
   Gtk.fileFilterAddPattern filt "*.json"
-  Gtk.fileFilterSetName filt "Json File"
+  Gtk.fileFilterSetName filt $ msgStr MsgJsonFilter
   Gtk.fileChooserAddFilter ch filt
   Gtk.fileChooserSetDoOverwriteConfirmation ch True
   return ch
     where
-      responses = [("Save", Gtk.ResponseOk)
-                  ,("Cancel", Gtk.ResponseCancel)]
-      title = Just "Open a Json file"
+      responses = [(msgStr MsgSave, Gtk.ResponseOk)
+                  ,(msgStr MsgCancel, Gtk.ResponseCancel)]
+      title = Just $ msgStr MsgJsonFilter
 
-createJsonImportDialog :: Gtk.Window -> IO Gtk.FileChooserDialog
-createJsonImportDialog win = do
+createJsonImportDialog :: (DhekMessage -> String) -> Gtk.Window -> IO Gtk.FileChooserDialog
+createJsonImportDialog msgStr win = do
   ch <- Gtk.fileChooserDialogNew title (Just win)
         Gtk.FileChooserActionOpen responses
   filt <- Gtk.fileFilterNew
   Gtk.fileFilterAddPattern filt "*.json"
-  Gtk.fileFilterSetName filt "Json File"
+  Gtk.fileFilterSetName filt $ msgStr MsgJsonFilter
   Gtk.fileChooserAddFilter ch filt
   return ch
     where
-      responses = [("Choose", Gtk.ResponseOk)
-                  ,("Cancel", Gtk.ResponseCancel)]
-      title = Just "Choose a Json file"
+      responses = [(msgStr MsgChoose, Gtk.ResponseOk)
+                  ,(msgStr MsgCancel, Gtk.ResponseCancel)]
+      title = Just $ msgStr MsgChooseJSON
 
-windowParams :: [Gtk.AttrOp Gtk.Window]
-windowParams =
-    [Gtk.windowTitle          := "Dhek PDF templating"
+windowParams :: (DhekMessage -> String) -> [Gtk.AttrOp Gtk.Window]
+windowParams msgStr =
+    [Gtk.windowTitle          := msgStr MsgMainTitle
     ,Gtk.windowDefaultWidth   := 800
     ,Gtk.windowDefaultHeight  := 600
     ,Gtk.containerBorderWidth := 10]
