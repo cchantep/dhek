@@ -10,6 +10,7 @@ import Dhek.File (onJsonSave, onJsonImport)
 import Dhek.Move (onMove, onPress, onRelease)
 import Dhek.Property (onProp)
 import Dhek.Selection (onSel)
+import Dhek.I18N
 
 main :: IO ()
 main = do
