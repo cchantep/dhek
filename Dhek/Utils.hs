@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
-module Dhek.Utils (takeFileName, takeExtension, trimString)  where
+module Dhek.Utils (joinPath, takeFileName, takeExtension, trimString)  where
 
 import Data.Char (isSpace)
 import Data.List (dropWhileEnd)

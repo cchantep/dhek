@@ -43,7 +43,7 @@ import qualified Graphics.UI.Gtk.Poppler.Document as Poppler
 import qualified Graphics.UI.Gtk.Poppler.Page     as Poppler
 
 import Dhek.Types
-import Dhek.Utils (takeFileName, trimString)
+import Dhek.Utils (joinPath, takeFileName, trimString)
 import Dhek.Instr
 import Dhek.I18N
 
@@ -166,10 +166,18 @@ engineStart eng = do
     iitem    <- Gtk.menuItemNewWithLabel $ msgStr MsgLoadMappings
     sitem    <- Gtk.menuItemNewWithLabel $ msgStr MsgSaveMappings
     citem    <- Gtk.checkMenuItemNewWithLabel $ msgStr MsgEnableOverlap
-    prev     <- Gtk.buttonNewWithLabel $ msgStr MsgPrevious
-    next     <- Gtk.buttonNewWithLabel $ msgStr MsgNext
-    minus    <- Gtk.buttonNewWithLabel "-"
-    plus     <- Gtk.buttonNewWithLabel "+"
+    pimg     <- Gtk.imageNewFromFile $ joinPath ["resources", "page-previous.png"]
+    nimg     <- Gtk.imageNewFromFile $ joinPath ["resources", "page-next.png"]
+    iimg     <- Gtk.imageNewFromFile $ joinPath ["resources", "zoom-in.png"]
+    oimg     <- Gtk.imageNewFromFile $ joinPath ["resources", "zoom-out.png"]
+    prev     <- Gtk.buttonNew
+    Gtk.buttonSetImage prev pimg
+    next     <- Gtk.buttonNew
+    Gtk.buttonSetImage next nimg
+    minus    <- Gtk.buttonNew
+    Gtk.buttonSetImage minus oimg
+    plus     <- Gtk.buttonNew
+    Gtk.buttonSetImage plus iimg
     rem      <- Gtk.buttonNewWithLabel $ msgStr MsgRemove
     store    <- Gtk.listStoreNew ([] :: [Rect])
     treeV    <- Gtk.treeViewNewWithModel store
