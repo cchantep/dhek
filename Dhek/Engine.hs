@@ -789,7 +789,7 @@ createPdfChooserDialog msgStr win = do
           (Just win) Gtk.FileChooserActionOpen responses
   filt <- Gtk.fileFilterNew
   Gtk.fileFilterAddPattern filt "*.pdf"
-  Gtk.fileFilterSetName filt "PDF File"
+  Gtk.fileFilterSetName filt $ msgStr MsgPdfFilter
   Gtk.fileChooserAddFilter ch filt
   return ch
     where
