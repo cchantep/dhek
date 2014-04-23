@@ -179,6 +179,7 @@ engineStart eng = do
     plus     <- Gtk.buttonNew
     Gtk.buttonSetImage plus iimg
     rem      <- Gtk.buttonNewWithLabel $ msgStr MsgRemove
+    app      <- Gtk.buttonNewWithLabel $ msgStr MsgApply
     store    <- Gtk.listStoreNew ([] :: [Rect])
     treeV    <- Gtk.treeViewNewWithModel store
     sel      <- Gtk.treeViewGetSelection treeV
@@ -200,6 +201,7 @@ engineStart eng = do
     aswin    <- Gtk.alignmentNew 0 0 1 1
     atswin   <- Gtk.alignmentNew 0 0 1 1
     arem     <- Gtk.alignmentNew 0.5 0 0 0
+    aapp     <- Gtk.alignmentNew 0.5 0 0 0
     bbox     <- Gtk.hButtonBoxNew
     vruler   <- Gtk.vRulerNew
     hruler   <- Gtk.hRulerNew
@@ -245,6 +247,7 @@ engineStart eng = do
     Gtk.tableAttach atable vscroll 2 3 1 2 [Gtk.Fill] gtkTabAll 0 0
     Gtk.tableAttach atable viewport 1 2 1 2 gtkTabView gtkTabView 0 0
     Gtk.containerAdd arem rem
+    Gtk.containerAdd aapp app
     Gtk.containerAdd align bbox
     Gtk.containerAdd bbox prev
     Gtk.containerAdd bbox next
@@ -274,7 +277,7 @@ engineStart eng = do
     nalign <- Gtk.alignmentNew 0 0.5 0 0
     talign <- Gtk.alignmentNew 0 0.5 0 0
     tstore <- Gtk.comboBoxSetModelText pCombo
-    table  <- Gtk.tableNew 2 2 False
+    table  <- Gtk.tableNew 2 3 False
     tvbox  <- Gtk.vBoxNew False 10
     Gtk.containerAdd nalign nlabel
     Gtk.containerAdd talign tlabel
@@ -282,6 +285,8 @@ engineStart eng = do
     Gtk.tableAttachDefaults table pEntry 1 2 0 1
     Gtk.tableAttachDefaults table talign 0 1 1 2
     Gtk.tableAttachDefaults table pCombo 1 2 1 2
+    Gtk.tableAttachDefaults table pCombo 1 2 1 2
+    Gtk.tableAttachDefaults table aapp   0 2 2 3
     Gtk.tableSetRowSpacings table 10
     Gtk.tableSetColSpacings table 10
     traverse_ (Gtk.listStoreAppend tstore) ["text", "checkbox", "radio"]
@@ -290,6 +295,7 @@ engineStart eng = do
     Gtk.boxPackStart vleft salign Gtk.PackNatural 0
     Gtk.containerAdd vleft tvbox
     Gtk.widgetSetSensitive rem False
+    Gtk.widgetSetSensitive app False
     Gtk.widgetSetSensitive pEntry False
     Gtk.widgetSetSensitive pCombo False
     let envRef   = _engineEnv eng
@@ -348,6 +354,7 @@ engineStart eng = do
                             writeIORef stateRef s1 -- combobox hack in order to prevent sync issue
                             traverse_ (Gtk.comboBoxSetActiveIter pCombo) tOpt
                             Gtk.widgetSetSensitive rem True
+                            Gtk.widgetSetSensitive app True
                             Gtk.widgetSetSensitive pCombo True
                             Gtk.widgetSetSensitive pEntry True
                             k s1 v1
@@ -444,6 +451,7 @@ engineStart eng = do
                     Gtk.widgetSetSensitive pCombo False
                     Gtk.widgetSetSensitive pEntry False
                     Gtk.widgetSetSensitive rem False
+                    Gtk.widgetSetSensitive app False
                     Gtk.entrySetText pEntry ""
                     Gtk.comboBoxSetActive pCombo (negate 1)
                     k s1 v
@@ -666,6 +674,9 @@ engineStart eng = do
     Gtk.on rem Gtk.buttonActivated $ do
         let x = negate 1
         interpret x x remF
+    Gtk.on app Gtk.buttonActivated $ do
+        let x = negate 1
+        interpret x x propF
     --- Selection ---
     Gtk.on sel Gtk.treeSelectionSelectionChanged $ do
         let x = negate 1
@@ -729,12 +740,6 @@ engineStart eng = do
                     _            -> delta'
                 newValue = min (upper - pageSize) (max 0 (oldValue + delta))
             Gtk.adjustmentSetValue vadj newValue
-    Gtk.on pEntry Gtk.entryActivate $ do
-       let x = negate 1
-       interpret x x propF
-    Gtk.on pCombo Gtk.changed $ do
-       let x = negate 1
-       interpret x x propF
     Gtk.on vruler Gtk.buttonPressEvent $ Gtk.tryEvent $ do
         let x      = negate 1
             action = compile $ newGuide GuideVertical

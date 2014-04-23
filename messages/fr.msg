@@ -17,3 +17,4 @@ Save: Sauvegarder
 Choose: Choisir
 ChooseJSON: Choisir un fichier JSON
 MainTitle: Dhek - Création de modèle PDF
+Apply: Appliquer
