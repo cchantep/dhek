@@ -509,10 +509,10 @@ engineStart eng = do
                     resp <- Gtk.dialogRun jdialog
                     Gtk.widgetHide jdialog
                     case resp of
-                        Gtk.ResponseCancel -> k Nothing s v
-                        Gtk.ResponseOk     -> do
+                        Gtk.ResponseOk -> do
                             fOpt <- Gtk.fileChooserGetFilename jdialog
                             k fOpt s v
+                        _              -> k Nothing s v
                 suspend (GetAllRects k) s v =
                     let tup (i, b) = (i, b ^. boardRects.to I.elems)
                         list       = fmap tup . I.toList in
@@ -521,10 +521,10 @@ engineStart eng = do
                     resp <- Gtk.dialogRun idialog
                     Gtk.widgetHide idialog
                     case resp of
-                        Gtk.ResponseCancel -> k Nothing s v
-                        Gtk.ResponseOk     -> do
+                        Gtk.ResponseOk -> do
                             fOpt <- Gtk.fileChooserGetFilename idialog
                             k fOpt s v
+                        _              -> k Nothing s v
                 suspend (SetRects xs k) s v = do
                     let onEach page r = do
                             id <- boardsState <+= 1
@@ -609,8 +609,7 @@ engineStart eng = do
         resp <- Gtk.dialogRun fdialog
         Gtk.widgetHide fdialog
         case resp of
-            Gtk.ResponseCancel -> return ()
-            Gtk.ResponseOk     -> do
+            Gtk.ResponseOk -> do
                 uriOpt  <- Gtk.fileChooserGetURI fdialog
                 nameOpt <- Gtk.fileChooserGetFilename fdialog
                 iOpt    <- traverse makeInternal uriOpt
@@ -635,6 +634,7 @@ engineStart eng = do
                 Gtk.windowSetTitle window
                         (name ++ " (page 1 / " ++ show nb ++ ")")
                 Gtk.widgetShowAll ahbox
+            _ -> return ()
     Gtk.on iitem Gtk.menuItemActivate $ do
         let x = negate 1
         interpret x x jsonLF
