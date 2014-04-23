@@ -21,10 +21,6 @@ onProp = compile $ do
   where
     go (r,n,t) = do
         rs <- getRects
-        let msg = "\"" ++ n ++ "\" is already used"
-            r1  = r & rectName .~ n
+        let r1  = r & rectName .~ n
                     & rectType .~ t
-            pred o = (o ^. rectName) == n && (o ^. rectId) /= (r ^. rectId)
-            exists = any pred rs
-        when exists (showError msg)
-        when (not exists) (setSelected (Just r1))
+        setSelected (Just r1)
