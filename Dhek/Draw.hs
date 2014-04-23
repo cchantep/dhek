@@ -34,20 +34,22 @@ cairoDraw = compile $ do
         eventR = event >>= eventGetRect
     sizeRequest (truncate width) (truncate height)
     execCairo $ do
+        -- Paint page background in white
         Cairo.setSourceRGB 1.0 1.0 1.0
         Cairo.rectangle 0 0 fw fh
         Cairo.fill
+
         Cairo.scale ratio ratio
         Poppler.pageRender (pagePtr page)
         mapM_ (drawGuide fw fh) guides
         mapM_ (drawGuide fw fh) curGuide
         Cairo.closePath
         Cairo.stroke
-        drawRects 1.0 selected overed rects
-        drawingSel selection
-        drawRects 1.0 Nothing eventR eventR
+        drawRects 1.0 fw fh selected overed rects
+        drawingSel fw fh selection
+        drawRects 1.0 fw fh eventR eventR eventR
   where
-    drawRects th sel ove = mapM_ (drawing th sel ove)
+    drawRects lw fw fh sel ove = mapM_ (drawing lw fw fh sel ove)
 
     drawGuide w h (Guide x typ) = do
         Cairo.setSourceRGB 0.16 0.26 0.87
@@ -60,13 +62,17 @@ cairoDraw = compile $ do
                 Cairo.moveTo 0.0 x
                 Cairo.lineTo w x
 
-    drawing th sel ove r =
+    -- lw: Line width
+    -- fw: Frame width
+    -- fh: Frame height
+    -- sel: selection
+    drawing lw fw fh sel ove r =
         let x = r ^. rectX
             y = r ^. rectY
             h = r ^. rectHeight
             w = r ^. rectWidth
             onSel s
-                | s == r    = Cairo.setSourceRGB 1.0 0 0
+                | s == r    = selRect r
                 | otherwise = return ()
             onOver o
                 | o == r    = Cairo.setSourceRGB 0.16 0.72 0.92
@@ -75,12 +81,51 @@ cairoDraw = compile $ do
         do Cairo.setSourceRGB 0 0 1.0
            mapM_ onOver ove
            mapM_ onSel sel
-           Cairo.setLineWidth th
+           Cairo.setLineWidth lw
            Cairo.rectangle x y w h
            Cairo.closePath
            Cairo.stroke
+        where
+          selRect r = do
+                 drawRectGuides fw fh r
 
-    drawingSel = mapM_ go
+                 -- Then prepare line color for rect
+                 Cairo.setSourceRGB 1.0 0 0
+
+    -- Draws temporary guides around selected rectangle r
+    -- fw: Frame width
+    -- fh: Frame height
+    -- r: Rectangle
+    drawRectGuides :: Double -> Double -> Rect -> Cairo.Render()
+    drawRectGuides fw fh r = 
+        let rectLeft = r ^. rectX
+            rectTop = r ^. rectY
+            rectBot = rectTop + r ^. rectHeight
+            rectRight = rectLeft + r ^. rectWidth in
+        do -- Prepare draw
+           --TODO: Cairo.setDash [1.0]
+           Cairo.setLineWidth 0.5
+           Cairo.setSourceRGB 0.16 0.72 0.92
+
+           -- Draw horizontal top line
+           Cairo.moveTo 0 rectTop -- frameLeft,rectTop
+           Cairo.lineTo fw rectTop -- line to frameRight,rectTop
+
+           -- Draw horizontal bottom line
+           Cairo.moveTo 0 rectBot -- frameLeft,rectBot
+           Cairo.lineTo fw rectBot -- line to frameRight,rectBot
+
+           -- Draw vertical left line
+           Cairo.moveTo rectLeft 0 -- rectLeft,frameTop
+           Cairo.lineTo rectLeft fh -- line to rectLeft,frameBottom
+
+           -- Draw vertical right line
+           Cairo.moveTo rectRight 0 -- rectRight,frameTop
+           Cairo.lineTo rectRight fh -- line to rectRight,frameBottom
+
+           Cairo.stroke
+
+    drawingSel fw fh rs = mapM_ (go) rs
       where
         go r =
             let x = r ^. rectX
@@ -92,3 +137,4 @@ cairoDraw = compile $ do
                Cairo.rectangle x y w h
                Cairo.closePath
                Cairo.stroke
+               drawRectGuides fw fh r
