@@ -166,18 +166,41 @@ engineStart eng = do
     iitem    <- Gtk.menuItemNewWithLabel $ msgStr MsgLoadMappings
     sitem    <- Gtk.menuItemNewWithLabel $ msgStr MsgSaveMappings
     citem    <- Gtk.checkMenuItemNewWithLabel $ msgStr MsgEnableOverlap
-    pimg     <- Gtk.imageNewFromFile $ joinPath ["resources", "page-previous.png"]
-    nimg     <- Gtk.imageNewFromFile $ joinPath ["resources", "page-next.png"]
-    iimg     <- Gtk.imageNewFromFile $ joinPath ["resources", "zoom-in.png"]
-    oimg     <- Gtk.imageNewFromFile $ joinPath ["resources", "zoom-out.png"]
+
+    -- Button Previous
     prev     <- Gtk.buttonNew
+    pimg     <- Gtk.imageNewFromFile $ joinPath ["resources", "page-previous.png"]
     Gtk.buttonSetImage prev pimg
+
+
+    -- Button Next
     next     <- Gtk.buttonNew
+    nimg     <- Gtk.imageNewFromFile $ joinPath ["resources", "page-next.png"]
     Gtk.buttonSetImage next nimg
+
+    -- Button Zoom out
     minus    <- Gtk.buttonNew
+    oimg     <- Gtk.imageNewFromFile $ joinPath ["resources", "zoom-out.png"]
     Gtk.buttonSetImage minus oimg
+
+    -- Button Zoom in
     plus     <- Gtk.buttonNew
+    iimg     <- Gtk.imageNewFromFile $ joinPath ["resources", "zoom-in.png"]
     Gtk.buttonSetImage plus iimg
+
+    -- Button Draw
+    drwb     <- Gtk.toggleButtonNew
+    dimg     <- Gtk.imageNewFromFile $ joinPath ["resources", "draw.png"]
+    Gtk.buttonSetImage drwb dimg
+    Gtk.toggleButtonSetActive drwb True
+    Gtk.widgetSetSensitive drwb False -- TODO
+
+    -- Button Draw
+    msb     <- Gtk.toggleButtonNew
+    simg     <- Gtk.imageNewFromFile $ joinPath ["resources", "multisel.png"]
+    Gtk.buttonSetImage msb simg
+    Gtk.widgetSetSensitive msb False -- TODO
+
     rem      <- Gtk.buttonNewWithLabel $ msgStr MsgRemove
     app      <- Gtk.buttonNewWithLabel $ msgStr MsgApply
     store    <- Gtk.listStoreNew ([] :: [Rect])
@@ -202,7 +225,7 @@ engineStart eng = do
     atswin   <- Gtk.alignmentNew 0 0 1 1
     arem     <- Gtk.alignmentNew 0.5 0 0 0
     aapp     <- Gtk.alignmentNew 0.5 0 0 0
-    bbox     <- Gtk.hButtonBoxNew
+    toolbar     <- Gtk.hButtonBoxNew
     vruler   <- Gtk.vRulerNew
     hruler   <- Gtk.hRulerNew
     pEntry   <- Gtk.entryNew
@@ -217,7 +240,8 @@ engineStart eng = do
     cstore   <- Gtk.comboBoxSetModelText pCombo
     table    <- Gtk.tableNew 2 2 False
     tvbox    <- Gtk.vBoxNew False 10
-    vsep     <- Gtk.vSeparatorNew
+    vsep1     <- Gtk.vSeparatorNew
+    vsep2     <- Gtk.vSeparatorNew
     hsep     <- Gtk.hSeparatorNew
     Gtk.containerAdd viewport area
     Gtk.set vruler [Gtk.rulerMetric := Gtk.Pixels]
@@ -248,12 +272,18 @@ engineStart eng = do
     Gtk.tableAttach atable viewport 1 2 1 2 gtkTabView gtkTabView 0 0
     Gtk.containerAdd arem rem
     Gtk.containerAdd aapp app
-    Gtk.containerAdd align bbox
-    Gtk.containerAdd bbox prev
-    Gtk.containerAdd bbox next
-    Gtk.containerAdd bbox vsep
-    Gtk.containerAdd bbox minus
-    Gtk.containerAdd bbox plus
+
+    -- Lays out toolbar 
+    Gtk.containerAdd align toolbar
+    Gtk.containerAdd toolbar prev
+    Gtk.containerAdd toolbar next
+    Gtk.containerAdd toolbar vsep1
+    Gtk.containerAdd toolbar minus
+    Gtk.containerAdd toolbar plus
+    Gtk.containerAdd toolbar vsep2
+    Gtk.containerAdd toolbar drwb
+    Gtk.containerAdd toolbar msb
+
     Gtk.boxPackStart vbox align Gtk.PackNatural 0
     Gtk.containerAdd atswin tswin
     Gtk.boxPackStart vleft atswin Gtk.PackGrow 0

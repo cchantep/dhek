@@ -1,4 +1,4 @@
-module Dhek.Button where
+module Dhek.Action where
 
 import Data.Foldable (traverse_)
 
