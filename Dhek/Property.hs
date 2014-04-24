@@ -16,11 +16,13 @@ onProp = compile $ do
     rs <- getRects
     sOpt <- getSelected
     nOpt <- getEntryText PropEntry
+    vOpt <- getEntryText ValueEntry
     tOpt <- getComboText PropCombo
-    traverse_ go ((,,) <$> sOpt <*> nOpt <*> tOpt)
+    traverse_ (go vOpt) ((,,) <$> sOpt <*> nOpt <*> tOpt)
   where
-    go (r,n,t) = do
+    go v (r,n,t) = do
         rs <- getRects
-        let r1  = r & rectName .~ n
-                    & rectType .~ t
+        let r1  = r & rectName  .~ n
+                    & rectType  .~ t
+                    & rectValue .~ v
         setSelected (Just r1)

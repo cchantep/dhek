@@ -18,3 +18,4 @@ Choose: Choose
 ChooseJSON: Choose a JSON file
 MainTitle: Dhek - PDF templating
 Apply: Apply
+Value: Value
