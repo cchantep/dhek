@@ -29,7 +29,7 @@ import Control.Monad.RWS.Strict
 import Control.Monad.State
 
 import Data.Array (Array, array, (!))
-import Data.Foldable (find, foldMap, traverse_, foldr)
+import Data.Foldable (find, foldMap, traverse_, foldr, for_)
 import qualified Data.IntMap as I
 import Data.IORef
 import Data.Maybe (fromJust, isNothing, isJust)
@@ -273,25 +273,35 @@ engineStart eng = do
     -- Properties --
     nlabel <- Gtk.labelNew (Just $ msgStr MsgName)
     tlabel <- Gtk.labelNew (Just $ msgStr MsgType)
+    vlabel <- Gtk.labelNew (Just $ msgStr MsgValue)
+    ventry <- Gtk.entryNew
     ualign <- Gtk.alignmentNew 0.5 0 0 0
     nalign <- Gtk.alignmentNew 0 0.5 0 0
     talign <- Gtk.alignmentNew 0 0.5 0 0
+    valign <- Gtk.alignmentNew 0 0.5 0 0
     tstore <- Gtk.comboBoxSetModelText pCombo
     table  <- Gtk.tableNew 2 3 False
     tvbox  <- Gtk.vBoxNew False 10
+    optvbox <- Gtk.vBoxNew False 10
+    --valueTable <- Gtk.tableNew 2 1 False
     Gtk.containerAdd nalign nlabel
     Gtk.containerAdd talign tlabel
+    Gtk.containerAdd valign vlabel
+    --Gtk.tableAttachDefaults valueTable valign 0 1 0 1
+    --Gtk.tableAttachDefaults valueTable ventry 1 2 0 1
     Gtk.tableAttachDefaults table nalign 0 1 0 1
     Gtk.tableAttachDefaults table pEntry 1 2 0 1
     Gtk.tableAttachDefaults table talign 0 1 1 2
     Gtk.tableAttachDefaults table pCombo 1 2 1 2
-    Gtk.tableAttachDefaults table pCombo 1 2 1 2
-    Gtk.tableAttachDefaults table aapp   0 2 2 3
+    Gtk.tableAttachDefaults table valign 0 1 2 3
+    Gtk.tableAttachDefaults table ventry 1 2 2 3
     Gtk.tableSetRowSpacings table 10
     Gtk.tableSetColSpacings table 10
-    traverse_ (Gtk.listStoreAppend tstore) ["text", "checkbox", "radio"]
+    traverse_ (Gtk.listStoreAppend tstore) ["text", "checkbox", "radio", "textcell"]
     Gtk.containerAdd salign hsep
     Gtk.boxPackStart tvbox table Gtk.PackNatural 0
+    --Gtk.boxPackStart tvbox valueTable Gtk.PackNatural 0
+    Gtk.boxPackStart tvbox aapp Gtk.PackNatural 0
     Gtk.boxPackStart vleft salign Gtk.PackNatural 0
     Gtk.containerAdd vleft tvbox
     Gtk.widgetSetSensitive rem False
@@ -350,6 +360,9 @@ engineStart eng = do
                                             Gtk.treeSelectionSelectIter sel it
                                       ) iOpt
                             Gtk.entrySetText pEntry (r ^. rectName)
+                            case (r ^. rectValue) of
+                                Nothing -> Gtk.entrySetText ventry ""
+                                Just v  -> Gtk.entrySetText ventry v
                             tOpt <- lookupStoreIter (\x -> x == (r ^. rectType)) tstore
                             writeIORef stateRef s1 -- combobox hack in order to prevent sync issue
                             traverse_ (Gtk.comboBoxSetActiveIter pCombo) tOpt
@@ -437,10 +450,11 @@ engineStart eng = do
                 suspend (GetEntryText e k) s v =
                     case e of
                         PropEntry -> do
-                            txt <- Gtk.entryGetText pEntry
-                            let txt1 = trimString txt
-                                tOpt = if null txt1 then Nothing else Just txt1
-                            k tOpt s v
+                            r <- lookupEntryText pEntry
+                            k r s v
+                        ValueEntry -> do
+                            r <- lookupEntryText ventry
+                            k r s v
                 suspend (GetComboText e k) s v =
                     case e of
                         PropCombo -> do
@@ -565,6 +579,17 @@ engineStart eng = do
                     k s1 v
                 suspend (GetCol k) s v =
                     k (s ^. engineColPos) s v
+                suspend (SetValuePropVisible b k) s v = do
+                    if b
+                        then do
+                             Gtk.widgetSetChildVisible valign True
+                             Gtk.widgetSetChildVisible ventry True
+                             Gtk.widgetShowAll valign
+                             Gtk.widgetShowAll ventry
+                        else do
+                             Gtk.widgetHideAll valign
+                             Gtk.widgetHideAll ventry
+                    k s v
 
                 end a s v = do
                     let drawing = s ^. engineDraw
@@ -740,6 +765,14 @@ engineStart eng = do
                     _            -> delta'
                 newValue = min (upper - pageSize) (max 0 (oldValue + delta))
             Gtk.adjustmentSetValue vadj newValue
+    Gtk.on pCombo Gtk.changed $ do
+        let x = negate 1
+        interpret x x $ compile $ do
+            opt <- getComboText PropCombo
+            for_ opt $ \c ->
+                if c == "radio"
+                then setValuePropVisible True
+                else setValuePropVisible False
     Gtk.on vruler Gtk.buttonPressEvent $ Gtk.tryEvent $ do
         let x      = negate 1
             action = compile $ newGuide GuideVertical
@@ -790,6 +823,10 @@ engineStart eng = do
     Gtk.set window (windowParams msgStr)
     Gtk.onDestroy window Gtk.mainQuit
     Gtk.widgetShowAll window
+    Gtk.widgetSetChildVisible valign False
+    Gtk.widgetSetChildVisible ventry False
+    Gtk.widgetHideAll valign
+    Gtk.widgetHideAll ventry
     Gtk.mainGUI
   where
     makeInternal uri = do
@@ -932,3 +969,10 @@ areaCursor LEFT         = Gtk.LeftSide
 eventCursor :: BoardEvent -> Gtk.CursorType
 eventCursor (Hold _ _)     = Gtk.Hand1
 eventCursor (Resize _ _ a) = areaCursor a
+
+lookupEntryText :: Gtk.Entry -> IO (Maybe String)
+lookupEntryText entry = do
+    txt <- Gtk.entryGetText entry
+    let txt1 = trimString txt
+        r    = if null txt1 then Nothing else Just txt1
+    return r

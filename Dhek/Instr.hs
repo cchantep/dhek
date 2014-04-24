@@ -14,6 +14,7 @@ import Graphics.UI.Gtk.Gdk.Cursor (CursorType)
 type DhekProgram a = Free DhekInstr a
 
 data DhekEntry = PropEntry
+               | ValueEntry
 
 data DhekCombo = PropCombo
 
@@ -69,6 +70,7 @@ data DhekInstr a = GetPointer ((Double, Double) -> a)
                  | PrevPointer ((Double, Double) -> a)
                  | SetCol !(Maybe (Double, Double, Double, Double, Double, Direction)) a
                  | GetCol (Maybe (Double, Double, Double, Double, Double, Direction) -> a)
+                 | SetValuePropVisible Bool a
 
 instance Functor DhekInstr where
     fmap f (GetPointer k)       = GetPointer (f . k)
@@ -121,6 +123,7 @@ instance Functor DhekInstr where
     fmap f (PrevPointer k)      = PrevPointer (f . k)
     fmap f (SetCol o a)         = SetCol o (f a)
     fmap f (GetCol k)           = GetCol (f . k)
+    fmap f (SetValuePropVisible b a) = SetValuePropVisible b (f a)
 
 getPointer :: F DhekInstr (Double, Double)
 getPointer = wrap $ GetPointer return
@@ -280,6 +283,9 @@ setCollision o = wrap $ SetCol o (return ())
 
 getCollision :: F DhekInstr (Maybe (Double, Double, Double, Double, Double, Direction))
 getCollision = wrap $ GetCol return
+
+setValuePropVisible :: Bool -> F DhekInstr ()
+setValuePropVisible b = wrap $ SetValuePropVisible b (return ())
 
 compile :: F DhekInstr a -> Free DhekInstr a
 compile = fromF

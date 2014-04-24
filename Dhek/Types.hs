@@ -62,7 +62,9 @@ data Rect = Rect { _rectId     :: {-# UNPACK #-} !Int
                  , _rectHeight :: {-# UNPACK #-} !Double
                  , _rectWidth  :: {-# UNPACK #-} !Double
                  , _rectName   :: !String
-                 , _rectType   :: !String } deriving (Eq, Show)
+                 , _rectType   :: !String
+                 , _rectValue  :: !(Maybe String)
+                 } deriving (Eq, Show)
 
 data GuideType = GuideVertical | GuideHorizontal
 
@@ -125,7 +127,8 @@ instance ToJSON Rect where
                ,"height" .= _rectHeight r
                ,"width"  .= _rectWidth r
                ,"name"   .= _rectName r
-               ,"type"   .= _rectType r]
+               ,"type"   .= _rectType r
+               ,"value"  .= _rectValue r]
 
 instance FromJSON Rect where
     parseJSON (Object v) =
@@ -135,7 +138,8 @@ instance FromJSON Rect where
         v .: "height" <*>
         v .: "width"  <*>
         v .: "name"   <*>
-        v .: "type"
+        v .: "type"   <*>
+        v .: "value"
     parseJSON _ = mzero
 
 saveNew :: [(Int, Maybe [Rect])] -> Save
@@ -160,7 +164,7 @@ bool True x _  = x
 bool False _ y = y
 
 rectNew :: Double -> Double -> Double -> Double -> Rect
-rectNew x y h w = Rect 0 x y h w "field" "text"
+rectNew x y h w = Rect 0 x y h w "field" "text" Nothing
 
 translateRect :: Double -> Double -> Rect -> Rect
 translateRect x y r = r & rectX +~ x & rectY +~ y
