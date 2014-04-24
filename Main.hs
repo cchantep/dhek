@@ -3,7 +3,7 @@ module Main where
 import Control.Lens ((.=))
 import Control.Monad.State (execState)
 
-import Dhek.Button (onNext, onPrev, onMinus, onPlus, onRem)
+import Dhek.Action (onNext, onPrev, onMinus, onPlus, onRem)
 import Dhek.Draw (cairoDraw)
 import Dhek.Engine
 import Dhek.File (onJsonSave, onJsonImport)
