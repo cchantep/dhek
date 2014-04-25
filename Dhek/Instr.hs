@@ -20,6 +20,9 @@ data DhekCombo = PropCombo
 
 data DhekOption = Overlap
 
+data DhekToggle = DrawToggle
+                | MultiSelToggle
+
 data DhekInstr a = GetPointer ((Double, Double) -> a)
                  | GetOverRect (Maybe Rect -> a)
                  | GetOverArea (Maybe Area -> a)
@@ -71,6 +74,8 @@ data DhekInstr a = GetPointer ((Double, Double) -> a)
                  | SetCol !(Maybe (Double, Double, Double, Double, Double, Direction)) a
                  | GetCol (Maybe (Double, Double, Double, Double, Double, Direction) -> a)
                  | SetValuePropVisible Bool a
+                 | IsToggleActive DhekToggle (Bool -> a)
+                 | SetToggleActive DhekToggle Bool a
 
 instance Functor DhekInstr where
     fmap f (GetPointer k)       = GetPointer (f . k)
@@ -124,6 +129,8 @@ instance Functor DhekInstr where
     fmap f (SetCol o a)         = SetCol o (f a)
     fmap f (GetCol k)           = GetCol (f . k)
     fmap f (SetValuePropVisible b a) = SetValuePropVisible b (f a)
+    fmap f (IsToggleActive t k) = IsToggleActive t  (f . k)
+    fmap f (SetToggleActive t b a) = SetToggleActive t b (f a)
 
 getPointer :: F DhekInstr (Double, Double)
 getPointer = wrap $ GetPointer return
@@ -286,6 +293,12 @@ getCollision = wrap $ GetCol return
 
 setValuePropVisible :: Bool -> F DhekInstr ()
 setValuePropVisible b = wrap $ SetValuePropVisible b (return ())
+
+isToggleActive :: DhekToggle -> F DhekInstr Bool
+isToggleActive t = wrap $ IsToggleActive t return
+
+setToggleActive :: DhekToggle -> Bool -> F DhekInstr ()
+setToggleActive t b = wrap $ SetToggleActive t b (return ())
 
 compile :: F DhekInstr a -> Free DhekInstr a
 compile = fromF

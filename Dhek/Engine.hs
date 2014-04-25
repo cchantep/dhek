@@ -193,13 +193,11 @@ engineStart eng = do
     dimg     <- Gtk.imageNewFromFile $ joinPath ["resources", "draw.png"]
     Gtk.buttonSetImage drwb dimg
     Gtk.toggleButtonSetActive drwb True
-    Gtk.widgetSetSensitive drwb False -- TODO
 
-    -- Button Draw
+    -- Button MultiSelection
     msb     <- Gtk.toggleButtonNew
-    simg     <- Gtk.imageNewFromFile $ joinPath ["resources", "multisel.png"]
+    simg    <- Gtk.imageNewFromFile $ joinPath ["resources", "multisel.png"]
     Gtk.buttonSetImage msb simg
-    Gtk.widgetSetSensitive msb False -- TODO
 
     rem      <- Gtk.buttonNewWithLabel $ msgStr MsgRemove
     app      <- Gtk.buttonNewWithLabel $ msgStr MsgApply
@@ -273,7 +271,7 @@ engineStart eng = do
     Gtk.containerAdd arem rem
     Gtk.containerAdd aapp app
 
-    -- Lays out toolbar 
+    -- Lays out toolbar
     Gtk.containerAdd align toolbar
     Gtk.containerAdd toolbar prev
     Gtk.containerAdd toolbar next
@@ -620,6 +618,19 @@ engineStart eng = do
                              Gtk.widgetHideAll valign
                              Gtk.widgetHideAll ventry
                     k s v
+                suspend (IsToggleActive t k) s v =
+                    case t of
+                        DrawToggle ->
+                            Gtk.toggleButtonGetActive drwb >>= \r -> k r s v
+                        MultiSelToggle ->
+                            Gtk.toggleButtonGetActive msb >>= \r -> k r s v
+                suspend (SetToggleActive t b k) s v = do
+                    case t of
+                        DrawToggle -> do
+                            Gtk.toggleButtonSetActive drwb b
+                        MultiSelToggle ->
+                            Gtk.toggleButtonSetActive msb b
+                    k s v
 
                 end a s v = do
                     let drawing = s ^. engineDraw
@@ -849,6 +860,16 @@ engineStart eng = do
                 addGuide
                 draw
         liftIO $ interpret x x action
+    Gtk.on drwb Gtk.toggled $ liftIO $ do
+        let x = negate 1
+        interpret x x $ compile $ do
+            b <- isToggleActive DrawToggle
+            setToggleActive MultiSelToggle (not b)
+    Gtk.on msb Gtk.toggled $ liftIO $ do
+        let x = negate 1
+        interpret x x $ compile $ do
+            b <- isToggleActive MultiSelToggle
+            setToggleActive DrawToggle (not b)
     Gtk.containerAdd window wvbox
     Gtk.set window (windowParams msgStr)
     Gtk.onDestroy window Gtk.mainQuit
