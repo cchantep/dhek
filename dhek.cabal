@@ -16,9 +16,12 @@ executable dhek
                  Dhek.Draw
                  Dhek.Engine
                  Dhek.File
+                 Dhek.GUI
                  Dhek.I18N
                  Dhek.Move
                  Dhek.Property
+                 Dhek.Selection
+                 Dhek.Signal
                  Dhek.Types
                  Dhek.Utils
   default-extensions:  TemplateHaskell

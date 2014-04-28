@@ -11,7 +11,8 @@ import Data.Maybe (isJust, fromMaybe)
 import Data.Monoid (First(..))
 import Data.Traversable (traverse)
 
-import Dhek.Engine
+import Graphics.UI.Gtk (CursorType(..))
+
 import Dhek.Instr
 import Dhek.Types hiding (addRect)
 
@@ -27,7 +28,7 @@ onMove = compile $ do
     traverse_ onEvent eOpt
     let cOpt = fmap eventCursor eOpt <|>
                fmap areaCursor aOpt  <|>
-               handCursor <$ oOpt
+               Hand1 <$ oOpt
     setCursor cOpt
 
   where
@@ -323,3 +324,17 @@ fromEdge d (x,y) r =
     ry = r ^. rectY
     rw = r ^. rectWidth
     rh = r ^. rectHeight
+
+eventCursor :: BoardEvent -> CursorType
+eventCursor (Hold _ _)     = Hand1
+eventCursor (Resize _ _ a) = areaCursor a
+
+areaCursor :: Area -> CursorType
+areaCursor TOP_LEFT     = TopLeftCorner
+areaCursor TOP          = TopSide
+areaCursor TOP_RIGHT    = TopRightCorner
+areaCursor RIGHT        = RightSide
+areaCursor BOTTOM_RIGHT = BottomRightCorner
+areaCursor BOTTOM       = BottomSide
+areaCursor BOTTOM_LEFT  = BottomLeftCorner
+areaCursor LEFT         = LeftSide
