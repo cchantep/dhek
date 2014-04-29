@@ -122,24 +122,28 @@ instance FromJSON Save where
 
 instance ToJSON Rect where
     toJSON r =
-        object ["x"      .= _rectX r
-               ,"y"      .= _rectY r
-               ,"height" .= _rectHeight r
-               ,"width"  .= _rectWidth r
-               ,"name"   .= _rectName r
-               ,"type"   .= _rectType r
-               ,"value"  .= _rectValue r]
+        object $ maybe props (const $ vProp:props) (_rectValue r)
+      where
+        vProp = "value" .= _rectValue r
+
+        props = [ "x"      .= _rectX r
+                , "y"      .= _rectY r
+                , "height" .= _rectHeight r
+                , "width"  .= _rectWidth r
+                , "name"   .= _rectName r
+                , "type"   .= _rectType r
+                ]
 
 instance FromJSON Rect where
     parseJSON (Object v) =
-        Rect 0        <$>
-        v .: "x"      <*>
-        v .: "y"      <*>
-        v .: "height" <*>
-        v .: "width"  <*>
-        v .: "name"   <*>
-        v .: "type"   <*>
-        v .: "value"
+        Rect 0         <$>
+        v .:  "x"      <*>
+        v .:  "y"      <*>
+        v .:  "height" <*>
+        v .:  "width"  <*>
+        v .:  "name"   <*>
+        v .:  "type"   <*>
+        v .:? "value"
     parseJSON _ = mzero
 
 saveNew :: [(Int, Maybe [Rect])] -> Save
