@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes       #-}
 {-# LANGUAGE TemplateHaskell  #-}
 --------------------------------------------------------------------------------
@@ -26,8 +27,11 @@ import qualified Graphics.UI.Gtk.Poppler.Document as Poppler
 import qualified Graphics.UI.Gtk.Poppler.Page     as Poppler
 
 --------------------------------------------------------------------------------
+import Dhek.Drawing
+import Dhek.Free
 import Dhek.GUI
 import Dhek.Instr
+import Dhek.Lens
 import Dhek.Types
 import Dhek.Utils (takeFileName, trimString)
 
@@ -49,14 +53,9 @@ data EngineState = EngineState
     , _engineDraw      :: !Bool
     , _enginePropLabel :: !String
     , _enginePropType  :: !(Maybe String)
-    , _engineEvent     :: !(Maybe BoardEvent)
-    , _engineSelection :: !(Maybe Rect)
-    , _engineSelected  :: !(Maybe Rect)
-    , _engineCursor    :: !(Maybe Gtk.CursorType)
-    , _engineAddedRect :: !(Maybe Rect)
-    , _engineRemRect   :: !(Maybe Rect)
     , _enginePrevPos   :: !(Double, Double)
-    , _engineColPos    :: !(Maybe (Double, Double, Double, Double, Double, Direction))
+    , _engineBoards    :: !Boards
+    , _engineDrawState :: !DrawState
     }
 
 --------------------------------------------------------------------------------
@@ -72,6 +71,155 @@ data EngineEnv = EngineEnv
 
 --------------------------------------------------------------------------------
 makeLenses ''EngineState
+
+--------------------------------------------------------------------------------
+instance DrawInterpreter Interpreter where
+    drawInterpret i (x,y) pgr = do
+        s <- readIORef $ _state i
+        v <- readIORef $ _internal i
+        e <- readIORef $ _env i
+
+        ratio <- engineRatio i
+
+        let gui   = _gui i
+            pages = v ^. viewerPages
+            pid   = s ^. engineCurPage
+            opts  = DrawOptions{ drawOverlap = s ^. engineOverlap
+                               , drawPointer = (x/ratio, y/ratio)
+                               , drawRects   = getRects s
+                               , drawRatio   = ratio
+                               }
+
+            start =  s ^. engineDrawState
+            end   = evalDrawing opts start pgr
+
+        s2 <- flip execStateT s $ do
+            engineDrawState .= end
+
+            -- handle rectangle selection
+            valueChanged drawSelected start end $ \sel ->
+                maybe (liftIO $ gtkUnselect gui) (_selectRect gui) sel
+
+            -- New rectangle
+            for_ (end ^. drawNewRect) $ \r -> do
+                let id = r ^. rectId
+
+                engineDrawState.drawNewRect .= Nothing
+                engineBoards.boardsMap.at pid.traverse.boardRects.at id ?= r
+                liftIO $ gtkAddRect gui r
+
+            -- Detach rectangle
+            for_ (end ^. drawDetached) $ \r -> do
+                let id = r ^. rectId
+
+                engineBoards.boardsMap.at pid.traverse.boardRects.at id .= Nothing
+                engineDrawState.drawDetached .= Nothing
+
+            -- Attach rectangle
+            for_ (end ^. drawAttached) $ \r -> do
+                let id = r ^. rectId
+
+                engineBoards.boardsMap.at pid.traverse.boardRects.at id ?= r
+                engineDrawState.drawAttached .= Nothing
+
+            -- Cursor
+            liftIO $ do
+                c <- traverse Gtk.cursorNew (end ^. drawCursor)
+                frame  <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
+                Gtk.drawWindowSetCursor frame c
+
+        writeIORef (_state i) s2
+        liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
+
+--------------------------------------------------------------------------------
+_selectRect :: (MonadState EngineState m, MonadIO m) => GUI -> Rect -> m ()
+_selectRect gui r = do
+     let rid = r ^. rectId
+
+     pid <- use engineCurPage
+
+     engineDrawState.drawSelected ?= r
+     engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r
+
+     liftIO $ gtkSelectRect gui r
+
+--------------------------------------------------------------------------------
+engineCurrentState :: Interpreter -> IO EngineState
+engineCurrentState  = readIORef . _state
+
+--------------------------------------------------------------------------------
+engineCurrentPage :: Interpreter -> IO PageItem
+engineCurrentPage  i = do
+    v <- readIORef $ _internal i
+    s <- readIORef $ _state i
+
+    let pages = v ^. viewerPages
+        pid   = s ^. engineCurPage
+        page  = pages ! pid
+
+    return page
+
+--------------------------------------------------------------------------------
+engineDrawingArea :: Interpreter -> Gtk.DrawingArea
+engineDrawingArea = guiDrawingArea . _gui
+
+--------------------------------------------------------------------------------
+engineRatio :: Interpreter -> IO Double
+engineRatio i = do
+    v <- readIORef $ _internal i
+    s <- readIORef $ _state i
+    let pages = v ^. viewerPages
+        zoom  = zoomValues ! (s ^. engineCurZoom)
+        pid   = s ^. engineCurPage
+        width = pageWidth (pages ! pid)
+        base  = fromIntegral (v ^. viewerBaseWidth)
+        ratio = (base * zoom) / width
+
+    return ratio
+
+--------------------------------------------------------------------------------
+gtkAddRect :: GUI -> Rect -> IO ()
+gtkAddRect gui r = do
+    Gtk.listStoreAppend (guiRectStore gui) r
+    iOpt <- lookupStoreIter (sameRectId r) (guiRectStore gui)
+    traverse_ (Gtk.treeSelectionSelectIter $ guiRectTreeSelection gui) iOpt
+
+--------------------------------------------------------------------------------
+gtkSelectRect :: GUI -> Rect -> IO ()
+gtkSelectRect gui r = do
+    iOpt <- lookupStoreIter (sameRectId r) $ guiRectStore gui
+    for_ iOpt $ \it -> do
+        let idx = Gtk.listStoreIterToIndex it
+
+        Gtk.listStoreSetValue (guiRectStore gui) idx r
+        Gtk.treeSelectionSelectIter (guiRectTreeSelection gui) it
+        Gtk.entrySetText (guiNameEntry gui) name
+
+        case r ^. rectValue of
+            Nothing -> Gtk.entrySetText (guiValueEntry gui) ""
+            Just v  -> Gtk.entrySetText (guiValueEntry gui) v
+
+        tOpt <- lookupStoreIter ((== typ)) (guiTypeStore gui)
+
+        traverse_ (Gtk.comboBoxSetActiveIter $ guiTypeCombo gui) tOpt
+        Gtk.widgetSetSensitive (guiRemoveButton gui) True
+        Gtk.widgetSetSensitive (guiApplyButton gui) True
+        Gtk.widgetSetSensitive (guiTypeCombo gui) True
+        Gtk.widgetSetSensitive (guiNameEntry gui) True
+
+  where
+    typ  = r ^. rectType
+    name = r ^. rectName
+
+--------------------------------------------------------------------------------
+gtkUnselect :: GUI -> IO ()
+gtkUnselect gui = do
+    Gtk.widgetSetSensitive (guiTypeCombo gui) False
+    Gtk.widgetSetSensitive (guiNameEntry gui) False
+    Gtk.widgetSetSensitive (guiRemoveButton gui) False
+    Gtk.widgetSetSensitive (guiApplyButton gui) False
+    Gtk.entrySetText (guiNameEntry gui) ""
+    Gtk.comboBoxSetActive (guiTypeCombo gui) (negate 1)
 
 --------------------------------------------------------------------------------
 makeInterpreter :: GUI -> IO Interpreter
@@ -109,240 +257,173 @@ stateNew =
                , _engineDraw = False
                , _enginePropLabel =  ""
                , _enginePropType = Nothing
-               , _engineEvent = Nothing
-               , _engineSelection = Nothing
-               , _engineSelected = Nothing
-               , _engineCursor = Nothing
-               , _engineAddedRect = Nothing
-               , _engineRemRect = Nothing
                , _enginePrevPos = (negate 1, negate 1)
-               , _engineColPos = Nothing
+               , _engineDrawState = drawStateNew
+               , _engineBoards = boardsNew 1
                }
 
 --------------------------------------------------------------------------------
-runProgram :: Interpreter -> DhekProgram () -> IO ()
-runProgram i = runProgramWithCoord i (x, x) where x = (-1)
-
---------------------------------------------------------------------------------
-runProgramWithCoord :: Interpreter
-                    -> (Double, Double)
-                    -> DhekProgram ()
-                    -> IO ()
-runProgramWithCoord i (x', y') p = do
+runProgram :: Interpreter -> DhekProgram a -> IO a
+runProgram i p = do
     s     <- readIORef $ _state i
     v     <- readIORef $ _internal i
     env   <- readIORef $ _env i
     frame <- Gtk.widgetGetDrawWindow $ guiDrawingArea $ _gui i
     let gui   = _gui i
         ratio = _getRatio s v
-        x     = x' / ratio
-        y     = y' / ratio
-        rects = _getRects s v
+        rects = getRects s
         pId   = s ^. engineCurPage
         nb    = v ^. viewerPageCount
         page  = _getPage s v
-        oOpt  = _getOverRect x y rects
-        aOpt  = _getOverArea ratio x y =<< oOpt
         filename = _engineFilename env
-        pred r x = (x ^. rectId) == (r ^. rectId)
 
-        susp (GetPointer k)  s v = k (x,y) s v
-        susp (GetOverRect k) s v = k oOpt s v
-        susp (GetOverArea k) s v = k aOpt s v
-        susp (GetSelected k) s v = k (s ^. engineSelected) s v
-        susp (SetSelected rOpt k) s v =
-            case rOpt of
-                Just r -> do
-                    let id = r ^. rectId
-                        s1 = s & engineSelected ?~ r
-                        v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id ?~ r
-                    iOpt <- lookupStoreIter (pred r) $ guiRectStore gui
-                    for_ iOpt $ \it -> do
-                        let idx = Gtk.listStoreIterToIndex it
-                        Gtk.listStoreSetValue (guiRectStore gui) idx r
-                        Gtk.treeSelectionSelectIter (guiRectTreeSelection gui) it
-                    Gtk.entrySetText (guiNameEntry gui) (r ^. rectName)
-                    case r ^. rectValue of
-                        Nothing -> Gtk.entrySetText (guiValueEntry gui) ""
-                        Just v  -> Gtk.entrySetText (guiValueEntry gui) v
-                    tOpt <- lookupStoreIter (\x -> x == (r ^. rectType)) (guiTypeStore gui)
-                    writeIORef (_state i) s1 -- combobox hack in order to prevent sync issue
-                    traverse_ (Gtk.comboBoxSetActiveIter $ guiTypeCombo gui) tOpt
-                    Gtk.widgetSetSensitive (guiRemoveButton gui) True
-                    Gtk.widgetSetSensitive (guiApplyButton gui) True
-                    Gtk.widgetSetSensitive (guiTypeCombo gui) True
-                    Gtk.widgetSetSensitive (guiNameEntry gui) True
-                    k s1 v1
-                Nothing -> susp (UnselectRect k) s v
-        susp (GetEvent k) s v   = k (s ^. engineEvent) s v
-        susp (SetEvent e k) s v =
-            let s1 = s & engineEvent .~ e in
-            k s1 v
-        susp (GetRects k) s v = k rects s v
-        susp (GetRatio k) s v = k ratio s v
-        susp (GetSelection k) s v = k (s ^. engineSelection) s v
-        susp (SetSelection r k) s v =
-            let s1 = s & engineSelection .~ r in
-            k s1 v
-        susp (GetPage k) s v = k page s v
-        susp (GetCurPage k) s v = k (s ^. engineCurPage) s v
-        susp (GetPageCount k ) s v = k nb s v
-        susp (SetCursor tOpt k) s v = do
-            cOpt <- traverse Gtk.cursorNew tOpt
-            Gtk.drawWindowSetCursor frame cOpt
-            k s v
-        susp (FreshId k) s v =
-            let (id, s1) = s & engineRectId <+~ 1 in
-            k id s1 v
-        susp (IncrPage k) s v = do
-            let (ncur, s1) = s & engineSelected .~ Nothing
-                               & engineCurPage <+~ 1
-                rects2     = _getRects s1 v
-            Gtk.widgetSetSensitive (guiPrevButton gui) True
-            Gtk.widgetSetSensitive (guiNextButton gui) (ncur < nb)
-            Gtk.listStoreClear $ guiRectStore gui
-            traverse_ (Gtk.listStoreAppend $ guiRectStore gui) rects2
-            k s1 v
-        susp (DecrPage k) s v = do
-            let (ncur, s1) = s & engineSelected .~ Nothing
-                               & engineCurPage <-~ 1
-                rects2     = _getRects s1 v
-            Gtk.widgetSetSensitive (guiPrevButton gui) (ncur > 1)
-            Gtk.widgetSetSensitive (guiNextButton gui) True
-            Gtk.listStoreClear (guiRectStore gui)
-            traverse_ (Gtk.listStoreAppend $ guiRectStore gui) rects2
-            k s1 v
-        susp (IncrZoom k) s v = do
-            let (ncur, s1) = s & engineCurZoom <+~ 1
-            Gtk.widgetSetSensitive (guiZoomOutButton gui) True
-            Gtk.widgetSetSensitive (guiZoomInButton gui) (ncur < 10)
-            k s1 v
-        susp (DecrZoom k) s v = do
-            let (ncur, s1) = s & engineCurZoom <-~ 1
-            Gtk.widgetSetSensitive (guiZoomOutButton gui) (ncur > 1)
-            Gtk.widgetSetSensitive (guiZoomInButton gui) True
-            k s1 v
-        susp (RemoveRect r k) s v = do
+        susp (GetCurPage k) = (use engineCurPage) >>= k
+        susp (GetPageCount k) = k (v ^. viewerPageCount)
+        susp (GetSelected k) = (use $ engineDrawState.drawSelected) >>= k
+        susp (SetSelected r k) = do
+            maybe (liftIO $ gtkUnselect gui) (_selectRect gui) r
+            k
+        susp (UnselectRect k) = do
+            engineDrawState.drawSelected .= Nothing
+            liftIO $ gtkUnselect gui
+            k
+        susp (GetRectangles k) = k rects
+        susp (IncrPage k) = do
+            engineDrawState.drawSelected .= Nothing
+            ncur <- engineCurPage <+= 1
+            s    <- get
+
+            let rects2 = getRects s
+
+            liftIO $ do
+                Gtk.widgetSetSensitive (guiPrevButton gui) True
+                Gtk.widgetSetSensitive (guiNextButton gui) (ncur < nb)
+                Gtk.listStoreClear $ guiRectStore gui
+                traverse_ (Gtk.listStoreAppend $ guiRectStore gui) rects2
+            k
+        susp (DecrPage k) = do
+            engineDrawState.drawSelected .= Nothing
+            ncur <- engineCurPage <-= 1
+            s    <- get
+
+            let rects2 = getRects s
+
+            liftIO $ do
+                Gtk.widgetSetSensitive (guiPrevButton gui) (ncur > 1)
+                Gtk.widgetSetSensitive (guiNextButton gui) True
+                Gtk.listStoreClear (guiRectStore gui)
+                traverse_ (Gtk.listStoreAppend $ guiRectStore gui) rects2
+            k
+        susp (IncrZoom k) = do
+            ncur <- engineCurZoom <+= 1
+
+            liftIO $ do
+                Gtk.widgetSetSensitive (guiZoomOutButton gui) True
+                Gtk.widgetSetSensitive (guiZoomInButton gui) (ncur < 10)
+            k
+        susp (DecrZoom k) = do
+            ncur <- engineCurZoom <-= 1
+
+            liftIO $ do
+                Gtk.widgetSetSensitive (guiZoomOutButton gui) (ncur > 1)
+                Gtk.widgetSetSensitive (guiZoomInButton gui) True
+            k
+        susp (RemoveRect r k) = do
             let id = r ^. rectId
-                v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id .~ Nothing
-            iOpt <- lookupStoreIter (pred r) (guiRectStore gui)
-            for_ iOpt $ \it ->
-                let idx = Gtk.listStoreIterToIndex it in
-                Gtk.listStoreRemove (guiRectStore gui) idx
-            k s v1
-        susp (DetachRect r k) s v = do
-            let id = r ^. rectId
-                v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id .~ Nothing
-            k s v1
-        susp (AttachRect r k) s v = do
-            let id = r ^. rectId
-                v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id ?~ r
-            k s v1
-        susp (AddRect r k) s v = do
-            let id = r ^. rectId
-                v1 = v & viewerBoards.boardsMap.at pId.traverse.boardRects.at id ?~ r
-            Gtk.listStoreAppend (guiRectStore gui) r
-            iOpt <- lookupStoreIter (pred r) (guiRectStore gui)
-            traverse_ (Gtk.treeSelectionSelectIter $ guiRectTreeSelection gui) iOpt
-            k s v1
-        susp (GetEntryText e k) s v =
+
+            engineBoards.boardsMap.at pId.traverse.boardRects.at id .= Nothing
+
+            liftIO $ do
+                iOpt <- lookupStoreIter (sameRectId r) (guiRectStore gui)
+                for_ iOpt $ \it ->
+                    let idx = Gtk.listStoreIterToIndex it in
+                    Gtk.listStoreRemove (guiRectStore gui) idx
+            k
+        susp (GetEntryText e k) =
             case e of
                 PropEntry -> do
-                    r <- lookupEntryText $ guiNameEntry gui
-                    k r s v
+                    r <- liftIO $ lookupEntryText $ guiNameEntry gui
+                    k r
                 ValueEntry -> do
-                    r <- lookupEntryText $ guiValueEntry gui
-                    k r s v
-        susp (GetComboText e k) s v =
+                    r <- liftIO $ lookupEntryText $ guiValueEntry gui
+                    k r
+        susp (GetComboText e k) =
             case e of
                 PropCombo -> do
-                    tOpt <- Gtk.comboBoxGetActiveText $ guiTypeCombo gui
-                    k tOpt s v
-        susp (UnselectRect k) s v = do
-            let s1 = s & engineSelected .~ Nothing
-            Gtk.widgetSetSensitive (guiTypeCombo gui) False
-            Gtk.widgetSetSensitive (guiNameEntry gui) False
-            Gtk.widgetSetSensitive (guiRemoveButton gui) False
-            Gtk.widgetSetSensitive (guiApplyButton gui) False
-            Gtk.entrySetText (guiNameEntry gui) ""
-            Gtk.comboBoxSetActive (guiTypeCombo gui) (negate 1)
-            k s1 v
-        susp (Draw k) s v =
-            let s1 = s & engineDraw .~ True in
-            k s1 v
-        susp (SetTitle t k) s v = do
-            Gtk.windowSetTitle (guiWindow gui) t
-            k s v
-        susp (GetFilename k) s v = k filename s v
-        susp (GetFrameSize k) s v = do
-            size <- Gtk.drawableGetSize frame
-            k size s v
-        susp (ExecCairo r k) s v = do
-            Gtk.renderWithDrawable frame r
-            k s v
-        susp (SizeRequest rx ry k) s v = do
-            Gtk.widgetSetSizeRequest (guiDrawingArea gui) rx ry
-            k s v
-        susp (ShowError e k) s v = do
-            m <- Gtk.messageDialogNew (Just $ guiWindow gui)
-                 [Gtk.DialogModal] Gtk.MessageError Gtk.ButtonsOk e
-            Gtk.dialogRun m
-            Gtk.widgetHide m
-            k s v
-        susp (PerformIO action k) s v = do
-            b <- action
-            k b s v
-        susp (GetTreeSelection k) s v = do
-            iOpt <- Gtk.treeSelectionGetSelected $ guiRectTreeSelection gui
-            rOpt <- for iOpt $ \it ->
-                let idx = Gtk.listStoreIterToIndex it in
-                Gtk.listStoreGetValue (guiRectStore gui) idx
-            k rOpt s v
-        susp (NewGuide t k) s v =
-            let v1 = v & viewerBoards.boardsCurGuide ?~ Guide 0 t in
-            k s v1
-        susp (UpdateGuide k) s v = do
-            x <- Gtk.get (guiHRuler gui) Gtk.rulerPosition
-            y <- Gtk.get (guiVRuler gui) Gtk.rulerPosition
+                    tOpt <- liftIO $ Gtk.comboBoxGetActiveText $ guiTypeCombo gui
+                    k tOpt
+        susp (Draw k) = do
+            engineDraw .= True
+            k
+        susp (SetTitle t k) = do
+            liftIO $ Gtk.windowSetTitle (guiWindow gui) t
+            k
+        susp (GetFilename k) = k filename
+        susp (ShowError e k) = do
+            liftIO $ do
+                m <- Gtk.messageDialogNew (Just $ guiWindow gui)
+                     [Gtk.DialogModal] Gtk.MessageError Gtk.ButtonsOk e
+                Gtk.dialogRun m
+                Gtk.widgetHide m
+            k
+        susp (PerformIO action k) = (liftIO action) >>= k
+        susp (GetTreeSelection k) = do
+            rOpt <- liftIO $ do
+                iOpt <- Gtk.treeSelectionGetSelected $ guiRectTreeSelection gui
+                for iOpt $ \it ->
+                    let idx = Gtk.listStoreIterToIndex it in
+                    Gtk.listStoreGetValue (guiRectStore gui) idx
+            k rOpt
+        susp (NewGuide t k) = do
+            engineBoards.boardsCurGuide ?= Guide 0 t
+            k
+        susp (UpdateGuide k) = do
+            x <- liftIO $ Gtk.get (guiHRuler gui) Gtk.rulerPosition
+            y <- liftIO $ Gtk.get (guiVRuler gui) Gtk.rulerPosition
+
             let upd g =
                     let v = case g ^. guideType of
                             GuideVertical   -> x
                             GuideHorizontal -> y in
                     g & guideValue .~ v
-                v1 = v & viewerBoards.boardsCurGuide %~ fmap upd
-            k s v1
-        susp (AddGuide k) s v =
-            let action = do
-                    gOpt <- use $ viewerBoards.boardsCurGuide
-                    gs   <- use $ viewerBoards.boardsGuides
-                    let gs1 = foldr (:) gs gOpt
-                    viewerBoards.boardsCurGuide .= Nothing
-                    viewerBoards.boardsGuides   .= gs1
-                v1 = execState action v in
-            k s v1
-        susp (GetCurGuide k) s v =  k (v ^. viewerBoards.boardsCurGuide) s v
-        susp (GetGuides k) s v = k (v ^. viewerBoards.boardsGuides) s v
-        susp (SelectJsonFile k) s v = do
-            resp <- Gtk.dialogRun $ guiJsonSaveDialog gui
-            Gtk.widgetHide $ guiJsonSaveDialog gui
-            case resp of
-                Gtk.ResponseOk -> do
-                    fOpt <- Gtk.fileChooserGetFilename $ guiJsonSaveDialog gui
-                    k fOpt s v
-                _ -> k Nothing s v
-        susp (GetAllRects k) s v =
+
+            engineBoards.boardsCurGuide %= fmap upd
+            k
+        susp (AddGuide k) = do
+            gOpt <- use $ engineBoards.boardsCurGuide
+            gs   <- use $ engineBoards.boardsGuides
+
+            let gs1 = foldr (:) gs gOpt
+
+            engineBoards.boardsCurGuide .= Nothing
+            engineBoards.boardsGuides   .= gs1
+
+            k
+        susp (GetCurGuide k) =  (use $ engineBoards.boardsCurGuide) >>= k
+        susp (GetGuides k) = (use $ engineBoards.boardsGuides) >>= k
+        susp (SelectJsonFile k) = do
+            r <- liftIO $ do
+                resp <- Gtk.dialogRun $ guiJsonSaveDialog gui
+                Gtk.widgetHide $ guiJsonSaveDialog gui
+                case resp of
+                    Gtk.ResponseOk ->
+                        Gtk.fileChooserGetFilename $ guiJsonSaveDialog gui
+                    _ -> return Nothing
+            k r
+        susp (GetAllRects k) = do
             let tup (i, b) = (i, b ^. boardRects.to I.elems)
-                list       = fmap tup . I.toList in
-            k (v ^. viewerBoards.boardsMap.to list) s v
-        susp (OpenJsonFile k) s v = do
-            resp <- Gtk.dialogRun $ guiJsonOpenDialog gui
-            Gtk.widgetHide $ guiJsonOpenDialog gui
-            case resp of
-                Gtk.ResponseOk -> do
-                    fOpt <- Gtk.fileChooserGetFilename $ guiJsonOpenDialog gui
-                    k fOpt s v
-                _ -> k Nothing s v
-        susp (SetRects xs k) s v = do
+                list       = fmap tup . I.toList
+            (use $ engineBoards.boardsMap.to list) >>= k
+        susp (OpenJsonFile k) = do
+            r <- liftIO $ do
+                resp <- Gtk.dialogRun $ guiJsonOpenDialog gui
+                Gtk.widgetHide $ guiJsonOpenDialog gui
+                case resp of
+                    Gtk.ResponseOk ->
+                        Gtk.fileChooserGetFilename $ guiJsonOpenDialog gui
+                    _ -> return Nothing
+            k r
+        susp (SetRects xs k) = do
             let onEach page r = do
                     id <- boardsState <+= 1
                     let r1 = r & rectId .~ id
@@ -352,62 +433,61 @@ runProgramWithCoord i (x', y') p = do
                 action        = traverse_ go xs
                 nb            = length xs
                 b             = execState action (boardsNew nb)
-                v1            = v & viewerBoards .~ b
-                s1            = s & engineRectId .~ (b ^. boardsState)
-                rects2        = _getRects s1 v1
-            Gtk.listStoreClear $ guiRectStore gui
-            traverse_ (Gtk.listStoreAppend $ guiRectStore gui) rects2
-            k s1 v1
-        susp (Active o b k) s v =
+
+            engineBoards                .= b
+            engineDrawState.drawFreshId .= b ^. boardsState
+            s <- get
+
+            liftIO $ do
+                Gtk.listStoreClear $ guiRectStore gui
+                traverse_ (Gtk.listStoreAppend $ guiRectStore gui) (getRects s)
+            k
+        susp (Active o b k) =
             case o of
                 Overlap -> do
-                    let s1 = s & engineOverlap .~ b
-                    Gtk.checkMenuItemSetActive (guiOverlapMenuItem gui) b
-                    k s1 v
-        susp (IsActive o k) s v =
+                    engineOverlap .= b
+                    liftIO $ Gtk.checkMenuItemSetActive (guiOverlapMenuItem gui) b
+                    k
+        susp (IsActive o k) =
             case o of
-                Overlap -> k (s ^. engineOverlap) s v
-        susp (PrevPointer k) s v =
-            k (s ^. enginePrevPos) s v
-        susp (SetCol o k) s v =
-            let s1 = s & engineColPos .~ o in
-            k s1 v
-        susp (GetCol k) s v =
-            k (s ^. engineColPos) s v
-        susp (SetValuePropVisible b k) s v = do
+                Overlap -> (use engineOverlap) >>= k
+        susp (SetValuePropVisible b k) = do
             if b
-                then do
+                then liftIO $ do
                     Gtk.widgetSetChildVisible (guiValueEntryAlign gui) True
                     Gtk.widgetSetChildVisible (guiValueEntry gui) True
                     Gtk.widgetShowAll $ guiValueEntryAlign gui
                     Gtk.widgetShowAll $ guiValueEntry gui
-                else do
+                else liftIO $ do
                    Gtk.widgetHideAll $ guiValueEntryAlign gui
                    Gtk.widgetHideAll $ guiValueEntry gui
-            k s v
-        susp (IsToggleActive t k) s v =
+            k
+        susp (IsToggleActive t k) =
             case t of
                 DrawToggle ->
-                    Gtk.toggleButtonGetActive (guiDrawToggle gui) >>= \r -> k r s v
+                    (liftIO $ Gtk.toggleButtonGetActive (guiDrawToggle gui)) >>= k
                 MultiSelToggle ->
-                    Gtk.toggleButtonGetActive (guiMultiSelToggle gui) >>= \r -> k r s v
-        susp (SetToggleActive t b k) s v = do
+                    (liftIO $ Gtk.toggleButtonGetActive (guiMultiSelToggle gui)) >>= k
+        susp (SetToggleActive t b k) = do
             case t of
                 DrawToggle -> do
-                    Gtk.toggleButtonSetActive (guiDrawToggle gui) b
+                    liftIO $ Gtk.toggleButtonSetActive (guiDrawToggle gui) b
                 MultiSelToggle ->
-                    Gtk.toggleButtonSetActive (guiMultiSelToggle gui) b
-            k s v
+                    liftIO $ Gtk.toggleButtonSetActive (guiMultiSelToggle gui) b
+            k
 
-        end a s v = do
-            let drawing = s ^. engineDraw
-                s1      = s & engineDraw    .~ False
-                            & enginePrevPos .~ (x,y)
-            writeIORef (_internal i) v
-            writeIORef (_state i) s1
-            when drawing (Gtk.widgetQueueDraw $ guiDrawingArea gui)
+        end a = do
+            drawing <- use engineDraw
+            engineDraw .= False
+            s <- get
 
-    (foldFree end susp p) s v
+            liftIO $ do
+                writeIORef (_state i) s
+                when drawing (Gtk.widgetQueueDraw $ guiDrawingArea gui)
+
+            return a
+
+    evalStateT (foldFree end susp p) s
 
 --------------------------------------------------------------------------------
 lookupStoreIter :: (a -> Bool) -> Gtk.ListStore a -> IO (Maybe Gtk.TreeIter)
@@ -435,7 +515,7 @@ _getRatio s v = (base * zoom) / width
     pIdx  = _engineCurPage s
     zIdx  = _engineCurZoom s
     pages = _viewerPages v
-    base  = 777
+    base  = fromIntegral $ _viewerBaseWidth v
     width = pageWidth (pages ! pIdx)
     zoom  = zoomValues ! zIdx
 
@@ -463,11 +543,11 @@ _getOverArea ratio x y r =
     aOpt
 
 --------------------------------------------------------------------------------
-_getRects :: EngineState -> Viewer -> [Rect]
-_getRects s v =
+getRects :: EngineState -> [Rect]
+getRects s =
     let pId   = s ^. engineCurPage
         rects =
-            v ^. viewerBoards.boardsMap.at pId.traverse.boardRects.to I.elems in
+            s ^. engineBoards.boardsMap.at pId.traverse.boardRects.to I.elems in
     rects
 
 --------------------------------------------------------------------------------
@@ -496,7 +576,9 @@ loadPdf i path = do
                       }
         name = _engineFilename env
         nb   = v ^. viewerPageCount
-        s'   = stateNew { _engineOverlap = s ^. engineOverlap }
+        s'   = stateNew { _engineOverlap = s ^. engineOverlap
+                        , _engineBoards  = boardsNew nb
+                        }
         gui  = _gui i
     writeIORef (_internal i) v
     writeIORef (_env i) env
@@ -520,7 +602,14 @@ _loadPdf path = do
     doc   <- fmap fromJust (Poppler.documentNewFromFile path Nothing)
     nb    <- Poppler.documentGetNPages doc
     pages <- _loadPages doc
-    return (Viewer doc pages 1 nb 100 3 1.0 (boardsNew nb))
+
+    let v = Viewer{ _viewerDocument  = doc
+                  , _viewerPages     = pages
+                  , _viewerPageCount = nb
+                  , _viewerBaseWidth = 777
+                  , _viewerThick     = 1
+                  }
+    return v
 
 --------------------------------------------------------------------------------
 _loadPages :: Poppler.Document -> IO (Array Int PageItem)
@@ -532,3 +621,7 @@ _loadPages doc = do
         page  <- Poppler.documentGetPage doc (i-1)
         (w,h) <- Poppler.pageGetSize page
         return (i, PageItem page w h)
+
+--------------------------------------------------------------------------------
+sameRectId :: Rect -> Rect -> Bool
+sameRectId r x = (x ^. rectId) == (r ^. rectId)

@@ -18,14 +18,12 @@ import Dhek.Version
 import Graphics.UI.Gtk hiding (get)
 import Graphics.UI.Gtk.Poppler.Document (Document, Page)
 
-data Viewer = Viewer { _viewerDocument    :: Document
-                     , _viewerPages       :: Array Int PageItem
-                     , _viewerCurrentPage :: Int
-                     , _viewerPageCount   :: Int
-                     , _viewerBaseWidth   :: Int
-                     , _viewerZoom        :: Int
-                     , _viewerThick       :: Double
-                     , _viewerBoards      :: Boards }
+data Viewer = Viewer { _viewerDocument   :: Document
+                     , _viewerPages      :: Array Int PageItem
+                     , _viewerPageCount  :: Int
+                     , _viewerBaseWidth  :: Int
+                     , _viewerThick      :: Double
+                     }
 
 data Board = Board { _boardRects :: !(IntMap Rect) } deriving Show
 
@@ -267,20 +265,6 @@ rectIntersect a b
 
     wy = w * dy
     hx = h * dx
-
-isOver :: Double -> Double -> Double -> Rect -> Bool
-isOver thick x y r = go
-  where
-    x0 = r ^. rectX
-    y0 = r ^. rectY
-    h  = r ^. rectHeight
-    w  = r ^. rectWidth
-    x1 = (x0 + w + thick)
-    y1 = (y0 + h + thick)
-    x' = (x0 - thick)
-    y' = (y0 - thick)
-
-    go = x >= x' && x <= x1 && y >= y' && y <= y1
 
 modifyEventRect :: (Rect -> Rect) -> BoardEvent -> BoardEvent
 modifyEventRect k (Hold r p)     = Hold (k r) p

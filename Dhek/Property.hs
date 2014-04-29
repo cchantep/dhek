@@ -8,12 +8,12 @@ import Control.Monad (when)
 
 import Data.Foldable (any, traverse_)
 
+import Dhek.Free
 import Dhek.Instr
 import Dhek.Types
 
 onProp :: DhekProgram ()
 onProp = compile $ do
-    rs <- getRects
     sOpt <- getSelected
     nOpt <- getEntryText PropEntry
     vOpt <- getEntryText ValueEntry
@@ -21,7 +21,7 @@ onProp = compile $ do
     traverse_ (go vOpt) ((,,) <$> sOpt <*> nOpt <*> tOpt)
   where
     go v (r,n,t) = do
-        rs <- getRects
+        rs <- getRectangles
         let r1  = r & rectName  .~ n
                     & rectType  .~ t
                     & rectValue .~ v
