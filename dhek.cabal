@@ -16,10 +16,13 @@ executable dhek
                  Dhek.Draw
                  Dhek.Drawing
                  Dhek.Engine
+                 Dhek.Engine.Interpreter
+                 Dhek.Engine.Type
                  Dhek.File
                  Dhek.Free
                  Dhek.GUI
                  Dhek.I18N
+                 Dhek.Mode.Normal
                  Dhek.Move
                  Dhek.Property
                  Dhek.Selection

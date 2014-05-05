@@ -275,3 +275,7 @@ oppositeDirection NORTH = SOUTH
 oppositeDirection SOUTH = NORTH
 oppositeDirection EAST  = WEST
 oppositeDirection WEST  = EAST
+
+--------------------------------------------------------------------------------
+sameRectId :: Rect -> Rect -> Bool
+sameRectId r x = (x ^. rectId) == (r ^. rectId)
