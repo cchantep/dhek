@@ -1,39 +1,65 @@
+--------------------------------------------------------------------------------
+-- |
+-- Module : Dhek.Draw
+--
+-- Gtk.Cairo drawing procedure
+--------------------------------------------------------------------------------
 module Dhek.Draw where
 
+--------------------------------------------------------------------------------
 import Prelude hiding (mapM_)
-
-import Control.Lens ((^.), use)
-import Control.Monad.RWS hiding (mapM_)
-
-import System.CPUTime
 import Data.Foldable (mapM_)
 
+--------------------------------------------------------------------------------
+import           Control.Lens ((^.), use)
+import           Control.Monad.RWS hiding (mapM_)
+import qualified Graphics.UI.Gtk              as Gtk
 import qualified Graphics.Rendering.Cairo     as Cairo
 import qualified Graphics.UI.Gtk.Poppler.Page as Poppler
 
-import Dhek.Engine
-import Dhek.Instr
+--------------------------------------------------------------------------------
 import Dhek.Types
 
-cairoDraw :: DhekProgram ()
-cairoDraw = compile $ do
-    ratio     <- getRatio
-    selected  <- getSelected
-    selection <- getSelection
-    event     <- getEvent
-    page      <- getPage
-    overed    <- getOverRect
-    rects     <- getRects
-    guides    <- getGuides
-    curGuide  <- getCurGuide
-    (fw',fh') <- getFrameSize
+--------------------------------------------------------------------------------
+data DrawParams
+    = DrawParams
+      { dpRatio     :: !Double
+      , dpSelected  :: !(Maybe Rect)
+      , dpSelection :: !(Maybe Rect)
+      , dpOvered    :: !(Maybe Rect)
+      , dpRects     :: ![Rect]
+      , dpEvent     :: !(Maybe BoardEvent)
+      , dpPage      :: !PageItem
+      , dpGuides    :: ![Guide]
+      , dpCurGuide  :: !(Maybe Guide)
+      , dpArea      :: !Gtk.DrawingArea
+      }
+
+--------------------------------------------------------------------------------
+cairoDraw :: DrawParams -> IO ()
+cairoDraw p = do
+    let ratio     = dpRatio p
+        selected  = dpSelected p
+        selection = dpSelection p
+        event     = dpEvent p
+        page      = dpPage p
+        overed    = dpOvered p
+        rects     = dpRects p
+        guides    = dpGuides p
+        curGuide  = dpCurGuide p
+        area      = dpArea p
+
+    frame     <- Gtk.widgetGetDrawWindow area
+    (fw',fh') <- Gtk.drawableGetSize frame
+
     let width  = ratio * (pageWidth page)
         height = ratio * (pageHeight page)
         fw     = fromIntegral fw'
         fh     = fromIntegral fh'
         eventR = event >>= eventGetRect
-    sizeRequest (truncate width) (truncate height)
-    execCairo $ do
+
+    Gtk.widgetSetSizeRequest area (truncate width) (truncate height)
+    Gtk.renderWithDrawable frame $ do
         -- Paint page background in white
         Cairo.setSourceRGB 1.0 1.0 1.0
         Cairo.rectangle 0 0 fw fh
@@ -97,7 +123,7 @@ cairoDraw = compile $ do
     -- fh: Frame height
     -- r: Rectangle
     drawRectGuides :: Double -> Double -> Rect -> Cairo.Render()
-    drawRectGuides fw fh r = 
+    drawRectGuides fw fh r =
         let rectLeft = r ^. rectX
             rectTop = r ^. rectY
             rectBot = rectTop + r ^. rectHeight
@@ -138,3 +164,5 @@ cairoDraw = compile $ do
                Cairo.closePath
                Cairo.stroke
                drawRectGuides fw fh r
+
+--------------------------------------------------------------------------------

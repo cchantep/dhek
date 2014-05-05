@@ -14,11 +14,16 @@ executable dhek
   main-is: Main.hs
   other-modules: Dhek.Action
                  Dhek.Draw
+                 Dhek.Drawing
                  Dhek.Engine
                  Dhek.File
+                 Dhek.Free
+                 Dhek.GUI
                  Dhek.I18N
                  Dhek.Move
                  Dhek.Property
+                 Dhek.Selection
+                 Dhek.Signal
                  Dhek.Types
                  Dhek.Utils
   default-extensions:  TemplateHaskell
@@ -39,4 +44,6 @@ executable dhek
                        , text
                        , Cabal == 1.18.*
                        , process
- default-language: Haskell2010
+
+  ghc-options: -O2 -threaded
+  default-language: Haskell2010
