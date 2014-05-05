@@ -2,6 +2,7 @@ module Dhek.Action where
 
 import Data.Foldable (traverse_)
 
+import Dhek.Free
 import Dhek.Instr
 
 onPrev :: DhekProgram ()

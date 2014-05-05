@@ -4,7 +4,7 @@
 --
 -- Drawing Area pointer interaction
 --------------------------------------------------------------------------------
-module Dhek.Move where
+module Dhek.Move2 where
 
 --------------------------------------------------------------------------------
 import Control.Applicative ((<|>), (<$))
@@ -15,13 +15,15 @@ import Data.Monoid (First(..))
 import Data.Traversable (traverse)
 
 --------------------------------------------------------------------------------
-import Control.Lens (use, (<+=), (.=), (%=), (?=), (+=), (-=), (<%=), (^.), (&), (.~), (%~), (-~), (+~))
+import Control.Lens (use, (.=), (%=), (?=), (+=), (-=), (<%=), (^.), (&), (.~), (%~), (-~), (+~))
 import Control.Monad.Reader (ask)
 import Control.Monad.State (execState)
 import Graphics.UI.Gtk (CursorType(..))
 
 --------------------------------------------------------------------------------
 import Dhek.Drawing
+import Dhek.Free
+import Dhek.Instr
 import Dhek.Types hiding (addRect)
 
 --------------------------------------------------------------------------------
@@ -36,8 +38,12 @@ onMove = do
 
     -- When user draws a rectangle
     for_ sOpt $ \s -> do
-        pos <- getPointer
-        drawSelection ?= updateDrawSelection pos s
+        (x,y) <- getPointer
+        drawSelection ?= flip execState s $ do
+            sx <- use rectX
+            sy <- use rectY
+            rectWidth  .= x-sx
+            rectHeight .= y-sy
 
     -- When user resizes or moves a rectangle
     for_ eOpt $ \e -> do
@@ -56,15 +62,17 @@ onMove = do
   where
     overlapMode :: BoardEvent -> Drawing ()
     overlapMode e = do
-        pos@(x,y) <- getPointer
+        (x,y) <- getPointer
         case e of
-            Hold r ppos ->
-                drawEvent ?= Hold (updateHoldRect ppos pos r) (x,y)
+            Hold r (x0,y0) ->
+                drawEvent ?= flip Hold (x,y) $ flip execState r $ do
+                    rectX += x-x0
+                    rectY += y-y0
 
             Resize r (x0,y0) a ->
                 let dx = x-x0
                     dy = y-y0 in
-                drawEvent ?= Resize (resizeRect dx dy a r) (x,y) a
+                drawEvent ?= Resize (resizeRect dx dy r) (x,y) a
 
     collisionMode :: BoardEvent -> Drawing ()
     collisionMode e = do
@@ -74,12 +82,12 @@ onMove = do
                 cOpt <- use drawCollision
                 case cOpt of
                     Nothing -> do -- No previous collision
-                        ts <- rectangles
+                        ts <- getRects
                         case intersection ts r of
                             Nothing    -> overlapMode e
                             Just (t,d) -> do
                                 let delta = collisionDelta d r t
-                                    r1    = adaptRect d delta r
+                                    r1    = adapRect d delta r
                                     c     = Collision
                                             { colDelta     = delta
                                             , colRange     = rectRange d t
@@ -137,12 +145,11 @@ onRelease = do
 
     -- on event mode, we re-insert targeted rectangle rectangle list
     for_ eOpt $ \e -> do
-        let r = normalize $ case e of
+        let r = case e of
                 Hold x _     -> x
                 Resize x _ _ -> x
 
-        drawAttached  ?= r
-        drawSelected  ?= r
+        drawSelected  ?= normalize r
         drawEvent     .= Nothing
         drawCollision .= Nothing
 
@@ -157,7 +164,7 @@ onRelease = do
             let r2 = r1 & rectId   .~ id
                         & rectName %~ (++ show id)
 
-            drawNewRect  ?= r2
+            drawNewRect  ?= r3
             drawSelected ?= r2
 
         drawSelection .= Nothing
@@ -295,22 +302,6 @@ resizeRect dx dy area r = execState (go area) r
     go LEFT = do
         rectX += dx
         rectWidth -= dx
-
---------------------------------------------------------------------------------
-updateDrawSelection :: Pos -> Rect -> Rect
-updateDrawSelection (x,y) = execState go where
-  go = do
-      sx <- use rectX
-      sy <- use rectY
-      rectWidth  .= x-sx
-      rectHeight .= y-sy
-
---------------------------------------------------------------------------------
-updateHoldRect :: Pos -> Pos -> Rect -> Rect
-updateHoldRect (x0,y0) (x,y) = execState go where
-  go = do
-      rectX += x-x0
-      rectY += y-y0
 
 --------------------------------------------------------------------------------
 replaceRect :: Direction -> Rect -> Rect -> (Double, Rect)
