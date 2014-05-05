@@ -1,5 +1,5 @@
 name:                dhek
-version:             1.0.3
+version:             1.0.4
 -- synopsis:
 -- description:
 -- license:
@@ -24,8 +24,8 @@ executable dhek
                  Dhek.Property
                  Dhek.Selection
                  Dhek.Signal
+                 Dhek.Version
                  Dhek.Types
-                 Dhek.Utils
   default-extensions:  TemplateHaskell
   build-depends:       base          == 4.7.*
                        , gtk         >= 0.12.4

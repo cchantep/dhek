@@ -13,10 +13,10 @@ import Data.Foldable (traverse_)
 --------------------------------------------------------------------------------
 import           Control.Lens ((^.))
 import qualified Graphics.UI.Gtk as Gtk
+import           System.FilePath (joinPath)
 
 --------------------------------------------------------------------------------
 import Dhek.I18N
-import Dhek.Utils (joinPath)
 import Dhek.Types
 
 --------------------------------------------------------------------------------

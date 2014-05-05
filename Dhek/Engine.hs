@@ -14,9 +14,11 @@ import           Prelude hiding (foldr)
 import           Control.Monad (when)
 import           Control.Monad.State
 import           Data.Array (Array, array, (!))
+import           Data.Char (isSpace)
 import           Data.Foldable (find, foldr, for_, traverse_)
 import qualified Data.IntMap as I
 import           Data.IORef
+import           Data.List (dropWhileEnd)
 import           Data.Maybe (fromJust)
 import           Data.Traversable (for)
 
@@ -25,6 +27,7 @@ import           Control.Lens
 import qualified Graphics.UI.Gtk                  as Gtk
 import qualified Graphics.UI.Gtk.Poppler.Document as Poppler
 import qualified Graphics.UI.Gtk.Poppler.Page     as Poppler
+import           System.FilePath (takeFileName)
 
 --------------------------------------------------------------------------------
 import Dhek.Drawing
@@ -33,7 +36,6 @@ import Dhek.GUI
 import Dhek.Instr
 import Dhek.Lens
 import Dhek.Types
-import Dhek.Utils (takeFileName, trimString)
 
 --------------------------------------------------------------------------------
 data Interpreter =
@@ -625,3 +627,7 @@ _loadPages doc = do
 --------------------------------------------------------------------------------
 sameRectId :: Rect -> Rect -> Bool
 sameRectId r x = (x ^. rectId) == (r ^. rectId)
+
+--------------------------------------------------------------------------------
+trimString :: String -> String
+trimString = dropWhileEnd isSpace . dropWhile isSpace

@@ -14,12 +14,12 @@ import Data.Foldable (traverse_)
 --------------------------------------------------------------------------------
 import           Data.Aeson (encode, eitherDecode)
 import qualified Data.ByteString.Lazy as B
+import           System.FilePath (takeExtension)
 
 --------------------------------------------------------------------------------
 import Dhek.Free
 import Dhek.Instr
 import Dhek.Types
-import Dhek.Utils (takeExtension)
 
 --------------------------------------------------------------------------------
 onJsonSave :: DhekProgram ()
