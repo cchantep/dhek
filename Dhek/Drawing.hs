@@ -1,5 +1,6 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE TemplateHaskell            #-}
 --------------------------------------------------------------------------------
 -- |
 -- Module : Dhek.Drawing
@@ -17,140 +18,33 @@ import Data.Traversable (for)
 --------------------------------------------------------------------------------
 import           Control.Lens hiding (Zoom)
 import           Control.Monad.Reader
-import           Control.Monad.State
 import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
+import Dhek.Engine.Type
 import Dhek.Types
 
 --------------------------------------------------------------------------------
-newtype Drawing a
-    = Drawing { runDrawing :: DrawOptions -> DrawState -> (a, DrawState ) }
+type Drawing a = DrawOptions -> M a
 
 --------------------------------------------------------------------------------
-instance Functor Drawing where
-    fmap f (Drawing k)
-        = Drawing $ \e s -> let (a, s') = k e s in (f a, s')
-
---------------------------------------------------------------------------------
-instance Applicative Drawing where
-    pure  = return
-    (<*>) = ap
-
---------------------------------------------------------------------------------
-instance Monad Drawing where
-    return a = Drawing $ \_ s -> (a, s)
-
-    Drawing k >>= f
-        = Drawing $ \e s ->
-            let (a, s') = k e s in runDrawing (f a) e s'
-
---------------------------------------------------------------------------------
-instance MonadReader DrawOptions Drawing where
-    ask = Drawing $ \e s -> (e, s)
-
-    local f m = Drawing $ \e s -> runDrawing m (f e) s
-
---------------------------------------------------------------------------------
-instance MonadState DrawState Drawing where
-    state k = Drawing $ \e -> k
-
---------------------------------------------------------------------------------
-data DrawOptions
-    = DrawOptions
-      { drawOverlap :: Bool             -- ^ Rectangle overlap
-      , drawPointer :: (Double, Double) -- ^ (x, y) pointer position
-      , drawRects   :: [Rect]           -- ^ Page rectangle
-      , drawRatio   :: Double           -- ^ Page ratio
-      }
-
---------------------------------------------------------------------------------
-data Collision
-    = Collision
-      { colDelta     :: !Double
-      , colRange     :: !(Double, Double)
-      , colPrevPos   :: !(Double, Double)
-      , colDirection :: !Direction
-      }
-
---------------------------------------------------------------------------------
-data DrawState
-    = DrawState
-      { _drawEvent     :: !(Maybe BoardEvent)
-      , _drawSelection :: !(Maybe Rect)
-      , _drawSelected  :: !(Maybe Rect)
-      , _drawCursor    :: !(Maybe Gtk.CursorType)
-      , _drawAddedRect :: !(Maybe Rect)
-      , _drawCollision :: !(Maybe Collision)
-      , _drawDetached  :: !(Maybe Rect)
-      , _drawAttached  :: !(Maybe Rect)
-      , _drawNewRect   :: !(Maybe Rect)
-      , _drawFreshId   :: !Int
-      }
-
---------------------------------------------------------------------------------
-type Pos = (Double, Double)
-type Width = Double
-type Zoom = Double
-
---------------------------------------------------------------------------------
-class DrawInterpreter a where
-    drawInterpret :: a -> Pos -> Drawing b -> IO ()
-
---------------------------------------------------------------------------------
-makeLenses ''DrawState
-
---------------------------------------------------------------------------------
-drawStateNew :: DrawState
-drawStateNew = DrawState{ _drawEvent     = Nothing
-                        , _drawSelection = Nothing
-                        , _drawSelected  = Nothing
-                        , _drawCursor    = Nothing
-                        , _drawAddedRect = Nothing
-                        , _drawCollision = Nothing
-                        , _drawDetached  = Nothing
-                        , _drawAttached  = Nothing
-                        , _drawNewRect   = Nothing
-                        , _drawFreshId   = 0
-                        }
-
---------------------------------------------------------------------------------
-drawStateWith :: State DrawState a -> DrawState
-drawStateWith action = execState action drawStateNew
-
---------------------------------------------------------------------------------
-evalDrawing :: DrawOptions -> DrawState -> Drawing a -> DrawState
-evalDrawing opts st d = snd $ runDrawing d opts st
-
---------------------------------------------------------------------------------
-overlapEnabled :: Drawing Bool
-overlapEnabled = asks drawOverlap
-
---------------------------------------------------------------------------------
-getRatio :: Drawing Double
-getRatio = asks drawRatio
-
---------------------------------------------------------------------------------
-getPointer :: Drawing (Double, Double)
-getPointer = asks drawPointer
-
---------------------------------------------------------------------------------
-rectangles :: Drawing [Rect]
-rectangles = asks drawRects
+execDrawing :: DrawOptions -> Drawing a -> M a
+execDrawing opts k = k opts
 
 --------------------------------------------------------------------------------
 getOverRect :: Drawing (Maybe Rect)
-getOverRect = do
-    (x,y) <- getPointer
-    rs    <- asks drawRects
+getOverRect o = do
+    let (x,y) = drawPointer o
+        rs    = drawRects o
     return $ find (isOver 1.0 x y) rs
 
 --------------------------------------------------------------------------------
 getOverArea :: Drawing (Maybe Area)
-getOverArea = do
-    ratio <- getRatio
-    rOpt  <- getOverRect
-    (x,y) <- getPointer
+getOverArea o = do
+    let ratio = drawRatio o
+        (x,y) = drawPointer o
+
+    rOpt  <- getOverRect o
     return $ rOpt >>= \r ->
         find (isOver 1.0 x y . rectArea (5/ratio) r) $ enumFrom TOP_LEFT
 

@@ -22,28 +22,27 @@ import Graphics.UI.Gtk (CursorType(..))
 
 --------------------------------------------------------------------------------
 import Dhek.Drawing
+import Dhek.Engine
 import Dhek.Types hiding (addRect)
 
 --------------------------------------------------------------------------------
 -- | Event handlers
 --------------------------------------------------------------------------------
 onMove :: Drawing ()
-onMove = do
-    oOpt <- getOverRect
-    aOpt <- getOverArea
-    eOpt <- use drawEvent
-    sOpt <- use drawSelection
+onMove opts = do
+    oOpt <- getOverRect opts
+    aOpt <- getOverArea opts
+    eOpt <- getEvent
+    sOpt <- getDrawSelection
 
     -- When user draws a rectangle
     for_ sOpt $ \s -> do
-        pos <- getPointer
-        drawSelection ?= updateDrawSelection pos s
+        let pos = drawPointer opts
+        setDrawSelection $ Just $ updateDrawSelection pos s
 
     -- When user resizes or moves a rectangle
     for_ eOpt $ \e -> do
-        (x,y)   <- getPointer
-        overlap <- overlapEnabled
-        if overlap
+        if drawOverlap opts
             then overlapMode e
             else collisionMode e
 
@@ -51,31 +50,30 @@ onMove = do
                      fmap areaCursor aOpt  <|>
                      Hand1 <$ oOpt
 
-    drawCursor .= cursorOpt
+    setCursor cursorOpt
 
   where
-    overlapMode :: BoardEvent -> Drawing ()
+    overlapMode :: BoardEvent -> M ()
     overlapMode e = do
-        pos@(x,y) <- getPointer
+        let pos@(x,y) = drawPointer opts
         case e of
             Hold r ppos ->
-                drawEvent ?= Hold (updateHoldRect ppos pos r) (x,y)
+                setEvent $ Just $ Hold (updateHoldRect ppos pos r) (x,y)
 
             Resize r (x0,y0) a ->
                 let dx = x-x0
                     dy = y-y0 in
-                drawEvent ?= Resize (resizeRect dx dy a r) (x,y) a
+                setEvent $ Just $ Resize (resizeRect dx dy a r) (x,y) a
 
-    collisionMode :: BoardEvent -> Drawing ()
+    collisionMode :: BoardEvent -> M ()
     collisionMode e = do
-        (x,y) <- getPointer
+        let (x,y) = drawPointer opts
         case e of
             Hold r (x0,y0) -> do
-                cOpt <- use drawCollision
+                cOpt <- getCollision
                 case cOpt of
-                    Nothing -> do -- No previous collision
-                        ts <- rectangles
-                        case intersection ts r of
+                    Nothing -> -- No previous collision
+                        case intersection (drawRects opts) r of
                             Nothing    -> overlapMode e
                             Just (t,d) -> do
                                 let delta = collisionDelta d r t
@@ -86,8 +84,8 @@ onMove = do
                                             , colPrevPos   = (x0,y0)
                                             , colDirection = d
                                             }
-                                drawEvent     ?= Hold r1 (adaptPos d delta x y)
-                                drawCollision ?= c
+                                setEvent $ Just $ Hold r1 (adaptPos d delta x y)
+                                setCollision $ Just c
 
                     Just c -> do -- with previous collision
                         let (rmin,rmax) = colRange c
@@ -102,38 +100,39 @@ onMove = do
                             catchUp     = diff <= 0
 
                         if not catchUp && collides
-                            then drawEvent ?= Hold r1 (px',py')
+                            then setEvent $ Just $ Hold r1 (px',py')
                             else do
-                                drawCollision .= Nothing
+                                setCollision Nothing
                                 let (r2, newPos) = correctRect d (x0',y0') r
-                                drawEvent ?= Hold r2 newPos
+                                setEvent $ Just $ Hold r2 newPos
 
             _ -> overlapMode e -- Resize collision detection is
                                -- not supported yet.
 
 --------------------------------------------------------------------------------
 onPress :: Drawing ()
-onPress = do
-    (x,y) <- getPointer
-    oOpt  <- getOverRect
-    aOpt  <- getOverArea
+onPress opts = do
+    let (x,y) = drawPointer opts
+
+    oOpt  <- getOverRect opts
+    aOpt  <- getOverArea opts
 
     let newSelection = rectNew x y 0 0
 
         onEvent r = do
             let evt = maybe (Hold r (x,y)) (Resize r (x,y)) aOpt
-            drawEvent    ?= evt
-            drawDetached ?= r
+            setEvent $ Just evt
+            detachRectangle r
 
     -- if user click on a blank area we're un drawing mode otherwise we enter
     -- event mode (Resize or Hold).
-    maybe (drawSelection ?= newSelection) onEvent oOpt
+    maybe (setDrawSelection $ Just newSelection) onEvent oOpt
 
 --------------------------------------------------------------------------------
 onRelease :: Drawing ()
-onRelease = do
-    sOpt <- use drawSelection
-    eOpt <- use drawEvent
+onRelease _ = do
+    sOpt <- getDrawSelection
+    eOpt <- getEvent
 
     -- on event mode, we re-insert targeted rectangle rectangle list
     for_ eOpt $ \e -> do
@@ -141,10 +140,10 @@ onRelease = do
                 Hold x _     -> x
                 Resize x _ _ -> x
 
-        drawAttached  ?= r
-        drawSelected  ?= r
-        drawEvent     .= Nothing
-        drawCollision .= Nothing
+        attachRectangle r
+        selectRectangle r
+        setEvent Nothing
+        setCollision Nothing
 
     -- on drawing mode, we add the new rectangle to rectangle list
     for_ sOpt $ \r -> do
@@ -153,14 +152,14 @@ onRelease = do
             h  = r1 ^. rectHeight
 
         when (w*h >= 30) $ do
-            id <- drawFreshId <+= 1
+            id <- freshId
             let r2 = r1 & rectId   .~ id
                         & rectName %~ (++ show id)
 
-            drawNewRect  ?= r2
-            drawSelected ?= r2
+            newRectangle r2
+            selectRectangle r2
 
-        drawSelection .= Nothing
+        setDrawSelection Nothing
 
 --------------------------------------------------------------------------------
 -- | Geometry utilities
