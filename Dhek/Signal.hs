@@ -23,7 +23,6 @@ import Dhek.GUI
 import Dhek.File (onJsonImport, onJsonSave)
 import Dhek.Free
 import Dhek.Instr
-import Dhek.Move (onMove, onPress, onRelease)
 import Dhek.Property (onProp)
 import Dhek.Engine
 import Dhek.Selection (onSel)
@@ -78,7 +77,7 @@ connectSignals g i = do
             params = DrawParams{ dpRatio = ratio
                                , dpSelected  = ds ^. drawSelected
                                , dpSelection = ds ^. drawSelection
-                               , dpOvered    = Nothing
+                               , dpOvered    = ds ^. drawOverRect
                                , dpRects     = getRects s
                                , dpEvent     = ds ^. drawEvent
                                , dpPage      = page
@@ -118,7 +117,7 @@ connectSignals g i = do
         liftIO $ do
             r <- engineRatio i
 
-            drawInterpret i pos onMove
+            drawInterpret move i pos
             Gtk.set (guiHRuler g) [Gtk.rulerPosition Gtk.:= x/r]
             Gtk.set (guiVRuler g) [Gtk.rulerPosition Gtk.:= y/r]
 
@@ -126,11 +125,11 @@ connectSignals g i = do
        pos <- Gtk.eventCoordinates
        b   <- Gtk.eventButton
        when (b == Gtk.LeftButton) $
-           liftIO $ drawInterpret i pos onPress
+           liftIO $ drawInterpret press i pos
 
     Gtk.on (guiDrawingArea g) Gtk.buttonReleaseEvent $ Gtk.tryEvent $ do
         pos <- Gtk.eventCoordinates
-        liftIO $ drawInterpret i pos onRelease
+        liftIO $ drawInterpret (const release) i pos
 
     Gtk.on (guiDrawingArea g) Gtk.scrollEvent $ Gtk.tryEvent $ do
         dir <- Gtk.eventScrollDirection

@@ -7,10 +7,12 @@ module Dhek.GUI.Action
     ( gtkUnselect
     , gtkSelectRect
     , gtkAddRect
+    , gtkSetCursor
     ) where
 
 --------------------------------------------------------------------------------
 import Data.Foldable (for_, traverse_)
+import Data.Traversable (traverse)
 
 --------------------------------------------------------------------------------
 import           Control.Lens
@@ -66,6 +68,13 @@ gtkAddRect r gui = do
     Gtk.listStoreAppend (guiRectStore gui) r
     iOpt <- lookupStoreIter (sameRectId r) (guiRectStore gui)
     traverse_ (Gtk.treeSelectionSelectIter $ guiRectTreeSelection gui) iOpt
+
+--------------------------------------------------------------------------------
+gtkSetCursor :: Maybe Gtk.CursorType -> GUI -> IO ()
+gtkSetCursor t gui = do
+    c     <- traverse Gtk.cursorNew t
+    frame <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
+    Gtk.drawWindowSetCursor frame c
 
 --------------------------------------------------------------------------------
 -- | Utilities

@@ -6,7 +6,7 @@
 --------------------------------------------------------------------------------
 module Dhek.Engine
     ( Collision(..)
-    , DrawOptions(..)
+    , DrawEnv(..)
     , EngineState
     , Interpreter
     , M
@@ -15,33 +15,22 @@ module Dhek.Engine
     , engineDrawingArea
     , engineCurrentPage
     , engineCurrentState
+    , engineSetMode
       -- Draw lenses
-    , drawAttached
     , drawCollision
     , drawCursor
-    , drawDetached
     , drawEvent
     , drawFreshId
-    , drawNewRect
+    , drawOverRect
     , drawSelected
     , drawSelection
       -- Engine lenses
     , engineBoards
     , engineDrawState
       -- Mode API
-    , selectRectangle
-    , unselectRectangle
-    , getDrawSelection
-    , setDrawSelection
-    , getEvent
-    , setEvent
-    , getCollision
-    , setCollision
-    , newRectangle
-    , attachRectangle
-    , detachRectangle
-    , setCursor
-    , freshId
+    , move
+    , press
+    , release
       --
     , engineRatio
     , getRects
