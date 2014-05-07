@@ -46,7 +46,7 @@ type Zoom = Double
 newtype M a = M (forall m. ModeMonad m => m a)
 
 --------------------------------------------------------------------------------
-newtype Mode a = Mode (M a -> EngineState -> IO EngineState)
+newtype Mode = Mode (forall a. M a -> EngineState -> IO EngineState)
 
 --------------------------------------------------------------------------------
 data DrawOptions
@@ -93,7 +93,7 @@ data EngineState = EngineState
     , _enginePrevPos   :: !(Double, Double)
     , _engineBoards    :: !Boards
     , _engineDrawState :: !DrawState
-    , _engineMode      :: forall a. Mode a
+    , _engineMode      :: Mode
     }
 
 --------------------------------------------------------------------------------
@@ -169,7 +169,7 @@ runM :: ModeMonad m => M a -> m a
 runM (M m) = m
 
 --------------------------------------------------------------------------------
-runMode :: Mode a -> EngineState -> M a -> IO EngineState
+runMode :: Mode -> EngineState -> M a -> IO EngineState
 runMode (Mode k) s m = k m s
 
 --------------------------------------------------------------------------------

@@ -15,6 +15,7 @@ module Dhek.Engine
     , engineDrawingArea
     , engineCurrentPage
     , engineCurrentState
+    , engineSetMode
       -- Draw lenses
     , drawAttached
     , drawCollision

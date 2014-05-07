@@ -35,6 +35,7 @@ import Dhek.Free
 import Dhek.GUI
 import Dhek.GUI.Action
 import Dhek.Instr
+import Dhek.Mode.Duplicate
 import Dhek.Mode.Normal
 import Dhek.Types
 
@@ -102,6 +103,11 @@ engineCurrentPage  i = do
 --------------------------------------------------------------------------------
 engineDrawingArea :: Interpreter -> Gtk.DrawingArea
 engineDrawingArea = guiDrawingArea . _gui
+
+--------------------------------------------------------------------------------
+engineSetMode :: Mode -> Interpreter -> IO ()
+engineSetMode m i = do
+    modifyIORef (_state i) (\s -> s { _engineMode = m })
 
 --------------------------------------------------------------------------------
 engineRatio :: Interpreter -> IO Double
@@ -359,9 +365,11 @@ runProgram i p = do
             k
         susp (IsToggleActive t k) =
             case t of
-                DrawToggle ->
+                DrawToggle -> do
+                    engineMode .= normalMode gui
                     (liftIO $ Gtk.toggleButtonGetActive (guiDrawToggle gui)) >>= k
-                MultiSelToggle ->
+                MultiSelToggle -> do
+                    engineMode .= duplicateMode gui
                     (liftIO $ Gtk.toggleButtonGetActive (guiMultiSelToggle gui)) >>= k
         susp (SetToggleActive t b k) = do
             case t of

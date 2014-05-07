@@ -103,5 +103,5 @@ runNormal gui (NormalMode m)  s = do
     return s'
 
 --------------------------------------------------------------------------------
-normalMode :: GUI -> Mode a
+normalMode :: GUI -> Mode
 normalMode gui = Mode (runNormal gui . runM)
