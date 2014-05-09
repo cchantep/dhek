@@ -29,7 +29,6 @@ import qualified Graphics.UI.Gtk.Poppler.Page     as Poppler
 import           System.FilePath (takeFileName)
 
 --------------------------------------------------------------------------------
-import Dhek.Drawing
 import Dhek.Engine.Type
 import Dhek.Free
 import Dhek.GUI

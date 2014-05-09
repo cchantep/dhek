@@ -18,7 +18,6 @@ import           Control.Monad.Trans
 import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
-import Dhek.Drawing
 import Dhek.Engine.Type
 import Dhek.Geometry
 import Dhek.GUI
