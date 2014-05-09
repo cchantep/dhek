@@ -55,30 +55,28 @@ instance ModeMonad DuplicateMode where
                 _ -> return ()
 
     mPress opts = do
-        for_ (getOverRect opts) $ \r -> do
-             rid <- engineDrawState.drawFreshId <+= 1
-             let r2    = r & rectId .~ rid
-                 (x,y) = drawPointer opts
-
-             engineDrawState.drawEvent ?= Hold r2 (x,y)
-
-    mRelease = do
         eOpt <- use $ engineDrawState.drawEvent
+        case eOpt of
+            Nothing -> for_ (getOverRect opts) $ \r -> do
+                rid <- engineDrawState.drawFreshId <+= 1
+                let r2    = r & rectId .~ rid
+                    (x,y) = drawPointer opts
 
-        -- on event mode, we re-insert targeted rectangle rectangle list
-        for_ eOpt $ \(Hold x _) -> do
+                engineDrawState.drawEvent ?= Hold r2 (x,y)
+            Just (Hold x _) -> do
+                rid <- engineDrawState.drawFreshId <+= 1
+                let r = normalize x & rectId .~ rid
 
-            rid <- engineDrawState.drawFreshId <+= 1
-            let r = normalize x & rectId .~ rid
+                -- Add rectangle
+                pid <- use engineCurPage
+                gui <- ask
+                engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r
+                liftIO $ gtkAddRect r gui
 
-            -- Add rectangle
-            pid <- use engineCurPage
-            gui <- ask
-            engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r
-            liftIO $ gtkAddRect r gui
+                engineDrawState.drawEvent     .= Nothing
+                engineDrawState.drawCollision .= Nothing
 
-            engineDrawState.drawEvent     .= Nothing
-            engineDrawState.drawCollision .= Nothing
+    mRelease = return ()
 
 --------------------------------------------------------------------------------
 runDuplicate :: GUI -> DuplicateMode a -> EngineState -> IO EngineState
