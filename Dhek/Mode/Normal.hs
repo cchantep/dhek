@@ -65,10 +65,7 @@ instance ModeMonad NormalMode where
 
         -- Update Gtk cursor
         gui <- ask
-        liftIO $ do
-            c     <- traverse Gtk.cursorNew cursorOpt
-            frame <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
-            Gtk.drawWindowSetCursor frame c
+        liftIO $ gtkSetCursor cursorOpt gui
 
       where
         overlapMode e = do

@@ -63,6 +63,8 @@ instance ModeMonad DuplicateMode where
                     (x,y) = drawPointer opts
 
                 engineDrawState.drawEvent ?= Hold r2 (x,y)
+                gui <- ask
+                liftIO $ gtkSetCursor (Just Gtk.Cross) gui
             Just (Hold x _) -> do
                 rid <- engineDrawState.drawFreshId <+= 1
                 let r = normalize x & rectId .~ rid
@@ -75,6 +77,9 @@ instance ModeMonad DuplicateMode where
 
                 engineDrawState.drawEvent     .= Nothing
                 engineDrawState.drawCollision .= Nothing
+
+                gui <- ask
+                liftIO $ gtkSetCursor Nothing gui
 
     mRelease = return ()
 
