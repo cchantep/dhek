@@ -1,168 +1,54 @@
 --------------------------------------------------------------------------------
 -- |
--- Module : Dhek.Move
+-- Module : Dhek.Geometry
 --
--- Drawing Area pointer interaction
 --------------------------------------------------------------------------------
-module Dhek.Move where
+module Dhek.Geometry where
 
 --------------------------------------------------------------------------------
-import Control.Applicative ((<|>), (<$))
-import Control.Monad ((<=<), when)
-import Data.Foldable (foldMap, for_, traverse_)
-import Data.Maybe (isJust, fromMaybe)
+import Data.Foldable (find, foldMap)
 import Data.Monoid (First(..))
-import Data.Traversable (traverse)
 
 --------------------------------------------------------------------------------
-import Control.Lens (use, (<+=), (.=), (%=), (?=), (+=), (-=), (<%=), (^.), (&), (.~), (%~), (-~), (+~))
-import Control.Monad.Reader (ask)
-import Control.Monad.State (execState)
+import Control.Lens
+import Control.Monad.State.Strict
 import Graphics.UI.Gtk (CursorType(..))
 
 --------------------------------------------------------------------------------
-import Dhek.Drawing
-import Dhek.Engine
-import Dhek.Types hiding (addRect)
+import Dhek.Engine.Type
+import Dhek.Types
 
 --------------------------------------------------------------------------------
--- | Event handlers
+getOverRect :: DrawEnv -> (Maybe Rect)
+getOverRect o =
+    let (x,y) = drawPointer o
+        rs    = drawRects o in
+    find (isOver 1.0 x y) rs
+
 --------------------------------------------------------------------------------
-onMove :: Drawing ()
-onMove opts = do
-    oOpt <- getOverRect opts
-    aOpt <- getOverArea opts
-    eOpt <- getEvent
-    sOpt <- getDrawSelection
+getOverArea :: DrawEnv -> (Maybe Area)
+getOverArea o =
+    let ratio = drawRatio o
+        (x,y) = drawPointer o
+        rOpt  = getOverRect o in
+    rOpt >>= \r ->
+        find (isOver 1.0 x y . rectArea (5/ratio) r) $ enumFrom TOP_LEFT
 
-    -- When user draws a rectangle
-    for_ sOpt $ \s -> do
-        let pos = drawPointer opts
-        setDrawSelection $ Just $ updateDrawSelection pos s
-
-    -- When user resizes or moves a rectangle
-    for_ eOpt $ \e -> do
-        if drawOverlap opts
-            then overlapMode e
-            else collisionMode e
-
-    let cursorOpt =  fmap eventCursor eOpt <|>
-                     fmap areaCursor aOpt  <|>
-                     Hand1 <$ oOpt
-
-    setCursor cursorOpt
-
+--------------------------------------------------------------------------------
+isOver :: Double -> Double -> Double -> Rect -> Bool
+isOver thick x y r = go
   where
-    overlapMode :: BoardEvent -> M ()
-    overlapMode e = do
-        let pos@(x,y) = drawPointer opts
-        case e of
-            Hold r ppos ->
-                setEvent $ Just $ Hold (updateHoldRect ppos pos r) (x,y)
+    x0 = r ^. rectX
+    y0 = r ^. rectY
+    h  = r ^. rectHeight
+    w  = r ^. rectWidth
+    x1 = (x0 + w + thick)
+    y1 = (y0 + h + thick)
+    x' = (x0 - thick)
+    y' = (y0 - thick)
 
-            Resize r (x0,y0) a ->
-                let dx = x-x0
-                    dy = y-y0 in
-                setEvent $ Just $ Resize (resizeRect dx dy a r) (x,y) a
+    go = x >= x' && x <= x1 && y >= y' && y <= y1
 
-    collisionMode :: BoardEvent -> M ()
-    collisionMode e = do
-        let (x,y) = drawPointer opts
-        case e of
-            Hold r (x0,y0) -> do
-                cOpt <- getCollision
-                case cOpt of
-                    Nothing -> -- No previous collision
-                        case intersection (drawRects opts) r of
-                            Nothing    -> overlapMode e
-                            Just (t,d) -> do
-                                let delta = collisionDelta d r t
-                                    r1    = adaptRect d delta r
-                                    c     = Collision
-                                            { colDelta     = delta
-                                            , colRange     = rectRange d t
-                                            , colPrevPos   = (x0,y0)
-                                            , colDirection = d
-                                            }
-                                setEvent $ Just $ Hold r1 (adaptPos d delta x y)
-                                setCollision $ Just c
-
-                    Just c -> do -- with previous collision
-                        let (rmin,rmax) = colRange c
-                            (px,py)     = colPrevPos c
-                            d           = colDirection c
-                            delta       = colDelta c
-                            collides    = rangeCollides d rmin rmax r
-                            diff        = diffPos d delta (x,y) (px,py)
-                            (x0',y0')   = adaptPosDefault d delta (x,y) (x0,y0)
-                            r1          = oppositeTranslate d (x,y) (x0,y0) r
-                            (px',py')   = updateHoldPos d (x,y) (px,py)
-                            catchUp     = diff <= 0
-
-                        if not catchUp && collides
-                            then setEvent $ Just $ Hold r1 (px',py')
-                            else do
-                                setCollision Nothing
-                                let (r2, newPos) = correctRect d (x0',y0') r
-                                setEvent $ Just $ Hold r2 newPos
-
-            _ -> overlapMode e -- Resize collision detection is
-                               -- not supported yet.
-
---------------------------------------------------------------------------------
-onPress :: Drawing ()
-onPress opts = do
-    let (x,y) = drawPointer opts
-
-    oOpt  <- getOverRect opts
-    aOpt  <- getOverArea opts
-
-    let newSelection = rectNew x y 0 0
-
-        onEvent r = do
-            let evt = maybe (Hold r (x,y)) (Resize r (x,y)) aOpt
-            setEvent $ Just evt
-            detachRectangle r
-
-    -- if user click on a blank area we're un drawing mode otherwise we enter
-    -- event mode (Resize or Hold).
-    maybe (setDrawSelection $ Just newSelection) onEvent oOpt
-
---------------------------------------------------------------------------------
-onRelease :: Drawing ()
-onRelease _ = do
-    sOpt <- getDrawSelection
-    eOpt <- getEvent
-
-    -- on event mode, we re-insert targeted rectangle rectangle list
-    for_ eOpt $ \e -> do
-        let r = normalize $ case e of
-                Hold x _     -> x
-                Resize x _ _ -> x
-
-        attachRectangle r
-        selectRectangle r
-        setEvent Nothing
-        setCollision Nothing
-
-    -- on drawing mode, we add the new rectangle to rectangle list
-    for_ sOpt $ \r -> do
-        let r1 = normalize r
-            w  = r1 ^. rectWidth
-            h  = r1 ^. rectHeight
-
-        when (w*h >= 30) $ do
-            id <- freshId
-            let r2 = r1 & rectId   .~ id
-                        & rectName %~ (++ show id)
-
-            newRectangle r2
-            selectRectangle r2
-
-        setDrawSelection Nothing
-
---------------------------------------------------------------------------------
--- | Geometry utilities
 --------------------------------------------------------------------------------
 adaptPos :: Direction
          -> Double

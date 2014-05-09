@@ -20,10 +20,11 @@ executable dhek
                  Dhek.Engine.Type
                  Dhek.File
                  Dhek.Free
+                 Dhek.Geometry
                  Dhek.GUI
                  Dhek.I18N
                  Dhek.Mode.Normal
-                 Dhek.Move
+                 Dhek.Mode.Duplicate
                  Dhek.Property
                  Dhek.Selection
                  Dhek.Signal

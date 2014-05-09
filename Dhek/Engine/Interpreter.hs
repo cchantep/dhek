@@ -35,6 +35,7 @@ import Dhek.Free
 import Dhek.GUI
 import Dhek.GUI.Action
 import Dhek.Instr
+import Dhek.Mode.Duplicate
 import Dhek.Mode.Normal
 import Dhek.Types
 
@@ -48,8 +49,8 @@ data Interpreter =
     }
 
 --------------------------------------------------------------------------------
-drawInterpret :: Interpreter -> Pos -> Drawing a -> IO ()
-drawInterpret i (x,y) pgr = do
+drawInterpret :: (DrawEnv -> M a) -> Interpreter -> Pos -> IO ()
+drawInterpret k i (x,y) = do
     s <- readIORef $ _state i
     v <- readIORef $ _internal i
     e <- readIORef $ _env i
@@ -60,13 +61,13 @@ drawInterpret i (x,y) pgr = do
         pages = v ^. viewerPages
         pid   = s ^. engineCurPage
         mode  = s ^. engineMode
-        opts  = DrawOptions{ drawOverlap = s ^. engineOverlap
-                               , drawPointer = (x/ratio, y/ratio)
-                               , drawRects   = getRects s
-                               , drawRatio   = ratio
-                               }
+        opts  = DrawEnv{ drawOverlap = s ^. engineOverlap
+                       , drawPointer = (x/ratio, y/ratio)
+                       , drawRects   = getRects s
+                       , drawRatio   = ratio
+                       }
 
-    s2 <- runMode mode s (execDrawing opts pgr)
+    s2 <- runMode mode s (k opts)
 
     writeIORef (_state i) s2
     liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
@@ -102,6 +103,11 @@ engineCurrentPage  i = do
 --------------------------------------------------------------------------------
 engineDrawingArea :: Interpreter -> Gtk.DrawingArea
 engineDrawingArea = guiDrawingArea . _gui
+
+--------------------------------------------------------------------------------
+engineSetMode :: Mode -> Interpreter -> IO ()
+engineSetMode m i = do
+    modifyIORef (_state i) (\s -> s { _engineMode = m })
 
 --------------------------------------------------------------------------------
 engineRatio :: Interpreter -> IO Double
@@ -359,9 +365,11 @@ runProgram i p = do
             k
         susp (IsToggleActive t k) =
             case t of
-                DrawToggle ->
+                DrawToggle -> do
+                    engineMode .= normalMode gui
                     (liftIO $ Gtk.toggleButtonGetActive (guiDrawToggle gui)) >>= k
-                MultiSelToggle ->
+                MultiSelToggle -> do
+                    engineMode .= duplicateMode gui
                     (liftIO $ Gtk.toggleButtonGetActive (guiMultiSelToggle gui)) >>= k
         susp (SetToggleActive t b k) = do
             case t of
@@ -420,22 +428,6 @@ _getPage s v = pages ! pIdx
   where
     pIdx  = _engineCurPage s
     pages = _viewerPages v
-
---------------------------------------------------------------------------------
-_getOverRect :: Double -> Double -> [Rect] -> Maybe Rect
-_getOverRect x y rs =
-    let overed = isOver 1.0 x y
-        oOpt   = find overed rs in
-    oOpt
-
---------------------------------------------------------------------------------
-_getOverArea :: Double -> Double -> Double -> Rect -> Maybe Area
-_getOverArea ratio x y r =
-    let overed a =
-            isOver 1.0 x y (rectArea (5/ratio) r a)
-
-        aOpt = find overed (enumFrom TOP_LEFT) in
-    aOpt
 
 --------------------------------------------------------------------------------
 getRects :: EngineState -> [Rect]
