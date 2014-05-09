@@ -21,19 +21,9 @@ import Dhek.Types
 -- | Mode Monad
 --------------------------------------------------------------------------------
 class (Monad m, Applicative m) => ModeMonad m where
-    mSelectRectangle   :: Rect -> m ()
-    mUnselectRectangle :: m ()
-    mGetDrawSelection  :: m (Maybe Rect)
-    mSetDrawSelection  :: Maybe Rect -> m ()
-    mGetEvent          :: m (Maybe BoardEvent)
-    mSetEvent          :: Maybe BoardEvent -> m ()
-    mGetCollision      :: m (Maybe Collision)
-    mSetCollision      :: Maybe Collision -> m ()
-    mNewRectangle      :: Rect -> m ()
-    mAttachRectangle   :: Rect -> m ()
-    mDetachRectangle   :: Rect -> m ()
-    mSetCursor         :: Maybe CursorType -> m ()
-    mFreshId           :: m Int
+    mMove    :: DrawEnv -> m ()
+    mPress   :: DrawEnv -> m ()
+    mRelease :: m ()
 
 --------------------------------------------------------------------------------
 -- | Declarations
@@ -49,8 +39,8 @@ newtype M a = M (forall m. ModeMonad m => m a)
 newtype Mode = Mode (forall a. M a -> EngineState -> IO EngineState)
 
 --------------------------------------------------------------------------------
-data DrawOptions
-    = DrawOptions
+data DrawEnv
+    = DrawEnv
       { drawOverlap :: Bool             -- ^ Rectangle overlap
       , drawPointer :: (Double, Double) -- ^ (x, y) pointer position
       , drawRects   :: [Rect]           -- ^ Page rectangle
@@ -73,11 +63,8 @@ data DrawState
       , _drawSelection :: !(Maybe Rect)
       , _drawSelected  :: !(Maybe Rect)
       , _drawCursor    :: !(Maybe CursorType)
-      , _drawAddedRect :: !(Maybe Rect)
       , _drawCollision :: !(Maybe Collision)
-      , _drawDetached  :: !(Maybe Rect)
-      , _drawAttached  :: !(Maybe Rect)
-      , _drawNewRect   :: !(Maybe Rect)
+      , _drawOverRect  :: !(Maybe Rect)
       , _drawFreshId   :: !Int
       }
 
@@ -115,11 +102,8 @@ drawStateNew = DrawState{ _drawEvent     = Nothing
                         , _drawSelection = Nothing
                         , _drawSelected  = Nothing
                         , _drawCursor    = Nothing
-                        , _drawAddedRect = Nothing
                         , _drawCollision = Nothing
-                        , _drawDetached  = Nothing
-                        , _drawAttached  = Nothing
-                        , _drawNewRect   = Nothing
+                        , _drawOverRect  = Nothing
                         , _drawFreshId   = 0
                         }
 
@@ -148,19 +132,9 @@ instance Monad M where
 
 --------------------------------------------------------------------------------
 instance ModeMonad M where
-    mSelectRectangle   = selectRectangle
-    mUnselectRectangle = unselectRectangle
-    mGetDrawSelection  = getDrawSelection
-    mSetDrawSelection  = setDrawSelection
-    mGetEvent          = getEvent
-    mSetEvent          = setEvent
-    mGetCollision      = getCollision
-    mSetCollision      = setCollision
-    mNewRectangle      = newRectangle
-    mAttachRectangle   = attachRectangle
-    mDetachRectangle   = detachRectangle
-    mSetCursor         = setCursor
-    mFreshId           = freshId
+    mMove    = move
+    mPress   = press
+    mRelease = release
 
 --------------------------------------------------------------------------------
 -- | Mode Run
@@ -173,55 +147,15 @@ runMode :: Mode -> EngineState -> M a -> IO EngineState
 runMode (Mode k) s m = k m s
 
 --------------------------------------------------------------------------------
--- | Mode API
+-- | Mode callback handlers
 --------------------------------------------------------------------------------
-selectRectangle :: Rect -> M ()
-selectRectangle r = M $ mSelectRectangle r
+move :: DrawEnv -> M ()
+move e = M $ mMove e
 
 --------------------------------------------------------------------------------
-unselectRectangle :: M ()
-unselectRectangle = M mUnselectRectangle
+press :: DrawEnv -> M ()
+press e = M $ mPress e
 
 --------------------------------------------------------------------------------
-getDrawSelection :: M (Maybe Rect)
-getDrawSelection = M mGetDrawSelection
-
---------------------------------------------------------------------------------
-setDrawSelection :: Maybe Rect -> M ()
-setDrawSelection s = M $ mSetDrawSelection s
-
---------------------------------------------------------------------------------
-getEvent :: M (Maybe BoardEvent)
-getEvent = M mGetEvent
-
---------------------------------------------------------------------------------
-setEvent :: Maybe BoardEvent -> M ()
-setEvent e = M $ mSetEvent e
-
---------------------------------------------------------------------------------
-getCollision :: M (Maybe Collision)
-getCollision = M mGetCollision
-
---------------------------------------------------------------------------------
-setCollision :: Maybe Collision -> M ()
-setCollision c = M $ mSetCollision c
-
---------------------------------------------------------------------------------
-newRectangle :: Rect -> M ()
-newRectangle r = M $ mNewRectangle r
-
---------------------------------------------------------------------------------
-attachRectangle :: Rect -> M ()
-attachRectangle r = M $ mAttachRectangle r
-
---------------------------------------------------------------------------------
-detachRectangle :: Rect -> M ()
-detachRectangle r = M $ mDetachRectangle r
-
---------------------------------------------------------------------------------
-setCursor :: Maybe CursorType -> M ()
-setCursor c = M $ mSetCursor c
-
---------------------------------------------------------------------------------
-freshId :: M Int
-freshId = M $ mFreshId
+release :: M ()
+release = M mRelease

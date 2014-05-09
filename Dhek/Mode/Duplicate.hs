@@ -13,112 +13,79 @@ import Data.IORef
 
 --------------------------------------------------------------------------------
 import           Control.Lens
-import           Control.Monad.RWS
+import           Control.Monad.RWS.Strict
 import           Control.Monad.Trans
 import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
 import Dhek.Engine.Type
+import Dhek.Geometry
 import Dhek.GUI
 import Dhek.GUI.Action
 import Dhek.Types
 
 --------------------------------------------------------------------------------
-data Input
-    = Input
-      { prevOverlapSetting :: Bool
-      , gui                :: GUI
-      }
-
---------------------------------------------------------------------------------
 newtype DuplicateMode a
-    = DuplicateMode (RWST Input () EngineState IO a)
+    = DuplicateMode (RWST GUI () EngineState IO a)
     deriving ( Functor
              , Applicative
              , Monad
-             , MonadReader Input
+             , MonadReader GUI
              , MonadState EngineState
              , MonadIO
              )
 
 --------------------------------------------------------------------------------
 instance ModeMonad DuplicateMode where
-    mSelectRectangle r =
-        return ()
+    mMove opts = do
+        let oOpt = getOverRect opts
 
-    mUnselectRectangle =
-        return ()
+        eOpt <- use $ engineDrawState.drawEvent
 
-    mGetDrawSelection =
-        use $ engineDrawState.drawSelection
+        engineDrawState.drawOverRect .= oOpt
 
-    mSetDrawSelection s =
-        return ()
+        -- We only handle move without caring about overlap
+        for_ eOpt $ \e -> do
+            let pos@(x,y) = drawPointer opts
+            case e of
+                Hold r ppos ->
+                    engineDrawState.drawEvent ?=
+                        Hold (updateHoldRect ppos pos r) (x,y)
 
-    mGetEvent =
-        use $ engineDrawState.drawEvent
+                _ -> return ()
 
-    mSetEvent opt = do
-        prev <- mGetEvent
-        maybe init update prev
+    mPress opts = do
+        for_ (getOverRect opts) $ \r -> do
+             rid <- engineDrawState.drawFreshId <+= 1
+             let r2    = r & rectId .~ rid
+                 (x,y) = drawPointer opts
 
-      where
-        init = for_ opt $ \e -> do
-            fid  <- mFreshId
-            prev <- use engineOverlap
+             engineDrawState.drawEvent ?= Hold r2 (x,y)
 
-            let (pos, r) = _eventRect e
-                r2       = r & rectId   .~ fid
-                             & rectName %~ (++ (" dup" ++ show fid))
+    mRelease = do
+        eOpt <- use $ engineDrawState.drawEvent
 
-            engineOverlap             .= True
-            engineDrawState.drawEvent ?= Hold r2 pos
+        -- on event mode, we re-insert targeted rectangle rectangle list
+        for_ eOpt $ \(Hold x _) -> do
 
-        update _ =
-            engineDrawState.drawEvent .= opt
+            rid <- engineDrawState.drawFreshId <+= 1
+            let r = normalize x & rectId .~ rid
 
-    mGetCollision =
-        use $ engineDrawState.drawCollision
+            -- Add rectangle
+            pid <- use engineCurPage
+            gui <- ask
+            engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r
+            liftIO $ gtkAddRect r gui
 
-    mSetCollision c =
-        engineDrawState.drawCollision .= Nothing
-
-    mNewRectangle r =
-        return ()
-
-    mAttachRectangle r = do
-        Input prev gui <- ask
-        pid            <- use engineCurPage
-        ans            <- use engineOverlap
-
-        let rid = r ^. rectId
-
-        engineOverlap .= not prev
-        engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r
-
-        liftIO $ gtkAddRect r gui
-
-    mDetachRectangle r =
-        return ()
-
-    mSetCursor t =
-        return ()
-
-    mFreshId =
-        engineDrawState.drawFreshId <+= 1
+            engineDrawState.drawEvent     .= Nothing
+            engineDrawState.drawCollision .= Nothing
 
 --------------------------------------------------------------------------------
 runDuplicate :: GUI -> DuplicateMode a -> EngineState -> IO EngineState
-runDuplicate gui (DuplicateMode m)  s = do
-    let prev = s ^. engineOverlap
-    (s', _) <- execRWST m (Input prev gui) s
+runDuplicate gui (DuplicateMode m) s = do
+    (s', _) <- execRWST m gui s
     return s'
 
 --------------------------------------------------------------------------------
 duplicateMode :: GUI -> Mode
 duplicateMode gui = Mode (runDuplicate gui . runM)
-
---------------------------------------------------------------------------------
-_eventRect :: BoardEvent -> (Pos, Rect)
-_eventRect (Hold r pos)     = (pos, r)
-_eventRect (Resize r pos _) = (pos, r)
