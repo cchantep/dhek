@@ -80,15 +80,14 @@ data EngineState = EngineState
     , _enginePrevPos   :: !(Double, Double)
     , _engineBoards    :: !Boards
     , _engineDrawState :: !DrawState
-    , _engineMode      :: Mode
+    , _engineMode      :: !Mode
+    , _engineBaseWidth :: !Int
+    , _engineThick     :: !Double
     }
 
 --------------------------------------------------------------------------------
 data EngineEnv = EngineEnv
-    { _enginePrevX     :: {-# UNPACK #-} !Double
-    , _enginePrevY     :: {-# UNPACK #-} !Double
-    , _enginePageCount :: {-# UNPACK #-} !Int
-    , _engineFilename  :: !String
+    { _engineFilename  :: !String
     , _engineRects     :: ![Rect]
     , _engineOverRect  :: !(Maybe Rect)
     , _engineOverArea  :: !(Maybe Area)

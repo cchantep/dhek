@@ -18,11 +18,9 @@ import Dhek.Version
 import Graphics.UI.Gtk hiding (get)
 import Graphics.UI.Gtk.Poppler.Document (Document, Page)
 
-data Viewer = Viewer { _viewerDocument   :: Document
-                     , _viewerPages      :: Array Int PageItem
-                     , _viewerPageCount  :: Int
-                     , _viewerBaseWidth  :: Int
-                     , _viewerThick      :: Double
+data Viewer = Viewer { _viewerDocument  :: Document
+                     , _viewerPages     :: Array Int PageItem
+                     , _viewerPageCount :: Int
                      }
 
 data Board = Board { _boardRects :: !(IntMap Rect) } deriving Show

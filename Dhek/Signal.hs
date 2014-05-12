@@ -7,11 +7,13 @@
 module Dhek.Signal where
 
 --------------------------------------------------------------------------------
-import Control.Lens
+import Control.Applicative ((<$>), (<*>))
 import Control.Monad (when)
 import Data.Foldable (for_, traverse_)
+import Data.Functor (void)
 
 --------------------------------------------------------------------------------
+import           Control.Lens
 import           Control.Monad.Trans (liftIO)
 import qualified Graphics.UI.Gtk as Gtk
 
@@ -40,85 +42,86 @@ connectSignals g i = do
             _ -> return ()
 
     Gtk.on (guiJsonOpenMenuItem g) Gtk.menuItemActivate $
-        runProgram i onJsonImport
+        void $ runProgram i onJsonImport
 
     Gtk.on (guiJsonSaveMenuItem g) Gtk.menuItemActivate $
-        runProgram i onJsonSave
+        void $ runProgram i onJsonSave
 
-    Gtk.on (guiOverlapMenuItem g) Gtk.menuItemActivate $ runProgram i $
+    Gtk.on (guiOverlapMenuItem g) Gtk.menuItemActivate $ void $ runProgram i $
         compile $ do
             b <- isActive Overlap
             active Overlap (not b)
 
     -- Previous Button ---
-    Gtk.on (guiPrevButton g) Gtk.buttonActivated $ runProgram i onPrev
+    Gtk.on (guiPrevButton g) Gtk.buttonActivated $ void $ runProgram i onPrev
 
     --- Next Button ---
-    Gtk.on (guiNextButton g) Gtk.buttonActivated $ runProgram i onNext
+    Gtk.on (guiNextButton g) Gtk.buttonActivated $ void $ runProgram i onNext
 
     --- Minus Button ---
-    Gtk.on (guiZoomOutButton g) Gtk.buttonActivated $ runProgram i onMinus
+    Gtk.on (guiZoomOutButton g) Gtk.buttonActivated $ void $ runProgram i onMinus
 
     --- Plus Button ---
-    Gtk.on (guiZoomInButton g) Gtk.buttonActivated $ runProgram i onPlus
-    Gtk.on (guiRemoveButton g) Gtk.buttonActivated $ runProgram i onRem
-    Gtk.on (guiApplyButton g) Gtk.buttonActivated $ runProgram i onProp
+    Gtk.on (guiZoomInButton g) Gtk.buttonActivated $ void $ runProgram i onPlus
+    Gtk.on (guiRemoveButton g) Gtk.buttonActivated $ void $ runProgram i onRem
+    Gtk.on (guiApplyButton g) Gtk.buttonActivated $ void $ runProgram i onProp
 
     --- Selection ---
     Gtk.on (guiRectTreeSelection g) Gtk.treeSelectionSelectionChanged $ do
-        runProgram i onSel
+        void $ runProgram i onSel
 
     Gtk.on (guiDrawingArea g) Gtk.exposeEvent $ Gtk.tryEvent $ liftIO $ do
-        s     <- engineCurrentState i
-        page  <- engineCurrentPage i
-        ratio <- engineRatio i
-        let ds     = s ^. engineDrawState
-            params = DrawParams{ dpRatio = ratio
-                               , dpSelected  = ds ^. drawSelected
-                               , dpSelection = ds ^. drawSelection
-                               , dpOvered    = ds ^. drawOverRect
-                               , dpRects     = getRects s
-                               , dpEvent     = ds ^. drawEvent
-                               , dpPage      = page
-                               , dpGuides    = s ^. engineBoards.boardsGuides
-                               , dpCurGuide  = s ^. engineBoards.boardsCurGuide
-                               , dpArea      = engineDrawingArea i
-                               }
+        s    <- engineCurrentState i
+        popt <- engineCurrentPage i
+        opt  <- engineRatio i
+        for_ ((,) <$> popt <*> opt) $ \(page, ratio)-> do
+            let ds     = s ^. engineDrawState
+                params = DrawParams{ dpRatio = ratio
+                                   , dpSelected  = ds ^. drawSelected
+                                   , dpSelection = ds ^. drawSelection
+                                   , dpOvered    = ds ^. drawOverRect
+                                   , dpRects     = getRects s
+                                   , dpEvent     = ds ^. drawEvent
+                                   , dpPage      = page
+                                   , dpGuides    = s ^. engineBoards.boardsGuides
+                                   , dpCurGuide  = s ^. engineBoards.boardsCurGuide
+                                   , dpArea      = engineDrawingArea i
+                                   }
 
-        cairoDraw params
-        hsize  <- Gtk.adjustmentGetPageSize $ guiHRulerAdjustment g
-        vsize  <- Gtk.adjustmentGetPageSize $ guiVRulerAdjustment g
-        hlower <- Gtk.adjustmentGetLower $ guiHRulerAdjustment g
-        hupper <- Gtk.adjustmentGetUpper $ guiHRulerAdjustment g
-        hincr  <- Gtk.adjustmentGetPageIncrement $ guiHRulerAdjustment g
-        sincr  <- Gtk.adjustmentGetStepIncrement $ guiHRulerAdjustment g
-        vincr  <- Gtk.adjustmentGetPageIncrement $ guiVRulerAdjustment g
-        hvalue <- Gtk.adjustmentGetValue $ guiHRulerAdjustment g
-        vvalue <- Gtk.adjustmentGetValue $ guiVRulerAdjustment g
+            cairoDraw params
+            hsize  <- Gtk.adjustmentGetPageSize $ guiHRulerAdjustment g
+            vsize  <- Gtk.adjustmentGetPageSize $ guiVRulerAdjustment g
+            hlower <- Gtk.adjustmentGetLower $ guiHRulerAdjustment g
+            hupper <- Gtk.adjustmentGetUpper $ guiHRulerAdjustment g
+            hincr  <- Gtk.adjustmentGetPageIncrement $ guiHRulerAdjustment g
+            sincr  <- Gtk.adjustmentGetStepIncrement $ guiHRulerAdjustment g
+            vincr  <- Gtk.adjustmentGetPageIncrement $ guiVRulerAdjustment g
+            hvalue <- Gtk.adjustmentGetValue $ guiHRulerAdjustment g
+            vvalue <- Gtk.adjustmentGetValue $ guiVRulerAdjustment g
 
-        let w  = (hsize/ratio) + hl
-            h  = (vsize/ratio) + vl
-            hl = hvalue / ratio
-            vl = vvalue / ratio
+            let w  = (hsize/ratio) + hl
+                h  = (vsize/ratio) + vl
+                hl = hvalue / ratio
+                vl = vvalue / ratio
 
-        Gtk.set (guiHRuler g) [ Gtk.rulerLower   Gtk.:= hl
-                              , Gtk.rulerUpper   Gtk.:= w
-                              , Gtk.rulerMaxSize Gtk.:= w
-                              ]
+            Gtk.set (guiHRuler g) [ Gtk.rulerLower   Gtk.:= hl
+                                  , Gtk.rulerUpper   Gtk.:= w
+                                  , Gtk.rulerMaxSize Gtk.:= w
+                                  ]
 
-        Gtk.set (guiVRuler g) [ Gtk.rulerLower   Gtk.:= vl
-                              , Gtk.rulerUpper   Gtk.:= h
-                              , Gtk.rulerMaxSize Gtk.:= h
-                              ]
+            Gtk.set (guiVRuler g) [ Gtk.rulerLower   Gtk.:= vl
+                                  , Gtk.rulerUpper   Gtk.:= h
+                                  , Gtk.rulerMaxSize Gtk.:= h
+                                  ]
 
     Gtk.on (guiDrawingArea g) Gtk.motionNotifyEvent $ Gtk.tryEvent $ do
         pos@(x,y) <- Gtk.eventCoordinates
         liftIO $ do
-            r <- engineRatio i
-
-            drawInterpret move i pos
-            Gtk.set (guiHRuler g) [Gtk.rulerPosition Gtk.:= x/r]
-            Gtk.set (guiVRuler g) [Gtk.rulerPosition Gtk.:= y/r]
+            opt <- engineRatio i
+            for_ opt $ \r -> do
+                drawInterpret move i pos
+                Gtk.set (guiHRuler g) [Gtk.rulerPosition Gtk.:= x/r]
+                Gtk.set (guiVRuler g) [Gtk.rulerPosition Gtk.:= y/r]
 
     Gtk.on (guiDrawingArea g) Gtk.buttonPressEvent $ Gtk.tryEvent $ do
        pos <- Gtk.eventCoordinates
@@ -146,7 +149,7 @@ connectSignals g i = do
             Gtk.adjustmentSetValue (guiVRulerAdjustment g) newValue
 
     Gtk.on (guiTypeCombo g) Gtk.changed $ do
-        runProgram i $ compile $ do
+        void $ runProgram i $ compile $ do
             opt <- getComboText PropCombo
             for_ opt $ \c ->
                 if c == "radio"
@@ -154,56 +157,60 @@ connectSignals g i = do
                 else setValuePropVisible False
 
     Gtk.on (guiVRuler g) Gtk.buttonPressEvent $ Gtk.tryEvent $ liftIO $
-        runProgram i $ compile $ newGuide GuideVertical
+        void $ runProgram i $ compile $ newGuide GuideVertical
 
     Gtk.on (guiVRuler g) Gtk.motionNotifyEvent $ Gtk.tryEvent $ do
         (x',y') <- Gtk.eventCoordinates
         liftIO $ do
-            ratio <- engineRatio i
-            v     <- Gtk.adjustmentGetValue (guiHRulerAdjustment g)
-            let (x,y) = ((x'-25+v)/ratio, y'/ratio)
+            opt <- engineRatio i
+            v   <- Gtk.adjustmentGetValue (guiHRulerAdjustment g)
 
-            Gtk.set (guiHRuler g) [Gtk.rulerPosition Gtk.:= x]
-            Gtk.set (guiVRuler g) [Gtk.rulerPosition Gtk.:= y]
+            for_ opt $ \ratio -> do
+                let (x,y) = ((x'-25+v)/ratio, y'/ratio)
 
-            runProgram i $ compile $ do
+                Gtk.set (guiHRuler g) [Gtk.rulerPosition Gtk.:= x]
+                Gtk.set (guiVRuler g) [Gtk.rulerPosition Gtk.:= y]
+
+            void $ runProgram i $ compile $ do
                 updateGuide
                 draw
 
     Gtk.on (guiVRuler g) Gtk.buttonReleaseEvent $ Gtk.tryEvent $ liftIO $
-        runProgram i $ compile $ do
+        void $ runProgram i $ compile $ do
             addGuide
             draw
 
     Gtk.on (guiHRuler g) Gtk.buttonPressEvent $ Gtk.tryEvent $ liftIO $
-        runProgram i $ compile $ newGuide GuideHorizontal
+        void $ runProgram i $ compile $ newGuide GuideHorizontal
 
     Gtk.on (guiHRuler g)  Gtk.motionNotifyEvent $ Gtk.tryEvent $ do
         (x',y') <- Gtk.eventCoordinates
         liftIO $ do
-            ratio <- engineRatio i
-            v     <- Gtk.adjustmentGetValue (guiVRulerAdjustment g)
-            let (x,y) = (x'/ratio, (y'+v-25)/ratio)
+            opt <- engineRatio i
+            v   <- Gtk.adjustmentGetValue (guiVRulerAdjustment g)
 
-            Gtk.set (guiHRuler g) [Gtk.rulerPosition Gtk.:= x]
-            Gtk.set (guiVRuler g) [Gtk.rulerPosition Gtk.:= y]
+            for_ opt $ \ratio -> do
+                let (x,y) = (x'/ratio, (y'+v-25)/ratio)
 
-            runProgram i $ compile $ do
+                Gtk.set (guiHRuler g) [Gtk.rulerPosition Gtk.:= x]
+                Gtk.set (guiVRuler g) [Gtk.rulerPosition Gtk.:= y]
+
+            void $ runProgram i $ compile $ do
                 updateGuide
                 draw
 
     Gtk.on (guiHRuler g) Gtk.buttonReleaseEvent $ Gtk.tryEvent $ liftIO $
-        liftIO $ runProgram i $ compile $ do
+        liftIO $ void $ runProgram i $ compile $ do
             addGuide
             draw
 
     Gtk.on (guiDrawToggle g) Gtk.toggled $ liftIO $
-        runProgram i $ compile $ do
+        void $ runProgram i $ compile $ do
             b <- isToggleActive DrawToggle
             setToggleActive MultiSelToggle (not b)
 
     Gtk.on (guiMultiSelToggle g) Gtk.toggled $ liftIO $
-        runProgram i $ compile $ do
+        void $ runProgram i $ compile $ do
             b <- isToggleActive MultiSelToggle
             setToggleActive DrawToggle (not b)
 

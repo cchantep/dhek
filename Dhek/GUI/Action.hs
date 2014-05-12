@@ -8,11 +8,26 @@ module Dhek.GUI.Action
     , gtkSelectRect
     , gtkAddRect
     , gtkSetCursor
+    , gtkIncrPage
+    , gtkDecrPage
+    , gtkIncrZoom
+    , gtkDecrZoom
+    , gtkRemoveRect
+    , gtkLookupEntryText
+    , gtkGetTreeSelection
+    , gtkShowError
+    , gtkSelectJsonFile
+    , gtkOpenJsonFile
+    , gtkSetRects
+    , gtkSetOverlapActive
+    , gtkSetValuePropVisible
     ) where
 
 --------------------------------------------------------------------------------
+import Data.Char (isSpace)
 import Data.Foldable (for_, traverse_)
-import Data.Traversable (traverse)
+import Data.List (dropWhileEnd)
+import Data.Traversable (for, traverse)
 
 --------------------------------------------------------------------------------
 import           Control.Lens
@@ -77,6 +92,106 @@ gtkSetCursor t gui = do
     Gtk.drawWindowSetCursor frame c
 
 --------------------------------------------------------------------------------
+gtkIncrPage :: Int -> Int -> [Rect] -> GUI -> IO ()
+gtkIncrPage ncur nb rects gui = do
+    Gtk.widgetSetSensitive (guiPrevButton gui) True
+    Gtk.widgetSetSensitive (guiNextButton gui) (ncur < nb)
+    Gtk.listStoreClear $ guiRectStore gui
+    traverse_ (Gtk.listStoreAppend $ guiRectStore gui) rects
+
+--------------------------------------------------------------------------------
+gtkDecrPage :: Int -> Int -> [Rect] -> GUI -> IO ()
+gtkDecrPage ncur nmin rects gui = do
+     Gtk.widgetSetSensitive (guiPrevButton gui) (ncur > nmin)
+     Gtk.widgetSetSensitive (guiNextButton gui) True
+     Gtk.listStoreClear (guiRectStore gui)
+     traverse_ (Gtk.listStoreAppend $ guiRectStore gui) rects
+
+--------------------------------------------------------------------------------
+gtkIncrZoom :: Int -> Int -> GUI -> IO ()
+gtkIncrZoom ncur nmax gui = do
+    Gtk.widgetSetSensitive (guiZoomOutButton gui) True
+    Gtk.widgetSetSensitive (guiZoomInButton gui) (ncur < nmax)
+
+--------------------------------------------------------------------------------
+gtkDecrZoom :: Int -> Int -> GUI -> IO ()
+gtkDecrZoom ncur nmin gui = do
+    Gtk.widgetSetSensitive (guiZoomOutButton gui) (ncur > nmin)
+    Gtk.widgetSetSensitive (guiZoomInButton gui) True
+
+--------------------------------------------------------------------------------
+gtkRemoveRect :: Rect -> GUI -> IO ()
+gtkRemoveRect r gui = do
+    iOpt <- lookupStoreIter (sameRectId r) (guiRectStore gui)
+    for_ iOpt $ \it ->
+        let idx = Gtk.listStoreIterToIndex it in
+        Gtk.listStoreRemove (guiRectStore gui) idx
+
+--------------------------------------------------------------------------------
+gtkLookupEntryText :: Gtk.Entry -> IO (Maybe String)
+gtkLookupEntryText entry = do
+    txt <- Gtk.entryGetText entry
+    let txt1 = trimString txt
+        r    = if null txt1 then Nothing else Just txt1
+    return r
+
+--------------------------------------------------------------------------------
+gtkShowError :: Show a => a -> GUI -> IO ()
+gtkShowError e gui = do
+    m <- Gtk.messageDialogNew (Just $ guiWindow gui)
+         [Gtk.DialogModal] Gtk.MessageError Gtk.ButtonsOk (show e)
+    Gtk.dialogRun m
+    Gtk.widgetHide m
+
+--------------------------------------------------------------------------------
+gtkGetTreeSelection :: GUI -> IO (Maybe Rect)
+gtkGetTreeSelection gui = do
+    iOpt <- Gtk.treeSelectionGetSelected $ guiRectTreeSelection gui
+    for iOpt $ \it ->
+        let idx = Gtk.listStoreIterToIndex it in
+        Gtk.listStoreGetValue (guiRectStore gui) idx
+
+--------------------------------------------------------------------------------
+gtkSelectJsonFile :: GUI -> IO (Maybe FilePath)
+gtkSelectJsonFile gui = do
+    resp <- Gtk.dialogRun $ guiJsonSaveDialog gui
+    Gtk.widgetHide $ guiJsonSaveDialog gui
+    case resp of
+        Gtk.ResponseOk -> Gtk.fileChooserGetFilename $ guiJsonSaveDialog gui
+        _              -> return Nothing
+
+--------------------------------------------------------------------------------
+gtkOpenJsonFile :: GUI -> IO (Maybe FilePath)
+gtkOpenJsonFile gui = do
+    resp <- Gtk.dialogRun $ guiJsonOpenDialog gui
+    Gtk.widgetHide $ guiJsonOpenDialog gui
+    case resp of
+        Gtk.ResponseOk -> Gtk.fileChooserGetFilename $ guiJsonOpenDialog gui
+        _              -> return Nothing
+--------------------------------------------------------------------------------
+gtkSetRects :: [Rect] -> GUI -> IO ()
+gtkSetRects rects gui = do
+    Gtk.listStoreClear $ guiRectStore gui
+    traverse_ (Gtk.listStoreAppend $ guiRectStore gui) rects
+
+--------------------------------------------------------------------------------
+gtkSetOverlapActive :: Bool -> GUI -> IO ()
+gtkSetOverlapActive b gui =
+    Gtk.checkMenuItemSetActive (guiOverlapMenuItem gui) b
+
+--------------------------------------------------------------------------------
+gtkSetValuePropVisible :: Bool -> GUI -> IO ()
+gtkSetValuePropVisible b gui
+    | b         = do
+        Gtk.widgetSetChildVisible (guiValueEntryAlign gui) True
+        Gtk.widgetSetChildVisible (guiValueEntry gui) True
+        Gtk.widgetShowAll $ guiValueEntryAlign gui
+        Gtk.widgetShowAll $ guiValueEntry gui
+    | otherwise = do
+        Gtk.widgetHideAll $ guiValueEntryAlign gui
+        Gtk.widgetHideAll $ guiValueEntry gui
+
+--------------------------------------------------------------------------------
 -- | Utilities
 --------------------------------------------------------------------------------
 lookupStoreIter :: (a -> Bool) -> Gtk.ListStore a -> IO (Maybe Gtk.TreeIter)
@@ -88,3 +203,7 @@ lookupStoreIter pred store = Gtk.treeModelGetIterFirst store >>= go
             then return (Just it)
             else Gtk.treeModelIterNext store it >>= go
     go _ = return Nothing
+
+--------------------------------------------------------------------------------
+trimString :: String -> String
+trimString = dropWhileEnd isSpace . dropWhile isSpace
