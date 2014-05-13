@@ -12,6 +12,7 @@ mkdir -p "$BUILDDIR/$APPNAME.app/Contents/MacOS/lib"
 mkdir -p "$BUILDDIR/$APPNAME.app/Contents/Resources"
  
 cp "$BINPATH" "$BUILDDIR/$APPNAME.app/Contents/MacOS/"
+cp -R `dirname $0`/../resources "$BUILDDIR/$APPNAME.app/Contents/MacOS/resources"
  
 echo "Will process dependencies ..."
 DEPS=`otool -L "$BUILDDIR/$APPNAME.app/Contents/MacOS/$BINFILE" | grep '.dylib' | grep -v '@' | grep -v '/usr/lib' | awk '{ printf("%s\n", $1); }'`
