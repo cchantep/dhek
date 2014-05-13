@@ -8,7 +8,8 @@ DISTDIR=dist/dhek-win$OSVER-$VER
 mkdir -p "$DISTDIR/bin"
 
 cp dist/build/dhek/dhek.exe "$DISTDIR/bin/"
-cp util/win-dlls/*.dll "$DISTDIR/bin/"
+cp util/win-dist/dlls/*.dll "$DISTDIR/bin/"
+cp -R util/win-dist/gtk-theme/* "$DISTDIR/"
 cp -R resources "$DISTDIR/bin/resources"
 
 cat > "$DISTDIR/dhek.bat" << EOF
