@@ -13,7 +13,10 @@ import Data.Foldable (traverse_)
 --------------------------------------------------------------------------------
 import           Control.Lens ((^.))
 import qualified Graphics.UI.Gtk as Gtk
-import           System.FilePath (joinPath)
+import           System.FilePath (joinPath, dropFileName)
+import           System.Environment.Executable (getExecutablePath)
+
+import Debug.Trace (trace)
 
 --------------------------------------------------------------------------------
 import Dhek.I18N
@@ -93,6 +96,10 @@ makeGUI = do
               Gtk.FileChooserActionOpen
               msgStr
 
+    -- Runtime directories
+    execPath <- getExecutablePath
+    let resDir = joinPath [dropFileName execPath, "resources"]
+
     -- Menu Bar
     mbar   <- Gtk.menuBarNew
     fmenu  <- Gtk.menuNew
@@ -116,33 +123,33 @@ makeGUI = do
 
     -- Button Next
     next <- Gtk.buttonNew
-    nimg <- Gtk.imageNewFromFile $ joinPath ["resources", "page-next.png"]
+    nimg <- Gtk.imageNewFromFile $ joinPath [resDir, "page-next.png"]
     Gtk.buttonSetImage next nimg
 
      -- Previous Prev
     prev <- Gtk.buttonNew
-    pimg <- Gtk.imageNewFromFile $ joinPath ["resources", "page-previous.png"]
+    pimg <- Gtk.imageNewFromFile $ joinPath [resDir, "page-previous.png"]
     Gtk.buttonSetImage prev pimg
 
     -- Button Zoom out
     minus <- Gtk.buttonNew
-    oimg  <- Gtk.imageNewFromFile $ joinPath ["resources", "zoom-out.png"]
+    oimg  <- Gtk.imageNewFromFile $ joinPath [resDir, "zoom-out.png"]
     Gtk.buttonSetImage minus oimg
 
     -- Button Zoom in
     plus <- Gtk.buttonNew
-    iimg <- Gtk.imageNewFromFile $ joinPath ["resources", "zoom-in.png"]
+    iimg <- Gtk.imageNewFromFile $ joinPath [resDir, "zoom-in.png"]
     Gtk.buttonSetImage plus iimg
 
     -- Button Draw
     drwb <- Gtk.toggleButtonNew
-    dimg <- Gtk.imageNewFromFile $ joinPath ["resources", "draw.png"]
+    dimg <- Gtk.imageNewFromFile $ joinPath [resDir, "draw.png"]
     Gtk.buttonSetImage drwb dimg
     Gtk.toggleButtonSetActive drwb True
 
     -- Button MultiSelection
     msb  <- Gtk.toggleButtonNew
-    simg <- Gtk.imageNewFromFile $ joinPath ["resources", "multisel.png"]
+    simg <- Gtk.imageNewFromFile $ joinPath [resDir, "multisel.png"]
     Gtk.buttonSetImage msb simg
 
     -- Toolbar
@@ -201,6 +208,7 @@ makeGUI = do
     atswin <- Gtk.alignmentNew 0 0 1 1
     col    <- Gtk.treeViewColumnNew
     trend  <- Gtk.cellRendererTextNew
+
     let mapping r = [Gtk.cellText Gtk.:= r ^. rectName]
     Gtk.treeViewColumnSetTitle col $ msgStr $ MsgAreas
     Gtk.cellLayoutPackStart col trend False

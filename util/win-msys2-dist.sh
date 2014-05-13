@@ -9,7 +9,7 @@ mkdir -p "$DISTDIR/bin"
 
 cp dist/build/dhek/dhek.exe "$DISTDIR/bin/"
 cp util/win-dlls/*.dll "$DISTDIR/bin/"
-cp -R resources "$DISTDIR/resources"
+cp -R resources "$DISTDIR/bin/resources"
 
 cat > "$DISTDIR/dhek.bat" << EOF
 start bin\dhek.exe
