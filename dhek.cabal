@@ -49,5 +49,9 @@ executable dhek
                        , Cabal == 1.18.*
                        , process
 
-  ghc-options: -O2 -threaded
+  if os(windows)
+    ghc-options: -O2 -threaded -optl-mwindows
+  else
+    ghc-options: -O2 -threaded
+
   default-language: Haskell2010
