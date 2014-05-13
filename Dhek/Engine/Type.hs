@@ -9,6 +9,7 @@ module Dhek.Engine.Type where
 
 --------------------------------------------------------------------------------
 import Control.Applicative
+import Data.Array (Array)
 
 --------------------------------------------------------------------------------
 import Control.Lens
@@ -24,13 +25,15 @@ class (Monad m, Applicative m) => ModeMonad m where
     mMove    :: DrawEnv -> m ()
     mPress   :: DrawEnv -> m ()
     mRelease :: m ()
+    mDrawing :: PageItem -> Ratio -> m ()
 
 --------------------------------------------------------------------------------
 -- | Declarations
 --------------------------------------------------------------------------------
-type Pos = (Double, Double)
+type Pos   = (Double, Double)
+type Ratio = Double
 type Width = Double
-type Zoom = Double
+type Zoom  = Double
 
 --------------------------------------------------------------------------------
 newtype M a = M (forall m. ModeMonad m => m a)
@@ -66,6 +69,7 @@ data DrawState
       , _drawCollision :: !(Maybe Collision)
       , _drawOverRect  :: !(Maybe Rect)
       , _drawFreshId   :: !Int
+      , _drawMultiSel  :: ![Rect]
       }
 
 --------------------------------------------------------------------------------
@@ -91,6 +95,7 @@ data EngineEnv = EngineEnv
     , _engineRects     :: ![Rect]
     , _engineOverRect  :: !(Maybe Rect)
     , _engineOverArea  :: !(Maybe Area)
+    , _engineModes     :: !(Array Int Mode)
     }
 
 --------------------------------------------------------------------------------
@@ -104,6 +109,7 @@ drawStateNew = DrawState{ _drawEvent     = Nothing
                         , _drawCollision = Nothing
                         , _drawOverRect  = Nothing
                         , _drawFreshId   = 0
+                        , _drawMultiSel  = []
                         }
 
 --------------------------------------------------------------------------------
@@ -134,6 +140,7 @@ instance ModeMonad M where
     mMove    = move
     mPress   = press
     mRelease = release
+    mDrawing = drawing
 
 --------------------------------------------------------------------------------
 -- | Mode Run
@@ -158,3 +165,6 @@ press e = M $ mPress e
 --------------------------------------------------------------------------------
 release :: M ()
 release = M mRelease
+
+drawing :: PageItem -> Ratio -> M ()
+drawing p r = M $ mDrawing p r

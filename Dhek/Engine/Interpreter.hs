@@ -36,6 +36,7 @@ import Dhek.GUI.Action
 import Dhek.Instr
 import Dhek.Mode.Duplicate
 import Dhek.Mode.Normal
+import Dhek.Mode.Selection
 import Dhek.Types
 
 --------------------------------------------------------------------------------
@@ -57,7 +58,6 @@ drawInterpret k i (x,y) = do
     for_ opt $ \v -> do
         let gui   = _gui i
             ratio = _engineRatio s v
-            pages = v ^. viewerPages
             pid   = s ^. engineCurPage
             mode  = s ^. engineMode
             opts  = DrawEnv{ drawOverlap = s ^. engineOverlap
@@ -69,6 +69,19 @@ drawInterpret k i (x,y) = do
         s2 <- runMode mode s (k opts)
         writeIORef (_state i) s2
         liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
+
+--------------------------------------------------------------------------------
+engineRunDraw :: Interpreter -> IO ()
+engineRunDraw i = do
+    s   <- readIORef $ _state i
+    opt <- readIORef $ _internal i
+
+    for_ opt $ \v -> do
+        let pages = v ^. viewerPages
+            page  = pages ! (s ^. engineCurPage)
+            ratio = _engineRatio s v
+        s2 <- runMode (s ^. engineMode) s (drawing page ratio)
+        writeIORef (_state i) s2
 
 --------------------------------------------------------------------------------
 _selectRect :: (MonadState EngineState m, MonadIO m) => GUI -> Rect -> m ()
@@ -131,7 +144,7 @@ _engineRatio s v =
 --------------------------------------------------------------------------------
 makeInterpreter :: GUI -> IO Interpreter
 makeInterpreter gui = do
-    eRef <- newIORef envNew
+    eRef <- newIORef (envNew gui)
     sRef <- newIORef $ stateNew gui
     vRef <- newIORef Nothing
     return Interpreter{ _internal = vRef
@@ -141,13 +154,19 @@ makeInterpreter gui = do
                       }
 
 --------------------------------------------------------------------------------
-envNew :: EngineEnv
-envNew =
+envNew :: GUI -> EngineEnv
+envNew gui =
     EngineEnv{ _engineFilename = ""
              , _engineRects = []
              , _engineOverRect = Nothing
              , _engineOverArea = Nothing
+             , _engineModes    = modes
              }
+  where
+    modes = array (1,3) [ (1, normalMode gui)
+                        , (2, duplicateMode gui)
+                        , (3, selectionMode gui)
+                        ]
 
 --------------------------------------------------------------------------------
 stateNew :: GUI -> EngineState
@@ -186,6 +205,7 @@ _evalProgram :: EngineEnv
              -> StateT EngineState IO a
 _evalProgram env gui ref prg v= foldFree end susp prg where
   nb = v ^. viewerPageCount
+  modes = _engineModes env
 
   susp (GetCurPage k) = (use engineCurPage) >>= k
   susp (GetPageCount k) = k (v ^. viewerPageCount)
@@ -323,20 +343,11 @@ _evalProgram env gui ref prg v= foldFree end susp prg where
   susp (SetValuePropVisible b k) = do
       liftIO $ gtkSetValuePropVisible b gui
       k
-  susp (IsToggleActive t k) =
-      case t of
-          DrawToggle -> do
-              engineMode .= normalMode gui
-              (liftIO $ Gtk.toggleButtonGetActive (guiDrawToggle gui)) >>= k
-          MultiSelToggle -> do
-              engineMode .= duplicateMode gui
-              (liftIO $ Gtk.toggleButtonGetActive (guiMultiSelToggle gui)) >>= k
-  susp (SetToggleActive t b k) = do
-      case t of
-          DrawToggle -> do
-              liftIO $ Gtk.toggleButtonSetActive (guiDrawToggle gui) b
-          MultiSelToggle ->
-              liftIO $ Gtk.toggleButtonSetActive (guiMultiSelToggle gui) b
+  susp (SetMode m k) = do
+      case m of
+          DhekNormal      -> engineMode .= (modes ! 1)
+          DhekDuplication -> engineMode .= (modes ! 2)
+          DhekSelection   -> engineMode .= (modes ! 3)
       k
 
   end a = do
@@ -417,9 +428,10 @@ loadPdf i path = do
     opt <- readIORef $ _internal i
     v   <- _loadPdf path
     s   <- readIORef $ _state i
+    ev  <- readIORef $ _env i
     case opt of
         Nothing -> do
-            let env  = envNew { _engineFilename  = takeFileName path }
+            let env  = (envNew gui) { _engineFilename  = takeFileName path }
                 name = _engineFilename env
                 nb   = v ^. viewerPageCount
                 s'   = (stateNew gui) { _engineOverlap = s ^. engineOverlap
@@ -440,7 +452,7 @@ loadPdf i path = do
                 (name ++ " (page 1 / " ++ show nb ++ ")")
             Gtk.widgetShowAll ahbox
         Just _ -> do
-            let env  = envNew { _engineFilename  = takeFileName path }
+            let env  = ev { _engineFilename  = takeFileName path }
                 name = _engineFilename env
                 nb   = v ^. viewerPageCount
                 ds   = s ^. engineDrawState
