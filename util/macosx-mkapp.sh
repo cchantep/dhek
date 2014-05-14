@@ -1,18 +1,23 @@
 #! /bin/sh
 
 APPNAME="Dhek"
+VER=`grep '^version:' dhek.cabal | cut -d ':' -f 2 | sed -e 's/^[ ]*//'`
 
 # Path to previously built binary
 BINPATH=`dirname $0`/../dist/build/dhek/dhek
  
 BUILDDIR=`dirname $0`/../dist
 BINFILE=`basename "$BINPATH"`
+UTILDIR=`dirname $0`
  
 mkdir -p "$BUILDDIR/$APPNAME.app/Contents/MacOS/lib"
 mkdir -p "$BUILDDIR/$APPNAME.app/Contents/Resources"
+echo 'APPLdhek' > "$BUILDDIR/$APPNAME.app/Contents/PkgInfo"
+sed -e "s/@VER@/$VER/g" < "$UTILDIR/macosx-app/Info.plist" > "$BUILDDIR/$APPNAME.app/Contents/Info.plist"
+cp "$UTILDIR/macosx-app/dhek.icns" "$BUILDDIR/$APPNAME.app/Contents/Resources"
  
 cp "$BINPATH" "$BUILDDIR/$APPNAME.app/Contents/MacOS/"
-cp -R `dirname $0`/../resources "$BUILDDIR/$APPNAME.app/Contents/MacOS/resources"
+cp -R "$UTILDIR/../resources" "$BUILDDIR/$APPNAME.app/Contents/MacOS/resources"
  
 echo "Will process dependencies ..."
 DEPS=`otool -L "$BUILDDIR/$APPNAME.app/Contents/MacOS/$BINFILE" | grep '.dylib' | grep -v '@' | grep -v '/usr/lib' | awk '{ printf("%s\n", $1); }'`
