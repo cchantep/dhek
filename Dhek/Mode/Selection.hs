@@ -1,20 +1,21 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 --------------------------------------------------------------------------------
 -- |
--- Module : Dhek.Mode.Duplicate
+-- Module : Dhek.Mode.Selection
 --
 --------------------------------------------------------------------------------
-module Dhek.Mode.Duplicate where
+module Dhek.Mode.Selection where
 
 --------------------------------------------------------------------------------
 import Prelude hiding (mapM_)
 import Control.Applicative
-import Data.Foldable (for_, mapM_, traverse_)
-import Data.IORef
+import Data.Foldable (for_, foldMap, mapM_, traverse_)
+import Data.Maybe (isJust)
+import Data.Traversable
 
 --------------------------------------------------------------------------------
 import           Control.Lens
-import           Control.Monad.RWS.Strict hiding (mapM_)
+import           Control.Monad.RWS hiding (mapM_)
 import           Control.Monad.Trans
 import qualified Data.IntMap                  as I
 import qualified Graphics.Rendering.Cairo     as Cairo
@@ -30,8 +31,8 @@ import Dhek.Mode.Common.Draw
 import Dhek.Types
 
 --------------------------------------------------------------------------------
-newtype DuplicateMode a
-    = DuplicateMode (RWST GUI () EngineState IO a)
+newtype SelectionMode a
+    = SelectionMode (RWST GUI () EngineState IO a)
     deriving ( Functor
              , Applicative
              , Monad
@@ -41,52 +42,53 @@ newtype DuplicateMode a
              )
 
 --------------------------------------------------------------------------------
-instance ModeMonad DuplicateMode where
+instance ModeMonad SelectionMode where
     mMove opts = do
-        let oOpt = getOverRect opts
+        engineDrawState.drawOverRect .= getOverRect opts
+        sOpt <- use $ engineDrawState.drawSelection
 
-        eOpt <- use $ engineDrawState.drawEvent
-
-        engineDrawState.drawOverRect .= oOpt
-
-        -- We only handle move without caring about overlap
-        for_ eOpt $ \e -> do
-            let pos@(x,y) = drawPointer opts
-            case e of
-                Hold r ppos ->
-                    engineDrawState.drawEvent ?=
-                        Hold (updateHoldRect ppos pos r) (x,y)
-
-                _ -> return ()
+        for_ sOpt $ \s -> do
+            let pos = drawPointer opts
+            engineDrawState.drawSelection ?= updateDrawSelection pos s
 
     mPress opts = do
-        eOpt <- use $ engineDrawState.drawEvent
-        case eOpt of
-            Nothing -> for_ (getOverRect opts) $ \r -> do
-                rid <- engineDrawState.drawFreshId <+= 1
-                let r2    = r & rectId .~ rid
-                    (x,y) = drawPointer opts
+        let (x,y)        = drawPointer opts
+            newSelection = rectNew x y 0 0
 
-                engineDrawState.drawEvent ?= Hold r2 (x,y)
-                gui <- ask
-                liftIO $ gtkSetCursor (Just Gtk.Cross) gui
-            Just (Hold x _) -> do
-                rid <- engineDrawState.drawFreshId <+= 1
-                let r = normalize x & rectId .~ rid
+        engineDrawState.drawSelection ?= newSelection
+        engineDrawState.drawMultiSel  .= []
 
-                -- Add rectangle
-                pid <- use engineCurPage
-                gui <- ask
-                engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r
-                liftIO $ gtkAddRect r gui
+        gui <- ask
+        liftIO $ do
+            gtkSetCursor (Just Gtk.Crosshair) gui
+            Gtk.treeSelectionUnselectAll $ guiRectTreeSelection gui
+            Gtk.treeSelectionSetMode (guiRectTreeSelection gui)
+                Gtk.SelectionMultiple
 
-                engineDrawState.drawEvent     .= Nothing
-                engineDrawState.drawCollision .= Nothing
+    mRelease = do
+        gui  <- ask
+        sOpt <- use $ engineDrawState.drawSelection
+        engineDrawState.drawSelection .= Nothing
 
-                gui <- ask
-                liftIO $ gtkSetCursor Nothing gui
+        for_ (fmap normalize sOpt) $ \r -> do
+            pid <- use engineCurPage
+            rs  <- use $
+                   engineBoards.boardsMap.at pid.traverse.boardRects.to I.elems
 
-    mRelease = return ()
+            -- get rectangles located in selection area
+            let crs = foldMap (collectSelected r) rs
+
+            for_ crs $ \cr ->
+                liftIO $ gtkSelectRect cr gui
+
+            engineDrawState.drawMultiSel .= crs
+            liftIO $ gtkSetCursor Nothing gui
+
+      where
+        collectSelected r c
+            | rectInArea c r = [c]
+            | otherwise      = []
+
 
     mDrawing page ratio = do
         gui <- ask
@@ -124,23 +126,44 @@ instance ModeMonad DuplicateMode where
                 -- We consider every rectangle as regular one (e.g not selected)
                 traverse_ (drawRect fw fh regularColor Line) rs
 
-                -- Draw event rectangle
-                for_ eventR $ \r -> do
+                -- Draw drawing selection rectangle
+                for_ (ds ^. drawSelection) $ \r ->
+                    drawRect fw fh selectionColor Dash r
+
+                for_ (ds ^. drawMultiSel) $ \r ->
                     drawRect fw fh selectedColor Line r
-                    drawRectGuides fw fh rectGuideColor r
       where
-        overedColor    = RGB 0.16 0.72 0.92
         regularColor   = rgbBlue
         selectedColor  = rgbRed
         selectionColor = rgbGreen
-        rectGuideColor = RGB 0.16 0.72 0.92
 
 --------------------------------------------------------------------------------
-runDuplicate :: GUI -> DuplicateMode a -> EngineState -> IO EngineState
-runDuplicate gui (DuplicateMode m) s = do
+runSelection :: GUI -> SelectionMode a -> EngineState -> IO EngineState
+runSelection gui (SelectionMode m)  s = do
     (s', _) <- execRWST m gui s
     return s'
 
 --------------------------------------------------------------------------------
-duplicateMode :: GUI -> Mode
-duplicateMode gui = Mode (runDuplicate gui . runM)
+selectionMode :: GUI -> Mode
+selectionMode gui = Mode (runSelection gui . runM)
+
+--------------------------------------------------------------------------------
+-- | Utilities
+--------------------------------------------------------------------------------
+rectInArea :: Rect -- target
+           -> Rect -- area
+           -> Bool
+rectInArea t a = tx      >= ax      &&
+                 ty      >= ay      &&
+                 (tx+tw) <= (ax+aw) &&
+                 (ty+th) <= (ay+ah)
+  where
+    tx = t ^. rectX
+    ty = t ^. rectY
+    tw = t ^. rectWidth
+    th = t ^. rectHeight
+
+    ax = a ^. rectX
+    ay = a ^. rectY
+    aw = a ^. rectWidth
+    ah = a ^. rectHeight

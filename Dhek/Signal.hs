@@ -88,7 +88,8 @@ connectSignals g i = do
                                    , dpArea      = engineDrawingArea i
                                    }
 
-            cairoDraw params
+            -- cairoDraw params
+            engineRunDraw i
             hsize  <- Gtk.adjustmentGetPageSize $ guiHRulerAdjustment g
             vsize  <- Gtk.adjustmentGetPageSize $ guiVRulerAdjustment g
             hlower <- Gtk.adjustmentGetLower $ guiHRulerAdjustment g
@@ -204,14 +205,29 @@ connectSignals g i = do
             addGuide
             draw
 
-    Gtk.on (guiDrawToggle g) Gtk.toggled $ liftIO $
-        void $ runProgram i $ compile $ do
-            b <- isToggleActive DrawToggle
-            setToggleActive MultiSelToggle (not b)
+    Gtk.on (guiDrawToggle g) Gtk.buttonActivated $ liftIO $ do
+        active <- Gtk.toggleButtonGetActive (guiDrawToggle g)
+        when active $ do
+            Gtk.treeSelectionSetMode (guiRectTreeSelection g)
+                Gtk.SelectionSingle
+            Gtk.toggleButtonSetActive (guiDupToggle g) False
+            Gtk.toggleButtonSetActive (guiMultiSelToggle g) False
+            void $ runProgram i $ compile $ setMode DhekNormal
 
-    Gtk.on (guiMultiSelToggle g) Gtk.toggled $ liftIO $
-        void $ runProgram i $ compile $ do
-            b <- isToggleActive MultiSelToggle
-            setToggleActive DrawToggle (not b)
+    Gtk.on (guiDupToggle g) Gtk.toggled $ liftIO $ do
+        active <- Gtk.toggleButtonGetActive (guiDupToggle g)
+        when active $ do
+            Gtk.treeSelectionSetMode (guiRectTreeSelection g)
+                Gtk.SelectionSingle
+            Gtk.toggleButtonSetActive (guiDrawToggle g) False
+            Gtk.toggleButtonSetActive (guiMultiSelToggle g) False
+            void $ runProgram i $ compile $ setMode DhekDuplication
+
+    Gtk.on (guiMultiSelToggle g) Gtk.toggled $ liftIO $ do
+        active <- Gtk.toggleButtonGetActive (guiMultiSelToggle g)
+        when active $ do
+            Gtk.toggleButtonSetActive (guiDupToggle g) False
+            Gtk.toggleButtonSetActive (guiDrawToggle g) False
+            void $ runProgram i $ compile $ setMode DhekSelection
 
     return ()

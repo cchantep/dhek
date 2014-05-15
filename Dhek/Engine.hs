@@ -15,6 +15,7 @@ module Dhek.Engine
     , engineDrawingArea
     , engineCurrentPage
     , engineCurrentState
+    , engineRunDraw
     , engineSetMode
       -- Draw lenses
     , drawCollision
@@ -31,6 +32,7 @@ module Dhek.Engine
     , move
     , press
     , release
+    , drawing
       --
     , engineRatio
     , getRects

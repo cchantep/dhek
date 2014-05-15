@@ -22,8 +22,10 @@ executable dhek
                  Dhek.Geometry
                  Dhek.GUI
                  Dhek.I18N
-                 Dhek.Mode.Normal
+                 Dhek.Mode.Common.Draw
                  Dhek.Mode.Duplicate
+                 Dhek.Mode.Normal
+                 Dhek.Mode.Selection
                  Dhek.Property
                  Dhek.Selection
                  Dhek.Signal

@@ -40,6 +40,7 @@ data GUI =
     , guiRemoveButton :: Gtk.Button
     , guiApplyButton :: Gtk.Button
     , guiDrawToggle :: Gtk.ToggleButton
+    , guiDupToggle :: Gtk.ToggleButton
     , guiMultiSelToggle :: Gtk.ToggleButton
     , guiVRuler :: Gtk.VRuler
     , guiHRuler :: Gtk.HRuler
@@ -147,6 +148,11 @@ makeGUI = do
     Gtk.buttonSetImage drwb dimg
     Gtk.toggleButtonSetActive drwb True
 
+    -- Button Duplicate
+    db   <- Gtk.toggleButtonNew
+    dimg <- Gtk.imageNewFromFile $ joinPath [resDir, "duplicate.png"]
+    Gtk.buttonSetImage db dimg
+
     -- Button MultiSelection
     msb  <- Gtk.toggleButtonNew
     simg <- Gtk.imageNewFromFile $ joinPath [resDir, "multisel.png"]
@@ -165,6 +171,7 @@ makeGUI = do
     Gtk.containerAdd toolbar plus
     Gtk.containerAdd toolbar vsep2
     Gtk.containerAdd toolbar drwb
+    Gtk.containerAdd toolbar db
     Gtk.containerAdd toolbar msb
     Gtk.boxPackStart vbox align Gtk.PackNatural 0
 
@@ -210,6 +217,7 @@ makeGUI = do
     trend  <- Gtk.cellRendererTextNew
 
     let mapping r = [Gtk.cellText Gtk.:= r ^. rectName]
+
     Gtk.treeViewColumnSetTitle col $ msgStr $ MsgAreas
     Gtk.cellLayoutPackStart col trend False
     Gtk.cellLayoutSetAttributes col trend store mapping
@@ -296,6 +304,7 @@ makeGUI = do
                 , guiRemoveButton = rem
                 , guiApplyButton = app
                 , guiDrawToggle = drwb
+                , guiDupToggle = db
                 , guiMultiSelToggle = msb
                 , guiVRuler = vruler
                 , guiHRuler = hruler

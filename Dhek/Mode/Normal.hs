@@ -7,21 +7,28 @@
 module Dhek.Mode.Normal where
 
 --------------------------------------------------------------------------------
+import Prelude hiding (mapM_)
+
+--------------------------------------------------------------------------------
 import Control.Applicative
-import Data.Foldable (for_)
+import Data.Foldable (for_, mapM_)
 import Data.Traversable
 
 --------------------------------------------------------------------------------
 import           Control.Lens
-import           Control.Monad.RWS
+import           Control.Monad.RWS hiding (mapM_)
 import           Control.Monad.Trans
-import qualified Graphics.UI.Gtk as Gtk
+import qualified Data.IntMap                  as I
+import qualified Graphics.Rendering.Cairo     as Cairo
+import qualified Graphics.UI.Gtk              as Gtk
+import qualified Graphics.UI.Gtk.Poppler.Page as Poppler
 
 --------------------------------------------------------------------------------
 import Dhek.Engine.Type
 import Dhek.Geometry
 import Dhek.GUI
 import Dhek.GUI.Action
+import Dhek.Mode.Common.Draw
 import Dhek.Types
 
 --------------------------------------------------------------------------------
@@ -186,6 +193,67 @@ instance ModeMonad NormalMode where
                 normalSelectRectangle r2
 
             engineDrawState.drawSelection .= Nothing
+
+    mDrawing page ratio = do
+        gui <- ask
+        ds  <- use $ engineDrawState
+        gds <- use $ engineBoards.boardsGuides
+        gd  <- use $ engineBoards.boardsCurGuide
+        pid <- use $ engineCurPage
+        rs  <- use $ engineBoards.boardsMap.at pid.traverse.boardRects.to I.elems
+
+        liftIO $ do
+            frame     <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
+            (fw',fh') <- Gtk.drawableGetSize frame
+
+            let width  = ratio * (pageWidth page)
+                height = ratio * (pageHeight page)
+                fw     = fromIntegral fw'
+                fh     = fromIntegral fh'
+                eventR = (ds ^. drawEvent) >>= eventGetRect
+                area   = guiDrawingArea gui
+
+            Gtk.widgetSetSizeRequest area (truncate width) (truncate height)
+            Gtk.renderWithDrawable frame $ do
+                -- Paint page background in white
+                Cairo.setSourceRGB 1.0 1.0 1.0
+                Cairo.rectangle 0 0 fw fh
+                Cairo.fill
+
+                Cairo.scale ratio ratio
+                Poppler.pageRender (pagePtr page)
+                mapM_ (drawGuide fw fh) gds
+                mapM_ (drawGuide fw fh) gd
+                Cairo.closePath
+                Cairo.stroke
+
+                -- Draw the entire board
+                for_ rs $ \r ->
+                    case () of
+                        _ | Just r == ds ^. drawSelected -> do
+                              drawRect fw fh selectedColor Line r
+
+                          | Just r == ds ^. drawOverRect ->
+                              drawRect fw fh overedColor Line r
+
+                          | otherwise ->
+                              drawRect fw fh regularColor Line r
+
+                -- Draw drawing selection rectangle
+                for_ (ds ^. drawSelection) $ \r -> do
+                    drawRect fw fh selectionColor Line r
+                    drawRectGuides fw fh rectGuideColor r
+
+                -- Draw event rectangle
+                for_ eventR $ \r -> do
+                    drawRect fw fh selectedColor Line r
+                    drawRectGuides fw fh rectGuideColor r
+      where
+        overedColor    = RGB 0.16 0.72 0.92
+        regularColor   = rgbBlue
+        selectedColor  = rgbRed
+        selectionColor = rgbGreen
+        rectGuideColor = RGB 0.16 0.72 0.92
 
 --------------------------------------------------------------------------------
 runNormal :: GUI -> NormalMode a -> EngineState -> IO EngineState

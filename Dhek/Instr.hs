@@ -21,8 +21,9 @@ data DhekCombo = PropCombo
 
 data DhekOption = Overlap
 
-data DhekToggle = DrawToggle
-                | MultiSelToggle
+data DhekMode = DhekNormal
+              | DhekDuplication
+              | DhekSelection
 
 data DhekInstr a = GetSelected (Maybe Rect -> a)
                  | SetSelected !(Maybe Rect) a
@@ -55,8 +56,7 @@ data DhekInstr a = GetSelected (Maybe Rect -> a)
                  | Active DhekOption Bool a
                  | IsActive DhekOption (Bool -> a)
                  | SetValuePropVisible Bool a
-                 | IsToggleActive DhekToggle (Bool -> a)
-                 | SetToggleActive DhekToggle Bool a
+                 | SetMode DhekMode a
 
 instance Functor DhekInstr where
     fmap f (GetSelected k)      = GetSelected (f . k)
@@ -90,8 +90,7 @@ instance Functor DhekInstr where
     fmap f (Active o b a)       = Active o b (f a)
     fmap f (IsActive o k)       = IsActive o (f . k)
     fmap f (SetValuePropVisible b a) = SetValuePropVisible b (f a)
-    fmap f (IsToggleActive t k) = IsToggleActive t  (f . k)
-    fmap f (SetToggleActive t b a) = SetToggleActive t b (f a)
+    fmap f (SetMode m a)        = SetMode m (f a)
 
 getSelected :: F DhekInstr (Maybe Rect)
 getSelected = wrap $ GetSelected return
@@ -186,8 +185,5 @@ isActive o = wrap $ IsActive o return
 setValuePropVisible :: Bool -> F DhekInstr ()
 setValuePropVisible b = wrap $ SetValuePropVisible b (return ())
 
-isToggleActive :: DhekToggle -> F DhekInstr Bool
-isToggleActive t = wrap $ IsToggleActive t return
-
-setToggleActive :: DhekToggle -> Bool -> F DhekInstr ()
-setToggleActive t b = wrap $ SetToggleActive t b (return ())
+setMode :: DhekMode -> F DhekInstr ()
+setMode m = wrap $ SetMode m (return ())
