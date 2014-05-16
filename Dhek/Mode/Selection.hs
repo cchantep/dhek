@@ -4,7 +4,7 @@
 -- Module : Dhek.Mode.Selection
 --
 --------------------------------------------------------------------------------
-module Dhek.Mode.Selection where
+module Dhek.Mode.Selection (selectionModeManager) where
 
 --------------------------------------------------------------------------------
 import Prelude hiding (mapM_)
@@ -62,8 +62,6 @@ instance ModeMonad SelectionMode where
         liftIO $ do
             gtkSetCursor (Just Gtk.Crosshair) gui
             Gtk.treeSelectionUnselectAll $ guiRectTreeSelection gui
-            Gtk.treeSelectionSetMode (guiRectTreeSelection gui)
-                Gtk.SelectionMultiple
 
     mRelease = do
         gui  <- ask
@@ -146,6 +144,14 @@ runSelection gui (SelectionMode m)  s = do
 --------------------------------------------------------------------------------
 selectionMode :: GUI -> Mode
 selectionMode gui = Mode (runSelection gui . runM)
+
+--------------------------------------------------------------------------------
+selectionModeManager :: GUI -> IO ModeManager
+selectionModeManager gui = do
+    Gtk.treeSelectionSetMode (guiRectTreeSelection gui) Gtk.SelectionMultiple
+    return $ ModeManager (selectionMode gui) $ liftIO $
+        Gtk.treeSelectionSetMode (guiRectTreeSelection gui)
+        Gtk.SelectionSingle
 
 --------------------------------------------------------------------------------
 -- | Utilities
