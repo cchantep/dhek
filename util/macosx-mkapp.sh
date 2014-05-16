@@ -11,10 +11,12 @@ BINFILE=`basename "$BINPATH"`
 UTILDIR=`dirname $0`
 
 mkdir -p "$BUILDDIR/$APPNAME.app/Contents/MacOS" 
-mkdir -p "$BUILDDIR/$APPNAME.app/Contents/Resources/lib"
+mkdir -p "$BUILDDIR/$APPNAME.app/Contents/Resources/lib/gtk-2.0/2.10.0"
 echo 'APPLdhek' > "$BUILDDIR/$APPNAME.app/Contents/PkgInfo"
 sed -e "s/@VER@/$VER/g" < "$UTILDIR/macosx-app/Info.plist" > "$BUILDDIR/$APPNAME.app/Contents/Info.plist"
 cp "$UTILDIR/macosx-app/dhek.icns" "$BUILDDIR/$APPNAME.app/Contents/Resources"
+cp -R "$UTILDIR/macosx-app/gtk2/engines" "$BUILDDIR/$APPNAME.app/Contents/Resources/lib/gtk-2.0/2.10.0/engines"
+cp -R "$UTILDIR/macosx-app/gtk2/themes" "$BUILDDIR/$APPNAME.app/Contents/Resources/themes"
  
 cp "$BINPATH" "$BUILDDIR/$APPNAME.app/Contents/MacOS/"
 cp -R "$UTILDIR/../resources" "$BUILDDIR/$APPNAME.app/Contents/MacOS/resources"
