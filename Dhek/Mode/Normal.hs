@@ -4,7 +4,7 @@
 -- Module : Dhek.Mode.Normal
 --
 --------------------------------------------------------------------------------
-module Dhek.Mode.Normal where
+module Dhek.Mode.Normal (normalModeManager) where
 
 --------------------------------------------------------------------------------
 import Prelude hiding (mapM_)
@@ -264,6 +264,10 @@ runNormal gui (NormalMode m)  s = do
 --------------------------------------------------------------------------------
 normalMode :: GUI -> Mode
 normalMode gui = Mode (runNormal gui . runM)
+
+--------------------------------------------------------------------------------
+normalModeManager :: GUI -> IO ModeManager
+normalModeManager gui = return $ ModeManager (normalMode gui) (return ())
 
 --------------------------------------------------------------------------------
 normalSelectRectangle :: Rect -> NormalMode ()

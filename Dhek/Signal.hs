@@ -208,26 +208,22 @@ connectSignals g i = do
     Gtk.on (guiDrawToggle g) Gtk.buttonActivated $ liftIO $ do
         active <- Gtk.toggleButtonGetActive (guiDrawToggle g)
         when active $ do
-            Gtk.treeSelectionSetMode (guiRectTreeSelection g)
-                Gtk.SelectionSingle
             Gtk.toggleButtonSetActive (guiDupToggle g) False
             Gtk.toggleButtonSetActive (guiMultiSelToggle g) False
-            void $ runProgram i $ compile $ setMode DhekNormal
+            engineSetMode DhekNormal i
 
     Gtk.on (guiDupToggle g) Gtk.toggled $ liftIO $ do
         active <- Gtk.toggleButtonGetActive (guiDupToggle g)
         when active $ do
-            Gtk.treeSelectionSetMode (guiRectTreeSelection g)
-                Gtk.SelectionSingle
             Gtk.toggleButtonSetActive (guiDrawToggle g) False
             Gtk.toggleButtonSetActive (guiMultiSelToggle g) False
-            void $ runProgram i $ compile $ setMode DhekDuplication
+            engineSetMode DhekDuplication i
 
     Gtk.on (guiMultiSelToggle g) Gtk.toggled $ liftIO $ do
         active <- Gtk.toggleButtonGetActive (guiMultiSelToggle g)
         when active $ do
             Gtk.toggleButtonSetActive (guiDupToggle g) False
             Gtk.toggleButtonSetActive (guiDrawToggle g) False
-            void $ runProgram i $ compile $ setMode DhekSelection
+            engineSetMode DhekSelection i
 
     return ()
