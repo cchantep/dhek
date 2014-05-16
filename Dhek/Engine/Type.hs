@@ -1,4 +1,6 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ConstraintKinds  #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes       #-}
 --------------------------------------------------------------------------------
 -- |
 -- Module : Dhek.Engine.Type
@@ -13,6 +15,7 @@ import Data.Array (Array)
 
 --------------------------------------------------------------------------------
 import Control.Lens
+import Control.Monad.State
 import Graphics.UI.Gtk (CursorType)
 
 --------------------------------------------------------------------------------
@@ -42,6 +45,20 @@ newtype M a = M (forall m. ModeMonad m => m a)
 newtype Mode = Mode (forall a. M a -> EngineState -> IO EngineState)
 
 --------------------------------------------------------------------------------
+-- | We expect from a cleanup handler to handle @EngineState@ state and
+--   IO actions
+type ModeCtx m = (MonadIO m, MonadState EngineState m)
+
+--------------------------------------------------------------------------------
+-- | Holds a Engine mode and a cleanup handler. @ModeManager@ manages anything
+--   related to a @Mode@ lifecycle
+data ModeManager
+    = ModeManager
+      { mgrMode    :: Mode
+      , mgrCleanup :: forall m. ModeCtx m => m ()
+      }
+
+--------------------------------------------------------------------------------
 data DrawEnv
     = DrawEnv
       { drawOverlap :: Bool             -- ^ Rectangle overlap
@@ -54,7 +71,7 @@ data DrawEnv
 data Collision
     = Collision
       { colDelta     :: !Double
-      , colRange     :: !(Double, Double)
+      , colRange     :: !(Double, Doub le)
       , colPrevPos   :: !(Double, Double)
       , colDirection :: !Direction
       }
@@ -84,7 +101,7 @@ data EngineState = EngineState
     , _enginePrevPos   :: !(Double, Double)
     , _engineBoards    :: !Boards
     , _engineDrawState :: !DrawState
-    , _engineMode      :: !Mode
+    , _engineModeMgr   :: !ModeManager
     , _engineBaseWidth :: !Int
     , _engineThick     :: !Double
     }
@@ -95,7 +112,7 @@ data EngineEnv = EngineEnv
     , _engineRects     :: ![Rect]
     , _engineOverRect  :: !(Maybe Rect)
     , _engineOverArea  :: !(Maybe Area)
-    , _engineModes     :: !(Array Int Mode)
+    , _engineModes     :: !(Array Int (IO ModeManager))
     }
 
 --------------------------------------------------------------------------------

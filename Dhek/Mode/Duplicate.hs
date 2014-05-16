@@ -4,7 +4,7 @@
 -- Module : Dhek.Mode.Duplicate
 --
 --------------------------------------------------------------------------------
-module Dhek.Mode.Duplicate where
+module Dhek.Mode.Duplicate (duplicateModeManager) where
 
 --------------------------------------------------------------------------------
 import Prelude hiding (mapM_)
@@ -144,3 +144,8 @@ runDuplicate gui (DuplicateMode m) s = do
 --------------------------------------------------------------------------------
 duplicateMode :: GUI -> Mode
 duplicateMode gui = Mode (runDuplicate gui . runM)
+
+--------------------------------------------------------------------------------
+duplicateModeManager :: GUI -> IO ModeManager
+duplicateModeManager gui
+    = return $ ModeManager (duplicateMode gui) (return ())
