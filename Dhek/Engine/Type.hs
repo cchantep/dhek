@@ -11,12 +11,12 @@ module Dhek.Engine.Type where
 
 --------------------------------------------------------------------------------
 import Control.Applicative
-import Data.Array (Array)
 
 --------------------------------------------------------------------------------
-import Control.Lens
-import Control.Monad.State
-import Graphics.UI.Gtk (CursorType)
+import           Control.Lens
+import           Control.Monad.State
+import qualified Data.IntMap as I
+import           Graphics.UI.Gtk (CursorType)
 
 --------------------------------------------------------------------------------
 import Dhek.Types
@@ -47,7 +47,7 @@ newtype Mode = Mode (forall a. M a -> EngineState -> IO EngineState)
 --------------------------------------------------------------------------------
 -- | We expect from a cleanup handler to handle @EngineState@ state and
 --   IO actions
-type ModeCtx m = (MonadIO m, MonadState EngineState m)
+type EngineCtx m = (MonadIO m, MonadState EngineState m)
 
 --------------------------------------------------------------------------------
 -- | Holds a Engine mode and a cleanup handler. @ModeManager@ manages anything
@@ -55,7 +55,7 @@ type ModeCtx m = (MonadIO m, MonadState EngineState m)
 data ModeManager
     = ModeManager
       { mgrMode    :: Mode
-      , mgrCleanup :: forall m. ModeCtx m => m ()
+      , mgrCleanup :: forall m. EngineCtx m => m ()
       }
 
 --------------------------------------------------------------------------------
@@ -101,19 +101,14 @@ data EngineState = EngineState
     , _enginePrevPos   :: !(Double, Double)
     , _engineBoards    :: !Boards
     , _engineDrawState :: !DrawState
-    , _engineModeMgr   :: !ModeManager
     , _engineBaseWidth :: !Int
     , _engineThick     :: !Double
     }
 
 --------------------------------------------------------------------------------
-data EngineEnv = EngineEnv
-    { _engineFilename  :: !String
-    , _engineRects     :: ![Rect]
-    , _engineOverRect  :: !(Maybe Rect)
-    , _engineOverArea  :: !(Maybe Area)
-    , _engineModes     :: !(Array Int (IO ModeManager))
-    }
+data EngineEnv
+    = EngineEnv
+      { _engineFilename :: !String }
 
 --------------------------------------------------------------------------------
 -- | Constructors
@@ -185,3 +180,19 @@ release = M mRelease
 
 drawing :: PageItem -> Ratio -> M ()
 drawing p r = M $ mDrawing p r
+
+--------------------------------------------------------------------------------
+-- | Helpers
+--------------------------------------------------------------------------------
+engineStateGetRects :: MonadState EngineState m => m [Rect]
+engineStateGetRects = do
+    pid <- use engineCurPage
+    use $ engineBoards.boardsMap.at pid.traverse.boardRects.to I.elems
+
+--------------------------------------------------------------------------------
+engineStateSetRects :: MonadState EngineState m => [Rect] -> m ()
+engineStateSetRects rs = do
+    pid <- use engineCurPage
+    forM_ rs $ \r -> do
+        let rid = r ^. rectId
+        engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r

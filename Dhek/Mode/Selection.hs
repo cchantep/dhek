@@ -1,4 +1,7 @@
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RankNTypes                 #-}
 --------------------------------------------------------------------------------
 -- |
 -- Module : Dhek.Mode.Selection
@@ -17,10 +20,11 @@ import Data.Traversable
 import           Control.Lens
 import           Control.Monad.RWS hiding (mapM_)
 import           Control.Monad.Trans
-import qualified Data.IntMap                  as I
 import qualified Graphics.Rendering.Cairo     as Cairo
 import qualified Graphics.UI.Gtk              as Gtk
 import qualified Graphics.UI.Gtk.Poppler.Page as Poppler
+import           System.FilePath (joinPath, dropFileName)
+import           System.Environment.Executable (getExecutablePath)
 
 --------------------------------------------------------------------------------
 import Dhek.Engine.Type
@@ -31,12 +35,19 @@ import Dhek.Mode.Common.Draw
 import Dhek.Types
 
 --------------------------------------------------------------------------------
+data Input
+    = Input
+      { inputGUI :: GUI
+      , inputTop :: Gtk.Button
+      }
+
+--------------------------------------------------------------------------------
 newtype SelectionMode a
-    = SelectionMode (RWST GUI () EngineState IO a)
+    = SelectionMode (RWST Input () EngineState IO a)
     deriving ( Functor
              , Applicative
              , Monad
-             , MonadReader GUI
+             , MonadReader Input
              , MonadState EngineState
              , MonadIO
              )
@@ -58,29 +69,31 @@ instance ModeMonad SelectionMode where
         engineDrawState.drawSelection ?= newSelection
         engineDrawState.drawMultiSel  .= []
 
-        gui <- ask
+        gui <- asks inputGUI
         liftIO $ do
             gtkSetCursor (Just Gtk.Crosshair) gui
             Gtk.treeSelectionUnselectAll $ guiRectTreeSelection gui
 
     mRelease = do
-        gui  <- ask
-        sOpt <- use $ engineDrawState.drawSelection
+        input <- ask
+        sOpt  <- use $ engineDrawState.drawSelection
         engineDrawState.drawSelection .= Nothing
 
         for_ (fmap normalize sOpt) $ \r -> do
-            pid <- use engineCurPage
-            rs  <- use $
-                   engineBoards.boardsMap.at pid.traverse.boardRects.to I.elems
+            rs <- engineStateGetRects
 
             -- get rectangles located in selection area
             let crs = foldMap (collectSelected r) rs
 
+            -- if no area is selected, we disable 'top' button
+            liftIO $ Gtk.widgetSetSensitive (inputTop input)
+                (not $ null crs)
+
             for_ crs $ \cr ->
-                liftIO $ gtkSelectRect cr gui
+                liftIO $ gtkSelectRect cr $ inputGUI input
 
             engineDrawState.drawMultiSel .= crs
-            liftIO $ gtkSetCursor Nothing gui
+            liftIO $ gtkSetCursor Nothing $ inputGUI input
 
       where
         collectSelected r c
@@ -89,12 +102,11 @@ instance ModeMonad SelectionMode where
 
 
     mDrawing page ratio = do
-        gui <- ask
+        gui <- asks inputGUI
         ds  <- use $ engineDrawState
         gds <- use $ engineBoards.boardsGuides
         gd  <- use $ engineBoards.boardsCurGuide
-        pid <- use $ engineCurPage
-        rs  <- use $ engineBoards.boardsMap.at pid.traverse.boardRects.to I.elems
+        rs  <- engineStateGetRects
 
         liftIO $ do
             frame     <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
@@ -136,22 +148,74 @@ instance ModeMonad SelectionMode where
         selectionColor = rgbGreen
 
 --------------------------------------------------------------------------------
-runSelection :: GUI -> SelectionMode a -> EngineState -> IO EngineState
-runSelection gui (SelectionMode m)  s = do
-    (s', _) <- execRWST m gui s
+-- | Called when 'Top' button, located in mode's toolbar, is clicked
+topButtonActivated :: GUI -> EngineCtx m => m ()
+topButtonActivated gui = do
+    rs <- use $ engineDrawState.drawMultiSel
+    case rs of
+        []   -> return ()
+        x:xs -> do
+            let toppest  = foldr cmp x xs
+                topY     = toppest ^. rectY
+                toppedRs = fmap (updY topY) rs
+
+            -- TODO: better mulitiselection management
+            engineStateSetRects toppedRs
+            engineDrawState.drawMultiSel .= toppedRs
+            liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
+  where
+    cmp r1 r2
+        | r1 ^. rectY < r2 ^. rectY = r1
+        | otherwise                 = r2
+
+    updY y r = r & rectY .~ y
+
+--------------------------------------------------------------------------------
+runSelection :: GUI
+             -> Gtk.Button
+             -> SelectionMode a
+             -> EngineState
+             -> IO EngineState
+runSelection gui btop (SelectionMode m)  s = do
+    (s', _) <- execRWST m input s
     return s'
+  where
+    input
+        = Input
+          { inputGUI = gui
+          , inputTop = btop
+          }
 
 --------------------------------------------------------------------------------
-selectionMode :: GUI -> Mode
-selectionMode gui = Mode (runSelection gui . runM)
+selectionMode :: GUI -> Gtk.Button -> Mode
+selectionMode gui btop = Mode (runSelection gui btop . runM)
 
 --------------------------------------------------------------------------------
-selectionModeManager :: GUI -> IO ModeManager
-selectionModeManager gui = do
+selectionModeManager :: ((forall m. EngineCtx m => m ()) -> IO ())
+                     -> GUI
+                     -> IO ModeManager
+selectionModeManager handler gui = do
     Gtk.treeSelectionSetMode (guiRectTreeSelection gui) Gtk.SelectionMultiple
-    return $ ModeManager (selectionMode gui) $ liftIO $
+    btop     <- Gtk.buttonNew
+    execPath <- getExecutablePath
+    let resDir = joinPath [dropFileName execPath, "resources"]
+    bimg <- Gtk.imageNewFromFile $ joinPath [resDir, "top.png"]
+    Gtk.buttonSetImage btop bimg
+    Gtk.containerAdd toolbar btop
+    Gtk.widgetSetSensitive btop False
+
+    -- listen to button event
+    cid <- Gtk.on btop Gtk.buttonActivated $ handler $ topButtonActivated gui
+
+    Gtk.widgetShowAll btop
+
+    return $ ModeManager (selectionMode gui btop) $ liftIO $ do
+        Gtk.signalDisconnect cid
+        Gtk.widgetDestroy btop
         Gtk.treeSelectionSetMode (guiRectTreeSelection gui)
-        Gtk.SelectionSingle
+            Gtk.SelectionSingle
+  where
+    toolbar = guiModeToolbar gui
 
 --------------------------------------------------------------------------------
 -- | Utilities
