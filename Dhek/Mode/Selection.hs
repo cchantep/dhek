@@ -31,6 +31,7 @@ import Dhek.Engine.Type
 import Dhek.Geometry
 import Dhek.GUI
 import Dhek.GUI.Action
+import Dhek.Instr
 import Dhek.Mode.Common.Draw
 import Dhek.Types
 
@@ -162,6 +163,7 @@ topButtonActivated gui = do
             -- TODO: better mulitiselection management
             engineStateSetRects toppedRs
             engineDrawState.drawMultiSel .= toppedRs
+            engineEventStack %= (UpdateRectBounds:)
             liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
   where
     cmp r1 r2

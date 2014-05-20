@@ -41,4 +41,5 @@ onRem = compile $ do
     go r = do
         removeRect r
         unselectRect
+        addEvent DeleteRect
         draw
