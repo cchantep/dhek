@@ -16,8 +16,6 @@ import qualified Graphics.UI.Gtk as Gtk
 import           System.FilePath (joinPath, dropFileName)
 import           System.Environment.Executable (getExecutablePath)
 
-import Debug.Trace (trace)
-
 --------------------------------------------------------------------------------
 import Dhek.I18N
 import Dhek.Types
@@ -56,6 +54,7 @@ data GUI =
     , guiWindowHBox :: Gtk.HBox
     , guiVRulerAdjustment :: Gtk.Adjustment
     , guiHRulerAdjustment :: Gtk.Adjustment
+    , guiModeToolbar :: Gtk.HButtonBox
     }
 
 --------------------------------------------------------------------------------
@@ -174,6 +173,13 @@ makeGUI = do
     Gtk.containerAdd toolbar db
     Gtk.containerAdd toolbar msb
     Gtk.boxPackStart vbox align Gtk.PackNatural 0
+
+    -- Mode toolbar
+    mtoolbar <- Gtk.hButtonBoxNew
+    mtalign  <- Gtk.alignmentNew 0 1 0 0
+    Gtk.containerAdd mtalign mtoolbar
+    Gtk.boxPackStart vbox mtalign Gtk.PackNatural 0
+    Gtk.widgetSetSizeRequest mtoolbar (-1) 32
 
     -- Drawing Area
     area     <- Gtk.drawingAreaNew
@@ -320,6 +326,7 @@ makeGUI = do
                 , guiWindowHBox = hbox
                 , guiVRulerAdjustment = vadj
                 , guiHRulerAdjustment = hadj
+                , guiModeToolbar = mtoolbar
                 }
 
 --------------------------------------------------------------------------------

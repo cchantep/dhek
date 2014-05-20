@@ -1,4 +1,6 @@
+{-# LANGUAGE ConstraintKinds  #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes       #-}
 --------------------------------------------------------------------------------
 -- |
 -- Module : Dhek.Engine.Interpreter
@@ -40,33 +42,43 @@ import Dhek.Mode.Selection
 import Dhek.Types
 
 --------------------------------------------------------------------------------
-data Interpreter =
-    Interpreter
-    { _internal :: IORef (Maybe Viewer)
-    , _state    :: IORef EngineState
-    , _env      :: IORef EngineEnv
-    , _gui      :: GUI
-    }
+data Interpreter
+    = Interpreter
+      { _internal   :: IORef (Maybe Viewer)
+      , _state      :: IORef EngineState
+      , _env        :: IORef EngineEnv
+      , _gui        :: GUI
+      , _modes      :: Modes
+      , _curModeMgr :: IORef ModeManager
+      }
+
+--------------------------------------------------------------------------------
+data Modes
+    = Modes
+      { modeDraw        :: IO ModeManager
+      , modeDuplication :: IO ModeManager
+      , modeSelection   :: IO ModeManager
+      }
 
 --------------------------------------------------------------------------------
 drawInterpret :: (DrawEnv -> M a) -> Interpreter -> Pos -> IO ()
 drawInterpret k i (x,y) = do
     s   <- readIORef $ _state i
     opt <- readIORef $ _internal i
-    e   <- readIORef $ _env i
+    mgr <- readIORef $ _curModeMgr i
 
     for_ opt $ \v -> do
-        let gui                 = _gui i
-            ratio               = _engineRatio s v
-            pid                 = s ^. engineCurPage
-            ModeManager mode _  = s ^. engineModeMgr
-            opts  = DrawEnv{ drawOverlap = s ^. engineOverlap
-                           , drawPointer = (x/ratio, y/ratio)
-                           , drawRects   = getRects s
-                           , drawRatio   = ratio
-                           }
+        let gui   = _gui i
+            ratio = _engineRatio s v
+            pid   = s ^. engineCurPage
+            opts  = DrawEnv
+                    { drawOverlap = s ^. engineOverlap
+                    , drawPointer = (x/ratio, y/ratio)
+                    , drawRects   = getRects s
+                    , drawRatio   = ratio
+                    }
 
-        s2 <- runMode mode s (k opts)
+        s2 <- runMode (mgrMode mgr) s (k opts)
         writeIORef (_state i) s2
         liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
 
@@ -75,13 +87,12 @@ engineRunDraw :: Interpreter -> IO ()
 engineRunDraw i = do
     s   <- readIORef $ _state i
     opt <- readIORef $ _internal i
-
+    mgr <- readIORef $ _curModeMgr i
     for_ opt $ \v -> do
         let pages = v ^. viewerPages
             page  = pages ! (s ^. engineCurPage)
-            ModeManager mode _ = s ^. engineModeMgr
             ratio = _engineRatio s v
-        s2 <- runMode mode s (drawing page ratio)
+        s2 <- runMode (mgrMode mgr) s (drawing page ratio)
         writeIORef (_state i) s2
 
 --------------------------------------------------------------------------------
@@ -130,20 +141,23 @@ engineDrawingArea = guiDrawingArea . _gui
 --   the new @ModeManager@
 engineSetMode :: DhekMode -> Interpreter -> IO ()
 engineSetMode m i = do
-    s <- readIORef $ _state i
-    e <- readIORef $ _env i
-    let ModeManager _ cleanup = s ^. engineModeMgr
+    s       <- readIORef $ _state i
+    e       <- readIORef $ _env i
+    prevMgr <- readIORef $ _curModeMgr i
+    let cleanup = mgrCleanup prevMgr
     s2  <- execStateT cleanup s
-    mgr <- (_engineModes e) ! midx
-    writeIORef (_state i) (s2 & engineModeMgr .~ mgr)
+    mgr <- selector modes
+    writeIORef (_state i) s2
+    writeIORef (_curModeMgr i) mgr
     Gtk.widgetQueueDraw area
 
   where
-    area = guiDrawingArea $ _gui i
-    midx = case m of
-        DhekNormal      -> 1
-        DhekDuplication -> 2
-        DhekSelection   -> 3
+    modes    = _modes i
+    area     = guiDrawingArea $ _gui i
+    selector = case m of
+        DhekNormal      -> modeDraw
+        DhekDuplication -> modeDuplication
+        DhekSelection   -> modeSelection
 
 --------------------------------------------------------------------------------
 -- | Returns the current page ratio. Returns Nothing if no PDF has been loaded
@@ -167,52 +181,48 @@ _engineRatio s v =
 --------------------------------------------------------------------------------
 makeInterpreter :: GUI -> IO Interpreter
 makeInterpreter gui = do
-    let env = envNew gui
+    let env = EngineEnv { _engineFilename = "" }
     eRef <- newIORef env
-    s    <- stateNew gui env
-    sRef <- newIORef s
+    sRef <- newIORef stateNew
     vRef <- newIORef Nothing
-    return Interpreter{ _internal = vRef
-                      , _state    = sRef
-                      , _env      = eRef
-                      , _gui      = gui
+
+    -- Instanciates ModeManagers
+    let mgrNormal      = normalModeManager gui
+        mgrDuplication = duplicateModeManager gui
+        mgrSelection   = selectionModeManager (withContext sRef) gui
+        modes = Modes
+                { modeDraw        = mgrNormal
+                , modeDuplication = mgrDuplication
+                , modeSelection   = mgrSelection
+                }
+
+    curMgr <- mgrNormal
+    cRef   <- newIORef curMgr
+    return Interpreter{ _internal   = vRef
+                      , _state      = sRef
+                      , _env        = eRef
+                      , _gui        = gui
+                      , _modes      = modes
+                      , _curModeMgr = cRef
                       }
 
 --------------------------------------------------------------------------------
-envNew :: GUI -> EngineEnv
-envNew gui =
-    EngineEnv{ _engineFilename = ""
-             , _engineRects = []
-             , _engineOverRect = Nothing
-             , _engineOverArea = Nothing
-             , _engineModes    = modes
-             }
-  where
-    modes = array (1,3) [ (1, normalModeManager gui)
-                        , (2, duplicateModeManager gui)
-                        , (3, selectionModeManager gui)
-                        ]
-
---------------------------------------------------------------------------------
-stateNew :: GUI -> EngineEnv -> IO EngineState
-stateNew gui env = do
-    mgr <- modes ! 1
-    return EngineState{ _engineCurPage   = 1
-                      , _engineCurZoom   = 3
-                      , _engineRectId    = 0
-                      , _engineOverlap   = False
-                      , _engineDraw      = False
-                      , _enginePropLabel =  ""
-                      , _enginePropType  = Nothing
-                      , _enginePrevPos   = (negate 1, negate 1)
-                      , _engineDrawState = drawStateNew
-                      , _engineBoards    = boardsNew 1
-                      , _engineModeMgr   = mgr
-                      , _engineBaseWidth = 777
-                      , _engineThick     = 1
-                      }
-  where
-    modes = _engineModes env
+stateNew :: EngineState
+stateNew
+    = EngineState
+      { _engineCurPage   = 1
+      , _engineCurZoom   = 3
+      , _engineRectId    = 0
+      , _engineOverlap   = False
+      , _engineDraw      = False
+      , _enginePropLabel = ""
+      , _enginePropType  = Nothing
+      , _enginePrevPos   = (negate 1, negate 1)
+      , _engineDrawState = drawStateNew
+      , _engineBoards    = boardsNew 1
+      , _engineBaseWidth = 777
+      , _engineThick     = 1
+      }
 
 --------------------------------------------------------------------------------
 runProgram :: Interpreter -> DhekProgram a -> IO (Maybe a)
@@ -225,6 +235,13 @@ runProgram i p = do
         evalStateT (_evalProgram env (_gui i) (_state i) p v) s
 
 --------------------------------------------------------------------------------
+withContext :: IORef EngineState -> (forall m. EngineCtx m => m a) -> IO ()
+withContext ref state = do
+    s  <- readIORef ref
+    s' <- execStateT state s
+    writeIORef ref s'
+
+--------------------------------------------------------------------------------
 _evalProgram :: EngineEnv
              -> GUI
              -> IORef EngineState
@@ -233,7 +250,6 @@ _evalProgram :: EngineEnv
              -> StateT EngineState IO a
 _evalProgram env gui ref prg v= foldFree end susp prg where
   nb = v ^. viewerPageCount
-  modes = _engineModes env
 
   susp (GetCurPage k) = (use engineCurPage) >>= k
   susp (GetPageCount k) = k (v ^. viewerPageCount)
@@ -453,7 +469,12 @@ loadPdf i path = do
     ev  <- readIORef $ _env i
     case opt of
         Nothing -> do
-            let env  = (envNew gui) { _engineFilename  = takeFileName path }
+            let modes = array (1,3)
+                        [ (1, normalModeManager gui)
+                        , (2, duplicateModeManager gui)
+                        , (3, selectionModeManager (withContext $ _state i) gui)
+                        ]
+                env  = EngineEnv { _engineFilename = takeFileName path }
                 name = _engineFilename env
                 nb   = v ^. viewerPageCount
                 s'   = s & engineBoards .~ boardsNew nb
