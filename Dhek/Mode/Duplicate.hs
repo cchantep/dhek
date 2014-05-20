@@ -26,6 +26,7 @@ import Dhek.Engine.Type
 import Dhek.Geometry
 import Dhek.GUI
 import Dhek.GUI.Action
+import Dhek.Instr
 import Dhek.Mode.Common.Draw
 import Dhek.Types
 
@@ -85,6 +86,7 @@ instance ModeMonad DuplicateMode where
 
                 gui <- ask
                 liftIO $ gtkSetCursor Nothing gui
+                engineEventStack %= (CreateRect:)
 
     mRelease = return ()
 

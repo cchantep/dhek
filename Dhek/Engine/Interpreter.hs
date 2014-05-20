@@ -189,7 +189,7 @@ makeInterpreter gui = do
     -- Instanciates ModeManagers
     let mgrNormal      = normalModeManager gui
         mgrDuplication = duplicateModeManager gui
-        mgrSelection   = selectionModeManager (withContext sRef) gui
+        mgrSelection   = selectionModeManager (_withContext sRef) gui
         modes = Modes
                 { modeDraw        = mgrNormal
                 , modeDuplication = mgrDuplication
@@ -210,18 +210,19 @@ makeInterpreter gui = do
 stateNew :: EngineState
 stateNew
     = EngineState
-      { _engineCurPage   = 1
-      , _engineCurZoom   = 3
-      , _engineRectId    = 0
-      , _engineOverlap   = False
-      , _engineDraw      = False
-      , _enginePropLabel = ""
-      , _enginePropType  = Nothing
-      , _enginePrevPos   = (negate 1, negate 1)
-      , _engineDrawState = drawStateNew
-      , _engineBoards    = boardsNew 1
-      , _engineBaseWidth = 777
-      , _engineThick     = 1
+      { _engineCurPage    = 1
+      , _engineCurZoom    = 3
+      , _engineRectId     = 0
+      , _engineOverlap    = False
+      , _engineDraw       = False
+      , _enginePropLabel  = ""
+      , _enginePropType   = Nothing
+      , _enginePrevPos    = (negate 1, negate 1)
+      , _engineDrawState  = drawStateNew
+      , _engineBoards     = boardsNew 1
+      , _engineBaseWidth  = 777
+      , _engineThick      = 1
+      , _engineEventStack = []
       }
 
 --------------------------------------------------------------------------------
@@ -235,11 +236,22 @@ runProgram i p = do
         evalStateT (_evalProgram env (_gui i) (_state i) p v) s
 
 --------------------------------------------------------------------------------
-withContext :: IORef EngineState -> (forall m. EngineCtx m => m a) -> IO ()
-withContext ref state = do
-    s  <- readIORef ref
-    s' <- execStateT state s
+engineHasEvents :: Interpreter -> IO Bool
+engineHasEvents i
+    = _engineWithContext i $
+      use $ engineEventStack.to (not . null)
+
+--------------------------------------------------------------------------------
+_engineWithContext :: Interpreter -> (forall m. EngineCtx m => m a) -> IO a
+_engineWithContext i = _withContext $ _state i
+
+--------------------------------------------------------------------------------
+_withContext :: IORef EngineState -> (forall m. EngineCtx m => m a) -> IO a
+_withContext ref state = do
+    s      <- readIORef ref
+    (a,s') <- runStateT state s
     writeIORef ref s'
+    return a
 
 --------------------------------------------------------------------------------
 _evalProgram :: EngineEnv
@@ -387,6 +399,12 @@ _evalProgram env gui ref prg v= foldFree end susp prg where
   susp (SetValuePropVisible b k) = do
       liftIO $ gtkSetValuePropVisible b gui
       k
+  susp (AddEvent e k) = do
+      engineEventStack %= (e:)
+      k
+  susp (ClearEvents k) = do
+      engineEventStack .= []
+      k
 
   end a = do
       drawing <- use engineDraw
@@ -469,12 +487,7 @@ loadPdf i path = do
     ev  <- readIORef $ _env i
     case opt of
         Nothing -> do
-            let modes = array (1,3)
-                        [ (1, normalModeManager gui)
-                        , (2, duplicateModeManager gui)
-                        , (3, selectionModeManager (withContext $ _state i) gui)
-                        ]
-                env  = EngineEnv { _engineFilename = takeFileName path }
+            let env  = EngineEnv { _engineFilename = takeFileName path }
                 name = _engineFilename env
                 nb   = v ^. viewerPageCount
                 s'   = s & engineBoards .~ boardsNew nb

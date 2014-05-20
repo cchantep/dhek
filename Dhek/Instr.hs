@@ -25,6 +25,13 @@ data DhekMode = DhekNormal
               | DhekDuplication
               | DhekSelection
 
+data Event
+    = CreateRect
+    | UpdateRectBounds
+    | DeleteRect
+    | UpdateRectProps
+
+
 data DhekInstr a = GetSelected (Maybe Rect -> a)
                  | SetSelected !(Maybe Rect) a
                  | GetRectangles ([Rect] -> a)
@@ -56,6 +63,8 @@ data DhekInstr a = GetSelected (Maybe Rect -> a)
                  | Active DhekOption Bool a
                  | IsActive DhekOption (Bool -> a)
                  | SetValuePropVisible Bool a
+                 | AddEvent Event a
+                 | ClearEvents a
 
 instance Functor DhekInstr where
     fmap f (GetSelected k)      = GetSelected (f . k)
@@ -89,6 +98,8 @@ instance Functor DhekInstr where
     fmap f (Active o b a)       = Active o b (f a)
     fmap f (IsActive o k)       = IsActive o (f . k)
     fmap f (SetValuePropVisible b a) = SetValuePropVisible b (f a)
+    fmap f (AddEvent e a)       = AddEvent e (f a)
+    fmap f (ClearEvents a)      = ClearEvents (f a)
 
 getSelected :: F DhekInstr (Maybe Rect)
 getSelected = wrap $ GetSelected return
@@ -182,3 +193,9 @@ isActive o = wrap $ IsActive o return
 
 setValuePropVisible :: Bool -> F DhekInstr ()
 setValuePropVisible b = wrap $ SetValuePropVisible b (return ())
+
+addEvent :: Event -> F DhekInstr ()
+addEvent e = wrap $ AddEvent e (return ())
+
+clearEvents :: F DhekInstr ()
+clearEvents = wrap $ ClearEvents (return ())

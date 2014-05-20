@@ -26,3 +26,4 @@ onProp = compile $ do
                     & rectType  .~ t
                     & rectValue .~ v
         setSelected (Just r1)
+        addEvent UpdateRectProps
