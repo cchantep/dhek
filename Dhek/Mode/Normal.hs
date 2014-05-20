@@ -28,6 +28,7 @@ import Dhek.Engine.Type
 import Dhek.Geometry
 import Dhek.GUI
 import Dhek.GUI.Action
+import Dhek.Instr
 import Dhek.Mode.Common.Draw
 import Dhek.Types
 
@@ -172,6 +173,7 @@ instance ModeMonad NormalMode where
 
             engineDrawState.drawEvent     .= Nothing
             engineDrawState.drawCollision .= Nothing
+            engineEventStack %= (UpdateRectPos:)
 
         -- on drawing mode, we add the new rectangle to rectangle list
         for_ sOpt $ \r -> do
@@ -193,6 +195,7 @@ instance ModeMonad NormalMode where
                 normalSelectRectangle r2
 
             engineDrawState.drawSelection .= Nothing
+            engineEventStack %= (CreateRect:)
 
     mDrawing page ratio = do
         gui <- ask

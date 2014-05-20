@@ -37,7 +37,7 @@ onJsonSave = compile $ do
                 | otherwise                     = path ++ ".json"
 
         e <- performIO $ try $ B.writeFile path1 (encode save)
-        either exception return e
+        either exception (const clearEvents) e
 
 --------------------------------------------------------------------------------
 onJsonImport :: DhekProgram ()
@@ -54,6 +54,7 @@ onJsonImport = compile $ do
                 either showError upd rectsE
 
     upd rs = do
+        clearEvents
         setRects rs
         draw
 
