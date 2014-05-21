@@ -18,7 +18,7 @@ import           Control.Monad.Trans (liftIO)
 import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
-import Dhek.Action (onNext, onPrev, onMinus, onPlus, onRem)
+import Dhek.Action (onNext, onPrev, onMinus, onPlus, onRem, onApplidok)
 import Dhek.Draw
 import Dhek.GUI
 import Dhek.GUI.Action
@@ -235,5 +235,8 @@ connectSignals g i = do
             Gtk.toggleButtonSetActive (guiDupToggle g) False
             Gtk.toggleButtonSetActive (guiDrawToggle g) False
             engineSetMode DhekSelection i
+
+    --- Applidok Button ---
+    Gtk.on (guiDokButton g) Gtk.buttonActivated $ onApplidok
 
     return ()

@@ -57,6 +57,7 @@ data GUI =
     , guiHRulerAdjustment :: Gtk.Adjustment
     , guiModeToolbar :: Gtk.HButtonBox
     , guiTranslate :: DhekMessage -> String
+    , guiDokButton :: Gtk.Button
     }
 
 --------------------------------------------------------------------------------
@@ -176,10 +177,16 @@ makeGUI = do
     Gtk.containerAdd toolbar msb
     Gtk.boxPackStart vbox align Gtk.PackNatural 0
 
+    -- Button Applidok
+    akb  <- Gtk.buttonNew
+    kimg <- Gtk.imageNewFromFile $ joinPath [resDir, "applidok.png"]
+    Gtk.buttonSetImage akb kimg
+
     -- Mode toolbar
     mtoolbar <- Gtk.hButtonBoxNew
     mtalign  <- Gtk.alignmentNew 0 1 0 0
     Gtk.containerAdd mtalign mtoolbar
+    Gtk.containerAdd mtoolbar akb
     Gtk.boxPackStart vbox mtalign Gtk.PackNatural 0
     Gtk.widgetSetSizeRequest mtoolbar (-1) 32
 
@@ -334,6 +341,7 @@ makeGUI = do
                 , guiHRulerAdjustment = hadj
                 , guiModeToolbar = mtoolbar
                 , guiTranslate = msgStr
+                , guiDokButton = akb
                 }
 
 --------------------------------------------------------------------------------

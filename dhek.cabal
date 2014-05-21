@@ -15,8 +15,12 @@ executable dhek
     c-sources: darwin/AppDelegate.m darwin/util.m
     hs-source-dirs: . darwin
     main-is: darwin/main.m
-  else
-    hs-source-dirs: . _darwin
+  if os(windows)
+    c-sources: win/util.c
+    hs-source-dirs: . win
+    main-is: win/main.c
+  if !os(windows) && !os(darwin)
+    hs-source-dirs: . unix
     main-is: Main.hs
 
   other-modules: Dhek.Launcher

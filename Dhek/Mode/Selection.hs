@@ -249,7 +249,10 @@ selectionModeManager handler gui = do
     -- Top button
     btop <- Gtk.buttonNew
     bimg <- Gtk.imageNewFromFile $ joinPath [resDir, "top.png"]
+    vsep <- Gtk.vSeparatorNew
+
     Gtk.buttonSetImage btop bimg
+    Gtk.containerAdd toolbar vsep
     Gtk.containerAdd toolbar btop
     Gtk.widgetSetSensitive btop False
     cid <- Gtk.on btop Gtk.buttonActivated $ handler $ topButtonActivated gui
@@ -262,15 +265,17 @@ selectionModeManager handler gui = do
     Gtk.widgetSetSensitive bdist False
     did <- Gtk.on bdist Gtk.buttonActivated $ handler $ distButtonActivated gui
 
-
+    Gtk.widgetShowAll vsep
     Gtk.widgetShowAll btop
     Gtk.widgetShowAll bdist
 
     return $ ModeManager (selectionMode gui btop bdist) $ liftIO $ do
         Gtk.signalDisconnect cid
         Gtk.signalDisconnect did
+        Gtk.widgetDestroy vsep
         Gtk.widgetDestroy btop
         Gtk.widgetDestroy bdist
+        Gtk.widgetDestroy vsep
         Gtk.treeSelectionSetMode (guiRectTreeSelection gui)
             Gtk.SelectionSingle
   where
