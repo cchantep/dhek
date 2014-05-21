@@ -19,3 +19,6 @@ ChooseJSON: Choisir un fichier JSON
 MainTitle: Dhek - Création de modèle PDF
 Apply: Appliquer
 Value: Valeur
+Yes: Oui
+No: Non
+Confirm: Le modèle a été modifié. Voulez vous quitter sans sauvegarder ces modifications ?
