@@ -33,7 +33,9 @@ executable dhek
                  Dhek.Types
 
   if os(darwin)
-    c-sources: darwin/AppDelegate.m
+    c-sources: darwin/AppDelegate.m darwin/util.m
+    hs-source-dirs: . darwin
+    other-modules: Dhek.Darwin
     main-is: darwin/main.m
   else
     main-is: Main.hs
