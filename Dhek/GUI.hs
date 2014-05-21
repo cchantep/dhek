@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-
 --------------------------------------------------------------------------------
 -- |
 -- Module : Dhek.GUI
@@ -21,10 +19,7 @@ import           System.Environment.Executable (getExecutablePath)
 --------------------------------------------------------------------------------
 import Dhek.I18N
 import Dhek.Types
-
-#if defined __APPLE__
-import Dhek.Darwin
-#endif
+import Dhek.AppUtil (appTerminate)
 
 --------------------------------------------------------------------------------
 data GUI =
@@ -302,10 +297,7 @@ makeGUI = do
 
     Gtk.onDestroy win $ do
                 Gtk.mainQuit
-#if defined __APPLE__
-                nsappTerminate
-#endif
-
+                appTerminate
 
     Gtk.widgetShowAll win
 

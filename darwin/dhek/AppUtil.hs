@@ -2,13 +2,14 @@
 
 --------------------------------------------------------------------------------
 -- |
--- Module : Dhek.Darwin
+-- Module : Dhek.AppUtil
 --
--- This module declares utilities related to Darwin/Mac OS X integration.
+-- This module declares application utilities, 
+-- related to Darwin/Mac OS X integration.
 --
 --------------------------------------------------------------------------------
-module Dhek.Darwin where
+module Dhek.AppUtil where
 
 import Foreign.C
 
-foreign import ccall "util.h nsappTerminate" nsappTerminate :: IO ()
+foreign import ccall "util.h nsappTerminate" appTerminate :: IO ()
