@@ -21,8 +21,10 @@ import qualified Graphics.UI.Gtk as Gtk
 import Dhek.Action (onNext, onPrev, onMinus, onPlus, onRem)
 import Dhek.Draw
 import Dhek.GUI
+import Dhek.GUI.Action
 import Dhek.File (onJsonImport, onJsonSave)
 import Dhek.Free
+import Dhek.I18N
 import Dhek.Instr
 import Dhek.Property (onProp)
 import Dhek.Engine
@@ -32,6 +34,14 @@ import Dhek.Types
 --------------------------------------------------------------------------------
 connectSignals :: GUI -> Interpreter -> IO ()
 connectSignals g i = do
+    Gtk.onDelete (guiWindow g) $ \_ -> do
+        hasEvent <- engineHasEvents i
+        case () of
+            _ | hasEvent -> do
+                resp <- gtkShowConfirm g (guiTranslate g $ MsgConfirm)
+                return $ not resp
+              | otherwise -> return False
+
     Gtk.on (guiPdfOpenMenuItem g) Gtk.menuItemActivate $ do
         resp <- Gtk.dialogRun $ guiPdfDialog g
         Gtk.widgetHide $ guiPdfDialog g

@@ -55,6 +55,7 @@ data GUI =
     , guiVRulerAdjustment :: Gtk.Adjustment
     , guiHRulerAdjustment :: Gtk.Adjustment
     , guiModeToolbar :: Gtk.HButtonBox
+    , guiTranslate :: DhekMessage -> String
     }
 
 --------------------------------------------------------------------------------
@@ -292,6 +293,7 @@ makeGUI = do
                 , Gtk.windowDefaultHeight  Gtk.:= 600
                 , Gtk.containerBorderWidth Gtk.:= 10
                 ]
+
     Gtk.onDestroy win Gtk.mainQuit
     Gtk.widgetShowAll win
 
@@ -327,6 +329,7 @@ makeGUI = do
                 , guiVRulerAdjustment = vadj
                 , guiHRulerAdjustment = hadj
                 , guiModeToolbar = mtoolbar
+                , guiTranslate = msgStr
                 }
 
 --------------------------------------------------------------------------------

@@ -21,6 +21,7 @@ module Dhek.GUI.Action
     , gtkSetRects
     , gtkSetOverlapActive
     , gtkSetValuePropVisible
+    , gtkShowConfirm
     ) where
 
 --------------------------------------------------------------------------------
@@ -35,6 +36,7 @@ import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
 import Dhek.GUI
+import Dhek.I18N
 import Dhek.Types
 
 --------------------------------------------------------------------------------
@@ -190,6 +192,19 @@ gtkSetValuePropVisible b gui
     | otherwise = do
         Gtk.widgetHideAll $ guiValueEntryAlign gui
         Gtk.widgetHideAll $ guiValueEntry gui
+
+--------------------------------------------------------------------------------
+gtkShowConfirm :: GUI -> String -> IO Bool
+gtkShowConfirm gui msg = do
+    m    <- Gtk.messageDialogNew (Just $ guiWindow gui)
+            [Gtk.DialogModal] Gtk.MessageWarning Gtk.ButtonsNone msg
+    Gtk.dialogAddButton m (guiTranslate gui MsgNo) Gtk.ResponseNo
+    Gtk.dialogAddButton m (guiTranslate gui MsgYes) Gtk.ResponseYes
+    resp <- Gtk.dialogRun m
+    Gtk.widgetHide m
+    case resp of
+        Gtk.ResponseYes -> return True
+        _               -> return False
 
 --------------------------------------------------------------------------------
 -- | Utilities

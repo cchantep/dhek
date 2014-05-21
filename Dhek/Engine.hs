@@ -17,6 +17,7 @@ module Dhek.Engine
     , engineCurrentState
     , engineRunDraw
     , engineSetMode
+    , engineHasEvents
       -- Draw lenses
     , drawCollision
     , drawCursor
