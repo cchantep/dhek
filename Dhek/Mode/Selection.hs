@@ -248,7 +248,7 @@ selectionModeManager handler gui = do
 
     -- Top button
     btop <- Gtk.buttonNew
-    bimg <- Gtk.imageNewFromFile $ joinPath [resDir, "top.png"]
+    bimg <- Gtk.imageNewFromFile $ joinPath [resDir, "align-vertical-top.png"]
     vsep <- Gtk.vSeparatorNew
 
     Gtk.buttonSetImage btop bimg
