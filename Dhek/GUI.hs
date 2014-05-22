@@ -126,12 +126,12 @@ makeGUI = do
 
     -- Button Next
     next <- Gtk.buttonNew
-    nimg <- Gtk.imageNewFromFile $ joinPath [resDir, "page-next.png"]
+    nimg <- Gtk.imageNewFromFile $ joinPath [resDir, "go-next.png"]
     Gtk.buttonSetImage next nimg
 
      -- Previous Prev
     prev <- Gtk.buttonNew
-    pimg <- Gtk.imageNewFromFile $ joinPath [resDir, "page-previous.png"]
+    pimg <- Gtk.imageNewFromFile $ joinPath [resDir, "go-previous.png"]
     Gtk.buttonSetImage prev pimg
 
     -- Button Zoom out
@@ -146,18 +146,18 @@ makeGUI = do
 
     -- Button Draw
     drwb <- Gtk.toggleButtonNew
-    dimg <- Gtk.imageNewFromFile $ joinPath [resDir, "draw.png"]
+    dimg <- Gtk.imageNewFromFile $ joinPath [resDir, "draw-rectangle.png"]
     Gtk.buttonSetImage drwb dimg
     Gtk.toggleButtonSetActive drwb True
 
     -- Button Duplicate
     db   <- Gtk.toggleButtonNew
-    dimg <- Gtk.imageNewFromFile $ joinPath [resDir, "duplicate.png"]
+    dimg <- Gtk.imageNewFromFile $ joinPath [resDir, "duplicate-rectangle.png"]
     Gtk.buttonSetImage db dimg
 
     -- Button MultiSelection
     msb  <- Gtk.toggleButtonNew
-    simg <- Gtk.imageNewFromFile $ joinPath [resDir, "multisel.png"]
+    simg <- Gtk.imageNewFromFile $ joinPath [resDir, "rectangular-selection.png"]
     Gtk.buttonSetImage msb simg
 
     -- Toolbar
