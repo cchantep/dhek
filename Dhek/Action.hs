@@ -4,6 +4,7 @@ import Data.Foldable (traverse_)
 
 import Dhek.Free
 import Dhek.Instr
+import Dhek.AppUtil (browserOpen)
 
 onPrev :: DhekProgram ()
 onPrev = compile $ do
@@ -43,3 +44,6 @@ onRem = compile $ do
         unselectRect
         addEvent DeleteRect
         draw
+
+onApplidok :: IO ()
+onApplidok = browserOpen "http://go.applidok.com"

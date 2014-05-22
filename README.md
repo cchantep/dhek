@@ -1,10 +1,25 @@
 # Dhek
 
-PDF app (or on the Discworld, supreme Djelibeybian god).
+PDF templating application (or on the Discworld, supreme Djelibeybian god).
+
+## Motivation
+
+Starting from any PDF, Dhek allows to define areas you want to fill with data later (templating).
+
+Unlike other solution, it doesn't require PDF to have been made using Acrofields, or any PDF extension/constraint. Moreover, you don't need to alter PDF in any way to be able to create a template. *It can be done above any existing PDF*.
+
+[Template format](#template-format) is an open one (JSON), so that you can use it whatever is your programming/integration environment (PHP, JVM, .Net, ...).
+
+You can also use a [service](http://go.applidok.com) allowing Web visitor to fill data for your templates using form, and finally get their custom/filled PDF.
+
+## Get started
+
+Binary distributions for Windows (7+) and Mac OS X (10.8/10.9) can be found in [releases section](https://github.com/applicius/dhek/releases).
 
 ## Build
 
-### Unix
+You can also build Dhek by yourself with following information.
+
 Depending on how you've installed GHC, you have 2 different prerequisites.
 
 Make sure gtk, pango, cairo and poppler are installed on your machine.
@@ -42,41 +57,13 @@ cabal install
 
 At this point, Dhek can be launched with `./dist/build/dhek/dhek`
 
-### Windows (only tested on Seven)
+### Windows 7/8
 
-Make sure you've installed GTK all-in-one [32Bits](http://ftp.gnome.org/pub/gnome/binaries/win32/gtk+/2.24/gtk+-bundle_2.24.10-20120208_win32.zip) or [64Bits](http://ftp.gnome.org/pub/gnome/binaries/win64/gtk+/2.22/gtk+-bundle_2.22.1-20101229_win64.zip) and MinGW poppler and poppler-glib.
+TODO
 
-Note: Unfortunately, it only works when packages are installed globally.
+### Template format
 
-```
-cabal update
-cabal install gtk2hs-buildtools
-cabal install gtk
-```
-
-Then, in project directory:
-
-```
-cabal install --only-dependencies --global
-runghc Setup configure --global # Don't ask me why it only works that way on Windows
-runghc Setup build
-```
-
-To produce an exe:
-
-```
-runghc Setup install --global
-```
-
-At this point, Dhek can be launched with `HASKELL_HOME\bin\dhek.exe`
-
---
-
-Anyway, for people working on crippled Operating Systems, we've already packaged Dhek for OSX and Windows (>= Seven) in [release section](https://github.com/applicius/dhek/releases)
-
-### JSON format
-
-Dhek mappings are saved in JSON files. Struture is the following:
+Dhek templates are saved in JSON files. Struture is the following:
 
 ```json
 {
