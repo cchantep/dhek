@@ -11,6 +11,14 @@ build-type:          Custom
 cabal-version:       >=1.18
 
 executable dhek
+  if os(darwin)
+    c-sources: darwin/AppDelegate.m darwin/util.m
+    hs-source-dirs: . darwin
+    main-is: darwin/main.m
+  else
+    hs-source-dirs: . _darwin
+    main-is: Main.hs
+
   other-modules: Dhek.Launcher
                  Dhek.Action
                  Dhek.Draw
@@ -31,14 +39,7 @@ executable dhek
                  Dhek.Signal
                  Dhek.Version
                  Dhek.Types
-
-  if os(darwin)
-    c-sources: darwin/AppDelegate.m darwin/util.m
-    hs-source-dirs: . darwin
-    other-modules: Dhek.Darwin
-    main-is: darwin/main.m
-  else
-    main-is: Main.hs
+                 Dhek.AppUtil
 
   default-extensions:  TemplateHaskell
   build-depends:       base          == 4.7.*
