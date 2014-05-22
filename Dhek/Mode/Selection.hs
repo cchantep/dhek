@@ -13,12 +13,14 @@ module Dhek.Mode.Selection (selectionModeManager) where
 import Prelude hiding (mapM_)
 import Control.Applicative
 import Data.Foldable (for_, foldMap, mapM_, traverse_)
+import Data.List (sortBy)
 import Data.Maybe (isJust)
 import Data.Traversable
 
 --------------------------------------------------------------------------------
 import           Control.Lens
 import           Control.Monad.RWS hiding (mapM_)
+import           Control.Monad.State (evalState)
 import           Control.Monad.Trans
 import qualified Graphics.Rendering.Cairo     as Cairo
 import qualified Graphics.UI.Gtk              as Gtk
@@ -38,8 +40,9 @@ import Dhek.Types
 --------------------------------------------------------------------------------
 data Input
     = Input
-      { inputGUI :: GUI
-      , inputTop :: Gtk.Button
+      { inputGUI  :: GUI
+      , inputTop  :: Gtk.Button
+      , inputDist :: Gtk.Button
       }
 
 --------------------------------------------------------------------------------
@@ -84,11 +87,13 @@ instance ModeMonad SelectionMode where
             rs <- engineStateGetRects
 
             -- get rectangles located in selection area
-            let crs = foldMap (collectSelected r) rs
-
-            -- if no area is selected, we disable 'top' button
-            liftIO $ Gtk.widgetSetSensitive (inputTop input)
-                (not $ null crs)
+            let crs          = foldMap (collectSelected r) rs
+                hasSelection = not $ null crs
+                atLeast3     = length crs >= 3
+            -- if no area is selected, we disable 'top' and 'distribute' button
+            liftIO $ do
+                Gtk.widgetSetSensitive (inputTop input) hasSelection
+                Gtk.widgetSetSensitive (inputDist input) atLeast3
 
             for_ crs $ \cr ->
                 liftIO $ gtkSelectRect cr $ inputGUI input
@@ -150,7 +155,7 @@ instance ModeMonad SelectionMode where
 
 --------------------------------------------------------------------------------
 -- | Called when 'Top' button, located in mode's toolbar, is clicked
-topButtonActivated :: GUI -> EngineCtx m => m ()
+topButtonActivated :: EngineCtx m => GUI -> m ()
 topButtonActivated gui = do
     rs <- use $ engineDrawState.drawMultiSel
     case rs of
@@ -173,24 +178,64 @@ topButtonActivated gui = do
     updY y r = r & rectY .~ y
 
 --------------------------------------------------------------------------------
+-- | Called when 'Distribute' button, located in mode's toolbar, is clicked
+distButtonActivated :: EngineCtx m => GUI -> m ()
+distButtonActivated gui = do
+    rs <- use $ engineDrawState.drawMultiSel
+    case rs of
+        []   -> return ()
+        x:xs -> do
+            let sorted = sortBy sortF rs
+                _AN = fromIntegral $ length rs -- number of selected area
+                _AW = foldr sumWidthF 0 rs -- selected areas width summed
+                _L  = head sorted -- most left rectangle
+                _R  = last sorted -- most right rectangle
+                _D  = _R ^. rectX - _L ^. rectX + _R ^. rectWidth -- _L and _R
+                                                                  -- distance
+                _S  = (_D - _AW) / (_AN - 1) -- space between rectangles
+                action = for (tail sorted) $ \r -> do
+                    _P <- get
+                    let _I = _P ^. rectX + _P ^. rectWidth
+                        r' = r & rectX .~ _I + _S
+                    put r'
+                    return r'
+                spaced = _L:(evalState action _L) -- homogeneous-spaced
+                                                  -- rectangle list
+
+            -- TODO: better mulitiselection management
+            engineStateSetRects spaced
+            engineDrawState.drawMultiSel .= spaced
+            engineEventStack %= (UpdateRectPos:)
+            liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
+
+            return ()
+  where
+    sumWidthF :: Rect -> Double -> Double
+    sumWidthF r s = s + realToFrac (r ^. rectWidth)
+
+    sortF a b = compare (a ^. rectX) (b ^. rectX)
+
+--------------------------------------------------------------------------------
 runSelection :: GUI
+             -> Gtk.Button
              -> Gtk.Button
              -> SelectionMode a
              -> EngineState
              -> IO EngineState
-runSelection gui btop (SelectionMode m)  s = do
+runSelection gui btop bdist (SelectionMode m)  s = do
     (s', _) <- execRWST m input s
     return s'
   where
     input
         = Input
-          { inputGUI = gui
-          , inputTop = btop
+          { inputGUI  = gui
+          , inputTop  = btop
+          , inputDist = bdist
           }
 
 --------------------------------------------------------------------------------
-selectionMode :: GUI -> Gtk.Button -> Mode
-selectionMode gui btop = Mode (runSelection gui btop . runM)
+selectionMode :: GUI -> Gtk.Button -> Gtk.Button -> Mode
+selectionMode gui btop bdist = Mode (runSelection gui btop bdist . runM)
 
 --------------------------------------------------------------------------------
 selectionModeManager :: ((forall m. EngineCtx m => m ()) -> IO ())
@@ -198,22 +243,34 @@ selectionModeManager :: ((forall m. EngineCtx m => m ()) -> IO ())
                      -> IO ModeManager
 selectionModeManager handler gui = do
     Gtk.treeSelectionSetMode (guiRectTreeSelection gui) Gtk.SelectionMultiple
-    btop     <- Gtk.buttonNew
     execPath <- getExecutablePath
     let resDir = joinPath [dropFileName execPath, "resources"]
+
+    -- Top button
+    btop <- Gtk.buttonNew
     bimg <- Gtk.imageNewFromFile $ joinPath [resDir, "top.png"]
     Gtk.buttonSetImage btop bimg
     Gtk.containerAdd toolbar btop
     Gtk.widgetSetSensitive btop False
-
-    -- listen to button event
     cid <- Gtk.on btop Gtk.buttonActivated $ handler $ topButtonActivated gui
 
-    Gtk.widgetShowAll btop
+    -- Distribute button
+    bdist <- Gtk.buttonNew
+    dimg  <- Gtk.imageNewFromFile $ joinPath [resDir, "distribute.png"]
+    Gtk.buttonSetImage bdist dimg
+    Gtk.containerAdd toolbar bdist
+    Gtk.widgetSetSensitive bdist False
+    did <- Gtk.on bdist Gtk.buttonActivated $ handler $ distButtonActivated gui
 
-    return $ ModeManager (selectionMode gui btop) $ liftIO $ do
+
+    Gtk.widgetShowAll btop
+    Gtk.widgetShowAll bdist
+
+    return $ ModeManager (selectionMode gui btop bdist) $ liftIO $ do
         Gtk.signalDisconnect cid
+        Gtk.signalDisconnect did
         Gtk.widgetDestroy btop
+        Gtk.widgetDestroy bdist
         Gtk.treeSelectionSetMode (guiRectTreeSelection gui)
             Gtk.SelectionSingle
   where
