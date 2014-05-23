@@ -8,7 +8,8 @@
 module Dhek.GUI where
 
 --------------------------------------------------------------------------------
-import Data.Foldable (traverse_)
+import Prelude hiding (foldr)
+import Data.Foldable (traverse_, foldr)
 
 --------------------------------------------------------------------------------
 import           Control.Lens ((^.))
@@ -63,9 +64,20 @@ data GUI =
     }
 
 --------------------------------------------------------------------------------
+initGUI :: IO [String]
+initGUI = do
+    gtk      <- Gtk.initGUI
+    Gtk.settingsGetDefault >>= 
+        foldr (\s err -> settings gtk s) (fail "No GTK default settings")
+  where
+    settings :: [String] -> Gtk.Settings -> IO [String]
+    settings gui gs = do
+        Gtk.settingsSetLongProperty gs "gtk-button-images" 1 "Dhek"
+        return gui
+
 makeGUI :: IO GUI
 makeGUI = do
-    Gtk.initGUI
+    gtkUI <- initGUI 
 
     -- Window creation
     win   <- Gtk.windowNew
@@ -248,7 +260,13 @@ makeGUI = do
 
     -- Properties
     rem     <- Gtk.buttonNewWithLabel $ msgStr MsgRemove
+    rmimg   <- Gtk.imageNewFromFile $ joinPath [resDir, "draw-eraser.png"]
+    Gtk.buttonSetImage rem rmimg
+
     app     <- Gtk.buttonNewWithLabel $ msgStr MsgApply
+    apimg   <- Gtk.imageNewFromFile $ joinPath [resDir, "dialog-accept.png"]
+    Gtk.buttonSetImage app apimg 
+
     idxspin <- Gtk.spinButtonNewWithRange 0 200 1
     nlabel  <- Gtk.labelNew (Just $ msgStr MsgName)
     tlabel  <- Gtk.labelNew (Just $ msgStr MsgType)
