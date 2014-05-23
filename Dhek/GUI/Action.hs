@@ -22,6 +22,8 @@ module Dhek.GUI.Action
     , gtkSetOverlapActive
     , gtkSetValuePropVisible
     , gtkShowConfirm
+    , gtkSetIndexPropVisible
+    , gtkGetIndexPropValue
     ) where
 
 --------------------------------------------------------------------------------
@@ -49,6 +51,8 @@ gtkUnselect gui = do
     Gtk.widgetSetSensitive (guiApplyButton gui) False
     Gtk.entrySetText (guiNameEntry gui) ""
     Gtk.comboBoxSetActive (guiTypeCombo gui) (- 1)
+    gtkSetValuePropVisible False gui
+    gtkSetIndexPropVisible False gui
 
 --------------------------------------------------------------------------------
 -- | When a rectangle is selected
@@ -65,6 +69,11 @@ gtkSelectRect r gui = do
         case r ^. rectValue of
             Nothing -> Gtk.entrySetText (guiValueEntry gui) ""
             Just v  -> Gtk.entrySetText (guiValueEntry gui) v
+
+        case r ^. rectIndex of
+            Nothing -> Gtk.spinButtonSetValue (guiIndexSpin gui) 0
+            Just i  -> Gtk.spinButtonSetValue (guiIndexSpin gui)
+                       (realToFrac i)
 
         tOpt <- lookupStoreIter ((== typ)) (guiTypeStore gui)
 
@@ -194,6 +203,18 @@ gtkSetValuePropVisible b gui
         Gtk.widgetHideAll $ guiValueEntry gui
 
 --------------------------------------------------------------------------------
+gtkSetIndexPropVisible :: Bool -> GUI -> IO ()
+gtkSetIndexPropVisible visible gui
+    | visible = do
+        Gtk.widgetSetChildVisible (guiIndexAlign gui) True
+        Gtk.widgetSetChildVisible (guiIndexSpin gui) True
+        Gtk.widgetShowAll $ guiIndexAlign gui
+        Gtk.widgetShowAll $ guiIndexSpin gui
+    | otherwise = do
+        Gtk.widgetHideAll $ guiIndexAlign gui
+        Gtk.widgetHideAll $ guiIndexSpin gui
+
+--------------------------------------------------------------------------------
 gtkShowConfirm :: GUI -> String -> IO Bool
 gtkShowConfirm gui msg = do
     m    <- Gtk.messageDialogNew (Just $ guiWindow gui)
@@ -205,6 +226,18 @@ gtkShowConfirm gui msg = do
     case resp of
         Gtk.ResponseYes -> return True
         _               -> return False
+
+--------------------------------------------------------------------------------
+gtkGetIndexPropValue :: GUI -> IO (Maybe Int)
+gtkGetIndexPropValue gui = do
+    opt      <- Gtk.comboBoxGetActiveText $ guiTypeCombo gui
+    idxvalue <- Gtk.spinButtonGetValueAsInt $ guiIndexSpin gui
+    return $ do
+        typ <- opt
+        if typ == "textcell"
+            then Just idxvalue
+            else Nothing
+
 
 --------------------------------------------------------------------------------
 -- | Utilities

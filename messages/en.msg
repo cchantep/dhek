@@ -22,3 +22,4 @@ Value: Value
 Yes: Yes
 No: No
 Confirm: Model has been modified. Do you want to quit anyway ?
+Index: Index

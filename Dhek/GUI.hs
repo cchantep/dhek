@@ -58,6 +58,8 @@ data GUI =
     , guiModeToolbar :: Gtk.HButtonBox
     , guiTranslate :: DhekMessage -> String
     , guiDokButton :: Gtk.Button
+    , guiIndexAlign :: Gtk.Alignment
+    , guiIndexSpin :: Gtk.SpinButton
     }
 
 --------------------------------------------------------------------------------
@@ -247,17 +249,20 @@ makeGUI = do
     -- Properties
     rem     <- Gtk.buttonNewWithLabel $ msgStr MsgRemove
     app     <- Gtk.buttonNewWithLabel $ msgStr MsgApply
+    idxspin <- Gtk.spinButtonNewWithRange 0 200 1
     nlabel  <- Gtk.labelNew (Just $ msgStr MsgName)
     tlabel  <- Gtk.labelNew (Just $ msgStr MsgType)
     vlabel  <- Gtk.labelNew (Just $ msgStr MsgValue)
+    idxlabel <- Gtk.labelNew (Just $ msgStr MsgIndex)
     pentry  <- Gtk.entryNew
     ventry  <- Gtk.entryNew
     ualign  <- Gtk.alignmentNew 0.5 0 0 0
     nalign  <- Gtk.alignmentNew 0 0.5 0 0
     talign  <- Gtk.alignmentNew 0 0.5 0 0
     valign  <- Gtk.alignmentNew 0 0.5 0 0
+    idxalign <- Gtk.alignmentNew 0 0.5 0 0
     salign  <- Gtk.alignmentNew 0 0 1 0
-    table   <- Gtk.tableNew 2 3 False
+    table   <- Gtk.tableNew 2 4 False
     tvbox   <- Gtk.vBoxNew False 10
     optvbox <- Gtk.vBoxNew False 10
     pcombo  <- Gtk.comboBoxNew
@@ -270,12 +275,15 @@ makeGUI = do
     Gtk.containerAdd nalign nlabel
     Gtk.containerAdd talign tlabel
     Gtk.containerAdd valign vlabel
+    Gtk.containerAdd idxalign idxlabel
     Gtk.tableAttachDefaults table nalign 0 1 0 1
     Gtk.tableAttachDefaults table pentry 1 2 0 1
     Gtk.tableAttachDefaults table talign 0 1 1 2
     Gtk.tableAttachDefaults table pcombo 1 2 1 2
     Gtk.tableAttachDefaults table valign 0 1 2 3
     Gtk.tableAttachDefaults table ventry 1 2 2 3
+    Gtk.tableAttachDefaults table idxalign 0 1 3 4
+    Gtk.tableAttachDefaults table idxspin 1 2 3 4
     Gtk.tableSetRowSpacings table 10
     Gtk.tableSetColSpacings table 10
     let types = ["text", "checkbox", "radio", "textcell"]
@@ -292,8 +300,12 @@ makeGUI = do
     Gtk.containerAdd vleft tvbox
     Gtk.widgetSetChildVisible valign False
     Gtk.widgetSetChildVisible ventry False
+    Gtk.widgetSetChildVisible idxalign False
+    Gtk.widgetSetChildVisible idxspin False
     Gtk.widgetHideAll valign
     Gtk.widgetHideAll ventry
+    Gtk.widgetHideAll idxalign
+    Gtk.widgetHideAll idxspin
 
     -- Window configuration
     Gtk.set win [ Gtk.windowTitle          Gtk.:= msgStr MsgMainTitle
@@ -342,6 +354,8 @@ makeGUI = do
                 , guiModeToolbar = mtoolbar
                 , guiTranslate = msgStr
                 , guiDokButton = akb
+                , guiIndexAlign = idxalign
+                , guiIndexSpin = idxspin
                 }
 
 --------------------------------------------------------------------------------

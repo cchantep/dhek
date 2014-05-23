@@ -74,7 +74,8 @@ connectSignals g i = do
     --- Plus Button ---
     Gtk.on (guiZoomInButton g) Gtk.buttonActivated $ void $ runProgram i onPlus
     Gtk.on (guiRemoveButton g) Gtk.buttonActivated $ void $ runProgram i onRem
-    Gtk.on (guiApplyButton g) Gtk.buttonActivated $ void $ runProgram i onProp
+    _ <- Gtk.on (guiApplyButton g) Gtk.buttonActivated $
+        void $ runProgram i (onProp g)
 
     --- Selection ---
     Gtk.on (guiRectTreeSelection g) Gtk.treeSelectionSelectionChanged $ do
@@ -159,13 +160,11 @@ connectSignals g i = do
                 newValue = min (upper - pageSize) (max 0 (oldValue + delta))
             Gtk.adjustmentSetValue (guiVRulerAdjustment g) newValue
 
-    Gtk.on (guiTypeCombo g) Gtk.changed $ do
-        void $ runProgram i $ compile $ do
-            opt <- getComboText PropCombo
-            for_ opt $ \c ->
-                if c == "radio"
-                then setValuePropVisible True
-                else setValuePropVisible False
+    _ <- Gtk.on (guiTypeCombo g) Gtk.changed $ do
+        opt <- Gtk.comboBoxGetActiveText $ guiTypeCombo g
+        for_ opt $ \c -> do
+            gtkSetValuePropVisible (c == "radio") g
+            gtkSetIndexPropVisible (c == "textcell") g
 
     Gtk.on (guiVRuler g) Gtk.buttonPressEvent $ Gtk.tryEvent $ liftIO $
         void $ runProgram i $ compile $ newGuide GuideVertical

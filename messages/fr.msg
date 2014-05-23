@@ -22,3 +22,4 @@ Value: Valeur
 Yes: Oui
 No: Non
 Confirm: Le modèle a été modifié. Voulez vous quitter sans sauvegarder ces modifications ?
+Index: Index
