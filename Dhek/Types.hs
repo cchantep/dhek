@@ -1,97 +1,167 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
+--------------------------------------------------------------------------------
+-- |
+-- Module : Dhek.Types
+--
+-- Main type declaration and intances
+--------------------------------------------------------------------------------
 module Dhek.Types where
 
+--------------------------------------------------------------------------------
 import Control.Applicative ((<*>), (<$>))
-import Control.Lens hiding ((.=), get)
 import Control.Monad (mzero)
 import Control.Monad.State (execState, evalStateT, modify, get)
 import Control.Monad.Trans (lift)
 import Data.Array (Array)
-import Data.Aeson hiding (Array)
-import Data.Aeson.Types (Parser)
 import Data.Foldable (foldMap)
-import Data.IntMap (IntMap, alter, empty, fromList)
-import Data.Monoid (Monoid (..))
-import qualified Data.Vector as V
+import Data.List (sortBy)
+
+--------------------------------------------------------------------------------
+import           Control.Lens hiding ((.=))
+import           Data.Aeson hiding (Array)
+import           Data.Aeson.Types (Parser)
+import           Data.IntMap (IntMap, empty, fromList)
+import qualified Data.Map                         as Map
+import           Data.Monoid (Monoid (..))
+import qualified Data.Vector                      as V
+import qualified Graphics.UI.Gtk.Poppler.Document as Poppler
+
+--------------------------------------------------------------------------------
 import Dhek.Version
-import Graphics.UI.Gtk hiding (get)
-import Graphics.UI.Gtk.Poppler.Document (Document, Page)
 
-data Viewer = Viewer { _viewerDocument  :: Document
-                     , _viewerPages     :: Array Int PageItem
-                     , _viewerPageCount :: Int
-                     }
+--------------------------------------------------------------------------------
+-- | Declarations
+--------------------------------------------------------------------------------
+data Viewer
+    = Viewer
+      { _viewerDocument  :: Poppler.Document
+      , _viewerPages     :: Array Int PageItem
+      , _viewerPageCount :: Int
+      }
 
-data Board = Board { _boardRects :: !(IntMap Rect) } deriving Show
+--------------------------------------------------------------------------------
+data Board
+    = Board
+      { _boardRects :: !(IntMap Rect) }
+    deriving Show
 
-data BoardEvent = None
-                | Hold Rect (Double, Double)
-                | Resize Rect (Double, Double) Area deriving (Show, Eq)
+--------------------------------------------------------------------------------
+data BoardEvent
+    = None
+    | Hold Rect (Double, Double)
+    | Resize Rect (Double, Double) Area
+    deriving (Show, Eq)
 
-data Area = TOP_LEFT
-          | TOP
-          | TOP_RIGHT
-          | RIGHT
-          | BOTTOM_RIGHT
-          | BOTTOM
-          | BOTTOM_LEFT
-          | LEFT deriving (Enum, Show, Eq)
+--------------------------------------------------------------------------------
+data Area
+    = TOP_LEFT
+    | TOP
+    | TOP_RIGHT
+    | RIGHT
+    | BOTTOM_RIGHT
+    | BOTTOM
+    | BOTTOM_LEFT
+    | LEFT
+    deriving (Enum, Show, Eq)
 
-data Direction = NORTH
-               | EAST
-               | SOUTH
-               | WEST deriving (Eq, Show)
+--------------------------------------------------------------------------------
+data Direction
+    = NORTH
+    | EAST
+    | SOUTH
+    | WEST
+    deriving (Eq, Show)
 
-data Boards = Boards { _boardsState     :: {-# UNPACK #-} !Int
-                     , _boardsEvent     :: !BoardEvent
-                     , _boardsSelection :: !(Maybe Rect)
-                     , _boardsOvered    :: !(Maybe Rect)
-                     , _boardsSelected  :: !(Maybe Rect)
-                     , _boardsCurGuide  :: !(Maybe Guide)
-                     , _boardsGuides    :: ![Guide]
-                     , _boardsMap       :: !(IntMap Board) }
+--------------------------------------------------------------------------------
+data Boards
+    = Boards
+      { _boardsState     :: !Int
+      , _boardsEvent     :: !BoardEvent
+      , _boardsSelection :: !(Maybe Rect)
+      , _boardsOvered    :: !(Maybe Rect)
+      , _boardsSelected  :: !(Maybe Rect)
+      , _boardsCurGuide  :: !(Maybe Guide)
+      , _boardsGuides    :: ![Guide]
+      , _boardsMap       :: !(IntMap Board)
+      }
 
-data Rect = Rect { _rectId     :: {-# UNPACK #-} !Int
-                 , _rectX      :: {-# UNPACK #-} !Double
-                 , _rectY      :: {-# UNPACK #-} !Double
-                 , _rectHeight :: {-# UNPACK #-} !Double
-                 , _rectWidth  :: {-# UNPACK #-} !Double
-                 , _rectName   :: !String
-                 , _rectType   :: !String
-                 , _rectValue  :: !(Maybe String)
-                 , _rectIndex  :: !(Maybe Int)
-                 } deriving (Eq, Show)
+--------------------------------------------------------------------------------
+data Grouped
+    = Simple Rect
+    | Grouped String GType [Rect]
 
-data GuideType = GuideVertical | GuideHorizontal
+--------------------------------------------------------------------------------
+data GType = TextCell
 
-data Guide = Guide { _guideValue :: {-# UNPACK #-} !Double
-                   , _guideType  :: !GuideType }
+--------------------------------------------------------------------------------
+data Rect
+    = Rect
+      { _rectId     :: !Int
+      , _rectX      :: !Double
+      , _rectY      :: !Double
+      , _rectHeight :: !Double
+      , _rectWidth  :: !Double
+      , _rectName   :: !String
+      , _rectType   :: !String
+      , _rectValue  :: !(Maybe String)
+      , _rectIndex  :: !(Maybe Int)
+      }
+    deriving (Eq, Show)
 
-data Save = Save { saveVersion :: !String
-                 , saveAreas   :: ![(Int, Maybe [Rect])] }
+--------------------------------------------------------------------------------
+data GuideType
+    = GuideVertical
+    | GuideHorizontal
 
-data PageItem = PageItem
-    { pagePtr    :: !Page
-    , pageWidth  :: {-# UNPACK #-} !Double
-    , pageHeight :: {-# UNPACK #-} !Double }
+--------------------------------------------------------------------------------
+data Guide
+    = Guide
+      { _guideValue :: !Double
+      , _guideType  :: !GuideType
+      }
 
+--------------------------------------------------------------------------------
+data Save
+    = Save
+      { saveVersion :: !String
+      , saveAreas   :: ![(Int, [Grouped])]
+      }
+
+--------------------------------------------------------------------------------
+data PageItem
+    = PageItem
+      { pagePtr    :: !Poppler.Page
+      , pageWidth  :: !Double
+      , pageHeight :: !Double
+      }
+
+--------------------------------------------------------------------------------
+-- | Lens declarations
+--------------------------------------------------------------------------------
 makeLenses ''Viewer
 makeLenses ''Board
 makeLenses ''Boards
 makeLenses ''Rect
 makeLenses ''Guide
 
+--------------------------------------------------------------------------------
+-- | Instances
+--------------------------------------------------------------------------------
 instance Monoid Board where
     mempty = Board empty
     mappend (Board l) (Board r) = Board (mappend l r)
 
+--------------------------------------------------------------------------------
 instance ToJSON Save where
     toJSON (Save v areas) =
-        let toPage (_, rects) = maybe Null (\t -> object ["areas" .= t]) rects
-            pages             = fmap toPage areas in
+        let toPage (_, rects)
+                | null rects = Null
+                | otherwise  = object ["areas" .= fmap toJsonGrouped rects]
+            pages = fmap toPage areas in
         object ["format" .= v, "pages" .= pages]
 
+--------------------------------------------------------------------------------
 instance FromJSON Save where
     parseJSON (Object v) = do
         ver   <- v .: "format"
@@ -105,18 +175,19 @@ instance FromJSON Save where
             modify (+1)
             i <- get
             case opt of
-              Null -> return (i, Nothing)
+              Null -> return (i, [])
               _    -> do
                   xs <- lift $ withObject "page" extractAreas opt
-                  return (i, Just xs)
+                  return (i, xs)
 
         extractAreas obj = do
             areas <- obj .: "areas"
             withArray "areas" (toAreas . V.toList) areas
 
-        toAreas = traverse parseJSON
-    parseJSON _          = mzero
+        toAreas = traverse parseGrouped
+    parseJSON _ = mzero
 
+--------------------------------------------------------------------------------
 instance ToJSON Rect where
     toJSON r =
         object $
@@ -135,6 +206,7 @@ instance ToJSON Rect where
                 , "type"   .= _rectType r
                 ]
 
+--------------------------------------------------------------------------------
 instance FromJSON Rect where
     parseJSON (Object v) =
         Rect 0         <$>
@@ -148,49 +220,122 @@ instance FromJSON Rect where
         v .:? "index"
     parseJSON _ = mzero
 
-saveNew :: [(Int, Maybe [Rect])] -> Save
-saveNew = Save dhekFullVersion
+--------------------------------------------------------------------------------
+toJsonGrouped :: Grouped -> Value
+toJsonGrouped (Simple r)
+    = toJSON r
+toJsonGrouped (Grouped name typ rs)
+    = case typ of
+    TextCell -> toJsonTextCell name rs
 
+--------------------------------------------------------------------------------
+toJsonTextCell :: String -> [Rect] -> Value
+toJsonTextCell name rs
+    = object [ "type"  .= ("celltext" :: String)
+             , "name"  .= name
+             , "cells" .= fmap toCell rs
+             ]
+  where
+    toCell r
+        = object [ "x"      .= _rectX r
+                 , "y"      .= _rectY r
+                 , "width"  .= _rectWidth r
+                 , "height" .= _rectHeight r
+                 , "index"  .= _rectIndex r
+                 ]
+
+--------------------------------------------------------------------------------
+parseGrouped :: Value -> Parser Grouped
+parseGrouped obj@(Object v)
+    = do typ <- v .: "type"
+         case (typ :: String) of
+             "celltext" -> parseTextCell obj
+             _          -> parseSimple obj
+parseGrouped _
+    = mzero
+
+--------------------------------------------------------------------------------
+parseSimple :: Value -> Parser Grouped
+parseSimple = fmap Simple . parseJSON
+
+--------------------------------------------------------------------------------
+parseTextCell :: Value -> Parser Grouped
+parseTextCell (Object v)
+    = do name  <- v .: "name"
+         cells <- v .: "cells"
+         let fromCell (Object c)
+                 = do x <- c .: "x"
+                      y <- c .: "y"
+                      w <- c .: "width"
+                      h <- c .: "height"
+                      i <- c .: "index"
+                      return Rect{ _rectId     = 0
+                                 , _rectX      = x
+                                 , _rectY      = y
+                                 , _rectType   = "textcell"
+                                 , _rectWidth  = w
+                                 , _rectHeight = h
+                                 , _rectIndex  = Just i
+                                 , _rectValue  = Nothing
+                                 , _rectName   = name
+                                 }
+             fromCell _ = mzero
+         rs <- traverse fromCell (cells :: [Value])
+         return $ Grouped name TextCell rs
+parseTextCell _
+    = mzero
+
+--------------------------------------------------------------------------------
+saveNew :: [(Int, [Rect])] -> Save
+saveNew xs = Save dhekFullVersion xs' where
+  xs' = fmap (\(i,rs) -> (i, classifyRects rs)) xs
+
+--------------------------------------------------------------------------------
 boardsNew :: Int -> Boards
 boardsNew n = Boards 0 None Nothing Nothing Nothing Nothing [] maps
   where
     maps = fromList $ fmap (\i -> (i, Board empty)) [1..n]
 
-fillUp :: Int -> [(Int, [Rect])] -> [(Int, Maybe [Rect])]
+--------------------------------------------------------------------------------
+fillUp :: Int -> [(Int, [Rect])] -> [(Int, [Rect])]
 fillUp n xs = go xs [1..n]
   where
-    go [] is = fmap (\i -> (i, Nothing)) is
+    go [] is = fmap (\i -> (i, [])) is
     go _ []  = []
-    go v@((k, rs):xs) (i:is)
-        | k == i = (k, bool (null rs) Nothing (Just rs)) : go xs is
-        | k > i  = (i, Nothing) : go v is
+    go v@((k, rs):rest) (i:is)
+        | k == i = (k, rs) : go rest is
+        | k > i  = (i, []) : go v is
+    go _ _ = error "impossible situation in Types.fillUp"
 
-bool :: Bool -> a -> a -> a
-bool True x _  = x
-bool False _ y = y
-
+--------------------------------------------------------------------------------
 rectNew :: Double -> Double -> Double -> Double -> Rect
 rectNew x y h w = Rect 0 x y h w "field" "text" Nothing Nothing
 
+--------------------------------------------------------------------------------
 translateRect :: Double -> Double -> Rect -> Rect
 translateRect x y r = r & rectX +~ x & rectY +~ y
 
+--------------------------------------------------------------------------------
 translateRectX :: Double -> Rect -> Rect
 translateRectX x r = r & rectX +~ x
 
+--------------------------------------------------------------------------------
 translateRectY :: Double -> Rect -> Rect
 translateRectY y r = r & rectY +~ y
 
+--------------------------------------------------------------------------------
 eventGetRect :: BoardEvent -> Maybe Rect
 eventGetRect (Hold r _)     = Just r
 eventGetRect (Resize r _ _) = Just r
 eventGetRect _              = Nothing
 
+--------------------------------------------------------------------------------
 eventSetRect :: Rect -> BoardEvent -> BoardEvent
 eventSetRect r (Hold _ x)     = Hold r x
 eventSetRect r (Resize _ x y) = Resize r x y
 eventSetRect _ e              = e
 
+--------------------------------------------------------------------------------
 normalize :: Rect -> Rect
 normalize r = newRectY newRectX
   where
@@ -207,6 +352,7 @@ normalize r = newRectY newRectX
         | h < 0     = r { _rectY = y + h, _rectHeight = abs h }
         | otherwise = r
 
+--------------------------------------------------------------------------------
 addRect :: Int -> Rect -> Boards -> Boards
 addRect page x = execState action
   where
@@ -216,6 +362,7 @@ addRect page x = execState action
         let x' = x & rectId .~ i & rectName %~ (++ show i)
         (boardsMap.at page.traverse.boardRects.at i) ?= x'
 
+--------------------------------------------------------------------------------
 rectArea :: Double -> Rect -> Area -> Rect
 rectArea eps r area = go area
   where
@@ -233,6 +380,7 @@ rectArea eps r area = go area
     go BOTTOM_LEFT  = rectNew x (y+h-eps) eps eps
     go LEFT         = rectNew x (y+eps) (h-2*eps) eps
 
+--------------------------------------------------------------------------------
 -- | Using Minkowski Sum
 rectIntersect :: Rect -> Rect -> Maybe Direction
 rectIntersect a b
@@ -270,10 +418,12 @@ rectIntersect a b
     wy = w * dy
     hx = h * dx
 
+--------------------------------------------------------------------------------
 modifyEventRect :: (Rect -> Rect) -> BoardEvent -> BoardEvent
 modifyEventRect k (Hold r p)     = Hold (k r) p
 modifyEventRect k (Resize r p a) = Resize (k r) p a
 
+--------------------------------------------------------------------------------
 oppositeDirection :: Direction -> Direction
 oppositeDirection NORTH = SOUTH
 oppositeDirection SOUTH = NORTH
@@ -283,3 +433,25 @@ oppositeDirection WEST  = EAST
 --------------------------------------------------------------------------------
 sameRectId :: Rect -> Rect -> Bool
 sameRectId r x = (x ^. rectId) == (r ^. rectId)
+
+--------------------------------------------------------------------------------
+classifyRects :: [Rect] -> [Grouped]
+classifyRects = loop Map.empty where
+  loop m []
+      = let toGroup (name, xs)
+                = Grouped name TextCell $ sortBy sortF xs
+            sortF l r
+                = compare (l ^. rectIndex) (r ^. rectIndex) in
+        fmap toGroup (Map.toList m)
+  loop m (r:rs)
+      | r ^. rectType /= "textcell" = Simple r : loop m rs
+      | otherwise =
+          let key = r ^. rectName
+              m'  = Map.insertWith (++) key [r] m in
+          loop m' rs
+
+--------------------------------------------------------------------------------
+expandGrouped :: [Grouped] -> [Rect]
+expandGrouped = foldMap go where
+  go (Simple r)       = [r]
+  go (Grouped _ _ rs) = rs

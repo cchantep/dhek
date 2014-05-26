@@ -28,7 +28,6 @@ onJsonSave = compile $ do
     traverse_ go fOpt
   where
     go path = do
-        nb <- getPageCount
         rs <- getAllRects
         let nb   = length rs
             save = saveNew $ fillUp nb rs
@@ -63,6 +62,5 @@ exception (e :: SomeException) = showError $ show e
 
 --------------------------------------------------------------------------------
 saveToRects :: Save -> [(Int, [Rect])]
-saveToRects (Save _ xs) = fmap go xs
-  where
-    go (i, xsOpt) = (i, maybe [] id xsOpt)
+saveToRects (Save _ xs)
+    = fmap (\(i, rs) -> (i, expandGrouped rs)) xs
