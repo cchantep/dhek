@@ -455,3 +455,13 @@ expandGrouped :: [Grouped] -> [Rect]
 expandGrouped = foldMap go where
   go (Simple r)       = [r]
   go (Grouped _ _ rs) = rs
+
+--------------------------------------------------------------------------------
+rectCompareX :: Rect -> Rect -> Ordering
+rectCompareX a b
+    = compare (a ^. rectX) (b ^. rectX)
+
+--------------------------------------------------------------------------------
+rectCompareIndex :: Rect -> Rect -> Ordering
+rectCompareIndex a b
+    = compare (a ^. rectIndex) (b ^. rectIndex)

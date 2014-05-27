@@ -13,15 +13,13 @@ module Dhek.Mode.Selection (selectionModeManager) where
 import Prelude hiding (mapM_)
 import Control.Applicative
 import Data.Foldable (for_, foldMap, mapM_, traverse_)
-import Data.List (sortBy)
-import Data.Maybe (isJust)
+import Data.List (replicate, sortBy)
 import Data.Traversable
 
 --------------------------------------------------------------------------------
 import           Control.Lens
 import           Control.Monad.RWS hiding (mapM_)
 import           Control.Monad.State (evalState)
-import           Control.Monad.Trans
 import qualified Graphics.Rendering.Cairo     as Cairo
 import qualified Graphics.UI.Gtk              as Gtk
 import qualified Graphics.UI.Gtk.Poppler.Page as Poppler
@@ -40,9 +38,10 @@ import Dhek.Types
 --------------------------------------------------------------------------------
 data Input
     = Input
-      { inputGUI  :: GUI
-      , inputTop  :: Gtk.Button
-      , inputDist :: Gtk.Button
+      { inputGUI        :: GUI
+      , inputTop        :: Gtk.Button
+      , inputDist       :: Gtk.Button
+      , inputDistCreate :: Gtk.Button
       }
 
 --------------------------------------------------------------------------------
@@ -90,10 +89,13 @@ instance ModeMonad SelectionMode where
             let crs          = foldMap (collectSelected r) rs
                 hasSelection = not $ null crs
                 atLeast3     = length crs >= 3
+                cDistCreate  = canActiveDistCreate crs
+
             -- if no area is selected, we disable 'top' and 'distribute' button
             liftIO $ do
                 Gtk.widgetSetSensitive (inputTop input) hasSelection
                 Gtk.widgetSetSensitive (inputDist input) atLeast3
+                Gtk.widgetSetSensitive (inputDistCreate input) cDistCreate
 
             for_ crs $ \cr ->
                 liftIO $ gtkSelectRect cr $ inputGUI input
@@ -122,7 +124,6 @@ instance ModeMonad SelectionMode where
                 height = ratio * (pageHeight page)
                 fw     = fromIntegral fw'
                 fh     = fromIntegral fh'
-                eventR = (ds ^. drawEvent) >>= eventGetRect
                 area   = guiDrawingArea gui
 
             Gtk.widgetSetSizeRequest area (truncate width) (truncate height)
@@ -185,7 +186,7 @@ distButtonActivated gui = do
     case rs of
         []   -> return ()
         x:xs -> do
-            let sorted = sortBy sortF rs
+            let sorted = sortBy rectCompareX rs
                 _AN = fromIntegral $ length rs -- number of selected area
                 _AW = foldr sumWidthF 0 rs -- selected areas width summed
                 _L  = head sorted -- most left rectangle
@@ -213,29 +214,84 @@ distButtonActivated gui = do
     sumWidthF :: Rect -> Double -> Double
     sumWidthF r s = s + realToFrac (r ^. rectWidth)
 
-    sortF a b = compare (a ^. rectX) (b ^. rectX)
+--------------------------------------------------------------------------------
+-- | Called when 'Distribute create' button, located in mode's toolbar,
+--   is clicked
+distCreateButtonActivated :: EngineCtx m => GUI -> m ()
+distCreateButtonActivated gui
+    = do sel <- use $ engineDrawState.drawMultiSel
+         let (r0:r1:rn:_) = sortBy rectCompareIndex sel
+             y    = r0 ^. rectY
+             w    = r0 ^. rectWidth
+             h    = r0 ^. rectHeight
+             name = r0 ^. rectName
+             s -- Horizontal space between 0 & 1
+                 = r1 ^. rectX - (r0 ^. rectX + w)
+             d -- Distance between 0 & N
+                 = rn ^. rectX - (r1 ^. rectX + w + s)
+             m -- Number of cells to be created between cell 1 & N
+                 = floor (((realToFrac d) / realToFrac (w + s) :: Double))
+             rn' -- N index is updated according to 'm' new rectangles
+                 = rn & rectIndex ?~ m+1
+
+             -- Create 'm' new rectangles
+             loop _ _ []
+                 = return ()
+             loop prevRect idx (_:rest)
+                 = do rid <- engineDrawState.drawFreshId <+= 1
+                      let rx = prevRect ^. rectX + prevRect ^. rectWidth + s
+                          r  = rectNew rx y h w & rectId    .~ rid
+                                                & rectName  .~ name
+                                                & rectType  .~ "textcell"
+                                                & rectIndex ?~ idx
+                      engineStateSetRect r
+                      liftIO $ gtkAddRect r gui
+                      engineDrawState.drawMultiSel %= (r:)
+                      loop r (idx+1) rest
+
+         loop r1 2 (replicate m ())
+         engineStateSetRect rn'
+
+--------------------------------------------------------------------------------
+-- | Dist create button is enabled if only 3 textcells with same name property
+--   are selected, and if indexes of these cells are 0, 1 and N>2.
+canActiveDistCreate :: [Rect] -> Bool
+canActiveDistCreate rs@(_:_:_:[])
+    = let (r0:r1:rn:_) = sortBy rectCompareIndex rs
+          areTextcell  = all ((== "textcell") . (^. rectType)) rs
+          sameName     = all ((== r0 ^. rectName) . (^. rectName)) [r1,rn] in
+      areTextcell               &&
+      r0 ^. rectIndex == Just 0 &&
+      r1 ^. rectIndex == Just 1 &&
+      rn ^. rectIndex >  Just 1 &&
+      sameName
+canActiveDistCreate _
+    = False
 
 --------------------------------------------------------------------------------
 runSelection :: GUI
              -> Gtk.Button
              -> Gtk.Button
+             -> Gtk.Button
              -> SelectionMode a
              -> EngineState
              -> IO EngineState
-runSelection gui btop bdist (SelectionMode m)  s = do
+runSelection gui btop bdist bdistcreate (SelectionMode m)  s = do
     (s', _) <- execRWST m input s
     return s'
   where
     input
         = Input
-          { inputGUI  = gui
-          , inputTop  = btop
-          , inputDist = bdist
+          { inputGUI        = gui
+          , inputTop        = btop
+          , inputDist       = bdist
+          , inputDistCreate = bdistcreate
           }
 
 --------------------------------------------------------------------------------
-selectionMode :: GUI -> Gtk.Button -> Gtk.Button -> Mode
-selectionMode gui btop bdist = Mode (runSelection gui btop bdist . runM)
+selectionMode :: GUI -> Gtk.Button -> Gtk.Button -> Gtk.Button -> Mode
+selectionMode gui btop bdist bdistcreate
+    = Mode (runSelection gui btop bdist bdistcreate. runM)
 
 --------------------------------------------------------------------------------
 selectionModeManager :: ((forall m. EngineCtx m => m ()) -> IO ())
@@ -265,19 +321,33 @@ selectionModeManager handler gui = do
     Gtk.widgetSetSensitive bdist False
     did <- Gtk.on bdist Gtk.buttonActivated $ handler $ distButtonActivated gui
 
+    -- Distribute create button
+    bdistcreate <- Gtk.buttonNew
+    bdimg <- Gtk.imageNewFromFile $ joinPath [resDir, "distribute-create.png"]
+    Gtk.buttonSetImage bdistcreate bdimg
+    Gtk.containerAdd toolbar bdistcreate
+    Gtk.widgetSetSensitive bdistcreate False
+    dcid <- Gtk.on bdistcreate Gtk.buttonActivated $ handler $
+            distCreateButtonActivated gui
+
     Gtk.widgetShowAll vsep
     Gtk.widgetShowAll btop
     Gtk.widgetShowAll bdist
+    Gtk.widgetShowAll bdistcreate
 
-    return $ ModeManager (selectionMode gui btop bdist) $ liftIO $ do
-        Gtk.signalDisconnect cid
-        Gtk.signalDisconnect did
-        Gtk.widgetDestroy vsep
-        Gtk.widgetDestroy btop
-        Gtk.widgetDestroy bdist
-        Gtk.widgetDestroy vsep
-        Gtk.treeSelectionSetMode (guiRectTreeSelection gui)
-            Gtk.SelectionSingle
+    return $ ModeManager (selectionMode gui btop bdist bdistcreate) $
+        do engineDrawState.drawMultiSel .= []
+           liftIO $
+               do Gtk.signalDisconnect cid
+                  Gtk.signalDisconnect did
+                  Gtk.signalDisconnect dcid
+                  Gtk.widgetDestroy vsep
+                  Gtk.widgetDestroy btop
+                  Gtk.widgetDestroy bdist
+                  Gtk.widgetDestroy bdistcreate
+                  Gtk.widgetDestroy vsep
+                  Gtk.treeSelectionSetMode (guiRectTreeSelection gui)
+                      Gtk.SelectionSingle
   where
     toolbar = guiModeToolbar gui
 

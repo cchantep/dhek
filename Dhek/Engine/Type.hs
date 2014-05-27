@@ -198,3 +198,10 @@ engineStateSetRects rs = do
     forM_ rs $ \r -> do
         let rid = r ^. rectId
         engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r
+
+--------------------------------------------------------------------------------
+engineStateSetRect :: MonadState EngineState m => Rect -> m ()
+engineStateSetRect r
+    = do pid <- use engineCurPage
+         let rid = r ^. rectId
+         engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r
