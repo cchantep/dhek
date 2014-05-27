@@ -73,18 +73,17 @@ instance ModeMonad DuplicateMode where
                 liftIO $ gtkSetCursor (Just Gtk.Cross) gui
             Just (Hold x _) -> do
                 rid <- engineDrawState.drawFreshId <+= 1
-                let r = normalize x & rectId .~ rid
+                let r = normalize x & rectId    .~ rid
+                                    & rectIndex %~ (fmap (+1))
 
                 -- Add rectangle
-                pid <- use engineCurPage
                 gui <- ask
-                engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r
+                engineStateSetRect r
                 liftIO $ gtkAddRect r gui
 
                 engineDrawState.drawEvent     .= Nothing
                 engineDrawState.drawCollision .= Nothing
 
-                gui <- ask
                 liftIO $ gtkSetCursor Nothing gui
                 engineEventStack %= (CreateRect:)
 
