@@ -510,11 +510,12 @@ loadPdf i path = do
                 name = _engineFilename env
                 nb   = v ^. viewerPageCount
                 ds   = s ^. engineDrawState
-                s'   = s { _engineOverlap   = s ^. engineOverlap
-                         , _engineBoards    = boardsNew nb
-                         , _engineCurPage   = 1
-                         , _engineCurZoom   = 3
-                         , _engineDrawState = ds { _drawFreshId = 0 }
+                s'   = s { _engineOverlap    = s ^. engineOverlap
+                         , _engineBoards     = boardsNew nb
+                         , _engineCurPage    = 1
+                         , _engineCurZoom    = 3
+                         , _engineDrawState  = ds { _drawFreshId = 0 }
+                         , _engineEventStack = []
                          }
             writeIORef (_internal i) (Just v)
             writeIORef (_env i) env
@@ -527,7 +528,7 @@ loadPdf i path = do
             Gtk.widgetSetSensitive (guiNextButton gui) (nb /= 1)
             Gtk.windowSetTitle (guiWindow gui)
                 (name ++ " (page 1 / " ++ show nb ++ ")")
-            Gtk.widgetQueueDraw $ guiDrawingArea gui
+            engineSetMode DhekNormal i
   where
     gui = _gui i
 --------------------------------------------------------------------------------
