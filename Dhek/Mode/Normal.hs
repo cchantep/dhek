@@ -11,7 +11,8 @@ import Prelude hiding (mapM_)
 
 --------------------------------------------------------------------------------
 import Control.Applicative
-import Data.Foldable (for_, mapM_)
+import Data.Foldable (find, for_, mapM_)
+import Data.Maybe (isJust, isNothing)
 import Data.Traversable
 
 --------------------------------------------------------------------------------
@@ -31,6 +32,7 @@ import Dhek.GUI.Action
 import Dhek.Instr
 import Dhek.Mode.Common.Draw
 import Dhek.Types
+import Dhek.Utils (findDelete)
 
 --------------------------------------------------------------------------------
 newtype NormalMode a
@@ -46,14 +48,29 @@ newtype NormalMode a
 --------------------------------------------------------------------------------
 instance ModeMonad NormalMode where
     mMove opts = do
+        gs <- engineStateGetGuides
 
-        let oOpt = getOverRect opts
-            aOpt = getOverArea opts
+        let oOpt   = getOverRect opts
+            aOpt   = getOverArea opts
+            gRange = guideRange opts
+            ogOpt  = find (isOverGuide gRange opts) gs
 
         eOpt <- use $ engineDrawState.drawEvent
         sOpt <- use $ engineDrawState.drawSelection
+        gOpt <- use $ engineDrawState.drawCurGuide
 
         engineDrawState.drawOverRect .= oOpt
+
+        gui <- ask
+        for_ gOpt $ \g ->
+            do x <- liftIO $ Gtk.get (guiHRuler gui) Gtk.rulerPosition
+               y <- liftIO $ Gtk.get (guiVRuler gui) Gtk.rulerPosition
+               let v = case g ^. guideType of
+                       GuideVertical   -> x
+                       GuideHorizontal -> y
+
+               let g' = g & guideValue .~ v
+               engineDrawState.drawCurGuide ?= g'
 
         -- When user draws a rectangle
         for_ sOpt $ \s -> do
@@ -68,10 +85,10 @@ instance ModeMonad NormalMode where
 
         let cursorOpt = fmap eventCursor eOpt <|>
                         fmap areaCursor aOpt  <|>
-                        Gtk.Hand1 <$ oOpt
+                        Gtk.Hand1 <$ oOpt     <|>
+                        Gtk.Hand1 <$ (gOpt <|> ogOpt)
 
         -- Update Gtk cursor
-        gui <- ask
         liftIO $ gtkSetCursor cursorOpt gui
 
       where
@@ -140,6 +157,7 @@ instance ModeMonad NormalMode where
             oOpt         = getOverRect opts
             aOpt         = getOverArea opts
             newSelection = rectNew x y 0 0
+            gRange       = guideRange opts
 
             onEvent r = do
                 let rid = r ^. rectId
@@ -150,13 +168,25 @@ instance ModeMonad NormalMode where
                 engineBoards.boardsMap.at pid.traverse.boardRects.at rid .=
                     Nothing
 
-        -- if user click on a blank area we're un drawing mode otherwise we enter
-        -- event mode (Resize or Hold).
-        maybe (engineDrawState.drawSelection ?= newSelection) onEvent oOpt
+            noEvent
+                = do gs <- engineStateGetGuides
+                     let (gOpt, gs') = findDelete (isOverGuide gRange opts) gs
+                     when (isJust gOpt) $
+                         do engineDrawState.drawCurGuide .= gOpt
+                            engineStateSetGuides gs'
+                     when (isNothing gOpt) $
+                         engineDrawState.drawSelection ?= newSelection
+
+        -- if user:
+        --      - click on nothing: we're in drawing mode
+        --      - click on a guide: guide is selected
+        --      - click on a rectangle: we enter in event mode (Resize or Hold).
+        maybe noEvent onEvent oOpt
 
     mRelease = do
         sOpt <- use $ engineDrawState.drawSelection
         eOpt <- use $ engineDrawState.drawEvent
+        gOpt <- use $ engineDrawState.drawCurGuide
 
         -- on event mode, we re-insert targeted rectangle rectangle list
         for_ eOpt $ \e -> do
@@ -197,9 +227,14 @@ instance ModeMonad NormalMode where
             engineDrawState.drawSelection .= Nothing
             engineEventStack %= (CreateRect:)
 
+        -- on guide update, we insert back the updated guide to its board
+        for_ gOpt $ \g ->
+            do gs <- engineStateGetGuides
+               engineStateSetGuides (g:gs)
+               engineDrawState.drawCurGuide .= Nothing
+
     mDrawing page ratio = do
         gui <- ask
-        ds  <- use $ engineDrawState
         ds  <- use $ engineDrawState
         pid <- use $ engineCurPage
         bd  <- use $ engineBoards.boardsMap.at pid.traverse
@@ -280,3 +315,9 @@ normalSelectRectangle r = do
     engineDrawState.drawSelected ?= r
     gui <- ask
     liftIO $ gtkSelectRect r gui
+
+--------------------------------------------------------------------------------
+-- | Guide range detection in pixels
+guideRange :: DrawEnv -> Double
+guideRange opts
+    = 10 / ratio where ratio = drawRatio opts

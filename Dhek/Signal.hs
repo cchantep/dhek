@@ -19,7 +19,6 @@ import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
 import Dhek.Action (onNext, onPrev, onMinus, onPlus, onRem, onApplidok)
-import Dhek.Draw
 import Dhek.GUI
 import Dhek.GUI.Action
 import Dhek.File (onJsonImport, onJsonSave)

@@ -207,3 +207,15 @@ engineStateSetRect r
     = do pid <- use engineCurPage
          let rid = r ^. rectId
          engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r
+
+--------------------------------------------------------------------------------
+engineStateGetGuides :: MonadState EngineState m => m [Guide]
+engineStateGetGuides
+    = do pid <- use engineCurPage
+         use $ engineBoards.boardsMap.at pid.traverse.boardGuides
+
+--------------------------------------------------------------------------------
+engineStateSetGuides :: MonadState EngineState m => [Guide] -> m ()
+engineStateSetGuides gs
+    = do pid <- use engineCurPage
+         engineBoards.boardsMap.at pid.traverse.boardGuides .= gs

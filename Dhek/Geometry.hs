@@ -269,3 +269,12 @@ areaCursor BOTTOM_RIGHT = BottomRightCorner
 areaCursor BOTTOM       = BottomSide
 areaCursor BOTTOM_LEFT  = BottomLeftCorner
 areaCursor LEFT         = LeftSide
+
+--------------------------------------------------------------------------------
+isOverGuide :: Double -> DrawEnv -> Guide -> Bool
+isOverGuide gRange opts (Guide pos typ)
+    = case typ of
+    GuideVertical   -> pos-gRange <= x && x <= pos+gRange
+    GuideHorizontal -> pos-gRange <= y && y <= pos+gRange
+  where
+    (x,y) = drawPointer opts

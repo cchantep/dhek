@@ -25,7 +25,6 @@ executable dhek
 
   other-modules: Dhek.Launcher
                  Dhek.Action
-                 Dhek.Draw
                  Dhek.Engine
                  Dhek.Engine.Interpreter
                  Dhek.Engine.Type
@@ -44,6 +43,7 @@ executable dhek
                  Dhek.Version
                  Dhek.Types
                  Dhek.AppUtil
+                 Dhek.Utils
 
   default-extensions:  TemplateHaskell
   build-depends:       base          == 4.7.*
@@ -64,6 +64,7 @@ executable dhek
                        , text
                        , Cabal == 1.18.*
                        , process
+                       , recursion-schemes >= 4.1
 
   if os(windows)
     ghc-options: -O2 -threaded -optl-mwindows
