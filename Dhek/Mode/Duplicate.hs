@@ -92,10 +92,11 @@ instance ModeMonad DuplicateMode where
     mDrawing page ratio = do
         gui <- ask
         ds  <- use $ engineDrawState
-        gds <- use $ engineBoards.boardsGuides
-        gd  <- use $ engineBoards.boardsCurGuide
         pid <- use $ engineCurPage
-        rs  <- use $ engineBoards.boardsMap.at pid.traverse.boardRects.to I.elems
+        bd  <- use $ engineBoards.boardsMap.at pid.traverse
+        let guides   = bd ^. boardGuides
+            curGuide = ds ^. drawCurGuide
+            rects    = bd ^. boardRects.to I.elems
 
         liftIO $ do
             frame     <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
@@ -117,13 +118,13 @@ instance ModeMonad DuplicateMode where
 
                 Cairo.scale ratio ratio
                 Poppler.pageRender (pagePtr page)
-                mapM_ (drawGuide fw fh) gds
-                mapM_ (drawGuide fw fh) gd
+                mapM_ (drawGuide fw fh) guides
+                mapM_ (drawGuide fw fh) curGuide
                 Cairo.closePath
                 Cairo.stroke
 
                 -- We consider every rectangle as regular one (e.g not selected)
-                traverse_ (drawRect fw fh regularColor Line) rs
+                traverse_ (drawRect fw fh regularColor Line) rects
 
                 -- Draw event rectangle
                 for_ eventR $ \r -> do

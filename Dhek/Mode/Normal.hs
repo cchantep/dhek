@@ -200,10 +200,12 @@ instance ModeMonad NormalMode where
     mDrawing page ratio = do
         gui <- ask
         ds  <- use $ engineDrawState
-        gds <- use $ engineBoards.boardsGuides
-        gd  <- use $ engineBoards.boardsCurGuide
+        ds  <- use $ engineDrawState
         pid <- use $ engineCurPage
-        rs  <- use $ engineBoards.boardsMap.at pid.traverse.boardRects.to I.elems
+        bd  <- use $ engineBoards.boardsMap.at pid.traverse
+        let guides   = bd ^. boardGuides
+            curGuide = ds ^. drawCurGuide
+            rects    = bd ^. boardRects.to I.elems
 
         liftIO $ do
             frame     <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
@@ -225,13 +227,13 @@ instance ModeMonad NormalMode where
 
                 Cairo.scale ratio ratio
                 Poppler.pageRender (pagePtr page)
-                mapM_ (drawGuide fw fh) gds
-                mapM_ (drawGuide fw fh) gd
+                mapM_ (drawGuide fw fh) guides
+                mapM_ (drawGuide fw fh) curGuide
                 Cairo.closePath
                 Cairo.stroke
 
                 -- Draw the entire board
-                for_ rs $ \r ->
+                for_ rects $ \r ->
                     case () of
                         _ | Just r == ds ^. drawSelected -> do
                               drawRect fw fh selectedColor Line r

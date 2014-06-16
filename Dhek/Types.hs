@@ -43,7 +43,9 @@ data Viewer
 --------------------------------------------------------------------------------
 data Board
     = Board
-      { _boardRects :: !(IntMap Rect) }
+      { _boardRects  :: !(IntMap Rect)
+      , _boardGuides :: ![Guide]
+      }
     deriving Show
 
 --------------------------------------------------------------------------------
@@ -81,8 +83,6 @@ data Boards
       , _boardsSelection :: !(Maybe Rect)
       , _boardsOvered    :: !(Maybe Rect)
       , _boardsSelected  :: !(Maybe Rect)
-      , _boardsCurGuide  :: !(Maybe Guide)
-      , _boardsGuides    :: ![Guide]
       , _boardsMap       :: !(IntMap Board)
       }
 
@@ -113,6 +113,7 @@ data Rect
 data GuideType
     = GuideVertical
     | GuideHorizontal
+    deriving Show
 
 --------------------------------------------------------------------------------
 data Guide
@@ -120,6 +121,7 @@ data Guide
       { _guideValue :: !Double
       , _guideType  :: !GuideType
       }
+    deriving Show
 
 --------------------------------------------------------------------------------
 data Save
@@ -149,8 +151,8 @@ makeLenses ''Guide
 -- | Instances
 --------------------------------------------------------------------------------
 instance Monoid Board where
-    mempty = Board empty
-    mappend (Board l) (Board r) = Board (mappend l r)
+    mempty = Board empty []
+    mappend (Board l g) (Board r g') = Board (mappend l r) (g ++ g')
 
 --------------------------------------------------------------------------------
 instance ToJSON Save where
@@ -292,9 +294,9 @@ saveNew xs = Save dhekFullVersion xs' where
 
 --------------------------------------------------------------------------------
 boardsNew :: Int -> Boards
-boardsNew n = Boards 0 None Nothing Nothing Nothing Nothing [] maps
+boardsNew n = Boards 0 None Nothing Nothing Nothing maps
   where
-    maps = fromList $ fmap (\i -> (i, Board empty)) [1..n]
+    maps = fromList $ fmap (\i -> (i, Board empty [])) [1..n]
 
 --------------------------------------------------------------------------------
 fillUp :: Int -> [(Int, [Rect])] -> [(Int, [Rect])]

@@ -110,11 +110,13 @@ instance ModeMonad SelectionMode where
 
 
     mDrawing page ratio = do
-        gui <- asks inputGUI
-        ds  <- use $ engineDrawState
-        gds <- use $ engineBoards.boardsGuides
-        gd  <- use $ engineBoards.boardsCurGuide
-        rs  <- engineStateGetRects
+        gui   <- asks inputGUI
+        ds    <- use $ engineDrawState
+        pid   <- use $ engineCurPage
+        bd    <- use $ engineBoards.boardsMap.at pid.traverse
+        rects <- engineStateGetRects
+        let guides   = bd ^. boardGuides
+            curGuide = ds ^. drawCurGuide
 
         liftIO $ do
             frame     <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
@@ -135,13 +137,13 @@ instance ModeMonad SelectionMode where
 
                 Cairo.scale ratio ratio
                 Poppler.pageRender (pagePtr page)
-                mapM_ (drawGuide fw fh) gds
-                mapM_ (drawGuide fw fh) gd
+                mapM_ (drawGuide fw fh) guides
+                mapM_ (drawGuide fw fh) curGuide
                 Cairo.closePath
                 Cairo.stroke
 
                 -- We consider every rectangle as regular one (e.g not selected)
-                traverse_ (drawRect fw fh regularColor Line) rs
+                traverse_ (drawRect fw fh regularColor Line) rects
 
                 -- Draw drawing selection rectangle
                 for_ (ds ^. drawSelection) $ \r ->

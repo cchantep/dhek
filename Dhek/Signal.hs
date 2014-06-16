@@ -86,20 +86,6 @@ connectSignals g i = do
         popt <- engineCurrentPage i
         opt  <- engineRatio i
         for_ ((,) <$> popt <*> opt) $ \(page, ratio)-> do
-            let ds     = s ^. engineDrawState
-                params = DrawParams{ dpRatio = ratio
-                                   , dpSelected  = ds ^. drawSelected
-                                   , dpSelection = ds ^. drawSelection
-                                   , dpOvered    = ds ^. drawOverRect
-                                   , dpRects     = getRects s
-                                   , dpEvent     = ds ^. drawEvent
-                                   , dpPage      = page
-                                   , dpGuides    = s ^. engineBoards.boardsGuides
-                                   , dpCurGuide  = s ^. engineBoards.boardsCurGuide
-                                   , dpArea      = engineDrawingArea i
-                                   }
-
-            -- cairoDraw params
             engineRunDraw i
             hsize  <- Gtk.adjustmentGetPageSize $ guiHRulerAdjustment g
             vsize  <- Gtk.adjustmentGetPageSize $ guiVRulerAdjustment g

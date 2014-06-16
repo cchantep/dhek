@@ -334,7 +334,7 @@ _evalProgram env gui ref prg v= foldFree end susp prg where
       rOpt <- liftIO $ gtkGetTreeSelection gui
       k rOpt
   susp (NewGuide t k) = do
-      engineBoards.boardsCurGuide ?= Guide 0 t
+      engineDrawState.drawCurGuide ?= Guide 0 t
       k
   susp (UpdateGuide k) = do
       x <- liftIO $ Gtk.get (guiHRuler gui) Gtk.rulerPosition
@@ -346,20 +346,23 @@ _evalProgram env gui ref prg v= foldFree end susp prg where
                       GuideHorizontal -> y in
               g & guideValue .~ v
 
-      engineBoards.boardsCurGuide %= fmap upd
+      engineDrawState.drawCurGuide %= fmap upd
       k
   susp (AddGuide k) = do
-      gOpt <- use $ engineBoards.boardsCurGuide
-      gs   <- use $ engineBoards.boardsGuides
+      pid  <- use engineCurPage
+      gOpt <- use $ engineDrawState.drawCurGuide
+      gs   <- use $ engineBoards.boardsMap.at pid.traverse.boardGuides
 
       let gs1 = foldr (:) gs gOpt
 
-      engineBoards.boardsCurGuide .= Nothing
-      engineBoards.boardsGuides   .= gs1
-
+      engineDrawState.drawCurGuide .= Nothing
+      engineBoards.boardsMap.at pid.traverse.boardGuides .= gs1
       k
-  susp (GetCurGuide k) =  (use $ engineBoards.boardsCurGuide) >>= k
-  susp (GetGuides k) = (use $ engineBoards.boardsGuides) >>= k
+  susp (GetCurGuide k) =  (use $ engineDrawState.drawCurGuide) >>= k
+  susp (GetGuides k)
+      = do pid <- use engineCurPage
+           gs  <- use $ engineBoards.boardsMap.at pid.traverse.boardGuides
+           k gs
   susp (SelectJsonFile k) = do
       r <- liftIO $ gtkSelectJsonFile gui
       k r
