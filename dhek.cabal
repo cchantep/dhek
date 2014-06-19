@@ -69,9 +69,9 @@ executable dhek
                        , transformers >= 0.4
 
   if os(windows)
-    ghc-options: -O2 -threaded -optl-mwindows
+    ghc-options: -O2 -threaded -optl-mwindows -user-package-db -package cairo -package glib -package gio -package gtk3 -package poppler
   if os(darwin)
-    ghc-options: -O2 -threaded -optl-ObjC++ -optl-mmacosx-version-min=10.9 -framework AppKit
+    ghc-options: -O2 -threaded -optl-ObjC++ -optl-mmacosx-version-min=10.9 -framework AppKit -user-package-db -package cairo -package glib -package gio -package gtk3 -package poppler
   if !os(windows) && !os(darwin)
     ghc-options: -O2 -threaded -user-package-db -package cairo -package glib -package gio -package gtk3 -package poppler
 
