@@ -62,15 +62,15 @@ instance ModeMonad NormalMode where
         engineDrawState.drawOverRect .= oOpt
 
         gui <- ask
-        for_ gOpt $ \g ->
-            do x <- liftIO $ Gtk.get (guiHRuler gui) Gtk.rulerPosition
-               y <- liftIO $ Gtk.get (guiVRuler gui) Gtk.rulerPosition
-               let v = case g ^. guideType of
-                       GuideVertical   -> x
-                       GuideHorizontal -> y
+        -- for_ gOpt $ \g ->
+        --     do x <- liftIO $ Gtk.get (guiHRuler gui) Gtk.rulerPosition
+        --        y <- liftIO $ Gtk.get (guiVRuler gui) Gtk.rulerPosition
+        --        let v = case g ^. guideType of
+        --                GuideVertical   -> x
+        --                GuideHorizontal -> y
 
-               let g' = g & guideValue .~ v
-               engineDrawState.drawCurGuide ?= g'
+        --        let g' = g & guideValue .~ v
+        --        engineDrawState.drawCurGuide ?= g'
 
         -- When user draws a rectangle
         for_ sOpt $ \s -> do
@@ -243,8 +243,9 @@ instance ModeMonad NormalMode where
             rects    = bd ^. boardRects.to I.elems
 
         liftIO $ do
-            frame     <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
-            (fw',fh') <- Gtk.drawableGetSize frame
+            frame <- Gtk.widgetGetParentWindow $ guiDrawingArea gui
+            fw'   <- Gtk.drawWindowGetWidth frame
+            fh'   <- Gtk.drawWindowGetHeight frame
 
             let width  = ratio * (pageWidth page)
                 height = ratio * (pageHeight page)
@@ -254,7 +255,7 @@ instance ModeMonad NormalMode where
                 area   = guiDrawingArea gui
 
             Gtk.widgetSetSizeRequest area (truncate width) (truncate height)
-            Gtk.renderWithDrawable frame $ do
+            Gtk.renderWithDrawWindow frame $ do
                 -- Paint page background in white
                 Cairo.setSourceRGB 1.0 1.0 1.0
                 Cairo.rectangle 0 0 fw fh

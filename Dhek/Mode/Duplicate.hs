@@ -99,8 +99,9 @@ instance ModeMonad DuplicateMode where
             rects    = bd ^. boardRects.to I.elems
 
         liftIO $ do
-            frame     <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
-            (fw',fh') <- Gtk.drawableGetSize frame
+            frame <- Gtk.widgetGetParentWindow $ guiDrawingArea gui
+            fw'   <- Gtk.drawWindowGetWidth frame
+            fh'   <- Gtk.drawWindowGetHeight frame
 
             let width  = ratio * (pageWidth page)
                 height = ratio * (pageHeight page)
@@ -110,7 +111,7 @@ instance ModeMonad DuplicateMode where
                 area   = guiDrawingArea gui
 
             Gtk.widgetSetSizeRequest area (truncate width) (truncate height)
-            Gtk.renderWithDrawable frame $ do
+            Gtk.renderWithDrawWindow frame $ do
                 -- Paint page background in white
                 Cairo.setSourceRGB 1.0 1.0 1.0
                 Cairo.rectangle 0 0 fw fh

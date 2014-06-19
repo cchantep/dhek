@@ -323,7 +323,7 @@ _evalProgram env gui ref prg v= foldFree end susp prg where
       engineDraw .= True
       k
   susp (SetTitle t k) = do
-      liftIO $ Gtk.windowSetTitle (guiWindow gui) t
+      liftIO $ Gtk.set (guiWindow gui) [Gtk.windowTitle  Gtk.:= t]
       k
   susp (GetFilename k) = k $ _engineFilename env
   susp (ShowError e k) = do
@@ -336,18 +336,18 @@ _evalProgram env gui ref prg v= foldFree end susp prg where
   susp (NewGuide t k) = do
       engineDrawState.drawCurGuide ?= Guide 0 t
       k
-  susp (UpdateGuide k) = do
-      x <- liftIO $ Gtk.get (guiHRuler gui) Gtk.rulerPosition
-      y <- liftIO $ Gtk.get (guiVRuler gui) Gtk.rulerPosition
+  -- susp (UpdateGuide k) = do
+  --     x <- liftIO $ Gtk.get (guiHRuler gui) Gtk.rulerPosition
+  --     y <- liftIO $ Gtk.get (guiVRuler gui) Gtk.rulerPosition
 
-      let upd g =
-              let v = case g ^. guideType of
-                      GuideVertical   -> x
-                      GuideHorizontal -> y in
-              g & guideValue .~ v
+  --     let upd g =
+  --             let v = case g ^. guideType of
+  --                     GuideVertical   -> x
+  --                     GuideHorizontal -> y in
+  --             g & guideValue .~ v
 
-      engineDrawState.drawCurGuide %= fmap upd
-      k
+  --     engineDrawState.drawCurGuide %= fmap upd
+  --     k
   susp (AddGuide k) = do
       pid  <- use engineCurPage
       gOpt <- use $ engineDrawState.drawCurGuide
@@ -505,8 +505,9 @@ loadPdf i path = do
             Gtk.widgetSetSensitive (guiOverlapMenuItem gui) True
             Gtk.widgetSetSensitive (guiPrevButton gui) False
             Gtk.widgetSetSensitive (guiNextButton gui) (nb /= 1)
-            Gtk.windowSetTitle (guiWindow gui)
-                (name ++ " (page 1 / " ++ show nb ++ ")")
+            Gtk.set (guiWindow gui)
+                [Gtk.windowTitle Gtk.:=
+                 (name ++ " (page 1 / " ++ show nb ++ ")")]
             Gtk.widgetShowAll ahbox
         Just _ -> do
             let env  = ev { _engineFilename  = takeFileName path }
@@ -529,8 +530,9 @@ loadPdf i path = do
             Gtk.widgetSetSensitive (guiOverlapMenuItem gui) True
             Gtk.widgetSetSensitive (guiPrevButton gui) False
             Gtk.widgetSetSensitive (guiNextButton gui) (nb /= 1)
-            Gtk.windowSetTitle (guiWindow gui)
-                (name ++ " (page 1 / " ++ show nb ++ ")")
+            Gtk.set (guiWindow gui)
+                [Gtk.windowTitle Gtk.:=
+                 (name ++ " (page 1 / " ++ show nb ++ ")")]
             engineSetMode DhekNormal i
   where
     gui = _gui i

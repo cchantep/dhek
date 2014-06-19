@@ -42,8 +42,8 @@ data GUI =
     , guiDrawToggle :: Gtk.ToggleButton
     , guiDupToggle :: Gtk.ToggleButton
     , guiMultiSelToggle :: Gtk.ToggleButton
-    , guiVRuler :: Gtk.VRuler
-    , guiHRuler :: Gtk.HRuler
+--    , guiVRuler :: Gtk.VRuler
+--    , guiHRuler :: Gtk.HRuler
     , guiDrawingArea :: Gtk.DrawingArea
     , guiRectStore :: Gtk.ListStore Rect
     , guiNameEntry :: Gtk.Entry
@@ -67,7 +67,7 @@ data GUI =
 initGUI :: IO [String]
 initGUI = do
     gtk      <- Gtk.initGUI
-    Gtk.settingsGetDefault >>= 
+    Gtk.settingsGetDefault >>=
         foldr (\s err -> settings gtk s) (fail "No GTK default settings")
   where
     settings :: [String] -> Gtk.Settings -> IO [String]
@@ -77,7 +77,7 @@ initGUI = do
 
 makeGUI :: IO GUI
 makeGUI = do
-    gtkUI <- initGUI 
+    gtkUI <- initGUI
 
     -- Window creation
     win   <- Gtk.windowNew
@@ -206,8 +206,8 @@ makeGUI = do
 
     -- Drawing Area
     area     <- Gtk.drawingAreaNew
-    vruler   <- Gtk.vRulerNew
-    hruler   <- Gtk.hRulerNew
+--    vruler   <- Gtk.vRulerNew
+--    hruler   <- Gtk.hRulerNew
     halign   <- Gtk.alignmentNew 0 0 1 1
     valign   <- Gtk.alignmentNew 0 0 0 1
     hadj     <- Gtk.adjustmentNew 0 0 0 0 0 0
@@ -215,25 +215,25 @@ makeGUI = do
     viewport <- Gtk.viewportNew hadj vadj
     hscroll  <- Gtk.hScrollbarNew hadj
     vscroll  <- Gtk.vScrollbarNew vadj
-    tswin    <- Gtk.scrolledWindowNew Nothing Nothing
-    atable   <- Gtk.tableNew 3 3 False
+    --stwin     <- Gtk.scrolledWindowNew Nothing Nothing
+    atable   <- Gtk.tableNew 2 2 False
     atswin   <- Gtk.alignmentNew 0 0 1 1
     Gtk.containerAdd viewport area
-    Gtk.set vruler [Gtk.rulerMetric Gtk.:= Gtk.Pixels]
-    Gtk.set hruler [Gtk.rulerMetric Gtk.:= Gtk.Pixels]
+--    Gtk.set vruler [Gtk.rulerMetric Gtk.:= Gtk.Pixels]
+--    Gtk.set hruler [Gtk.rulerMetric Gtk.:= Gtk.Pixels]
     Gtk.widgetAddEvents area [Gtk.PointerMotionMask]
     Gtk.widgetSetSizeRequest viewport 200 200
-    Gtk.widgetSetSizeRequest hruler 25 25
-    Gtk.widgetSetSizeRequest vruler 25 25
+--    Gtk.widgetSetSizeRequest hruler 25 25
+--    Gtk.widgetSetSizeRequest vruler 25 25
     Gtk.tableSetRowSpacing atable 0 0
     Gtk.tableSetColSpacing atable 0 0
     let gtkTabAll  = [Gtk.Expand, Gtk.Shrink, Gtk.Fill]
         gtkTabView = [Gtk.Expand, Gtk.Fill]
-    Gtk.tableAttach atable hruler 1 2 0 1 gtkTabAll [Gtk.Fill] 0 0
-    Gtk.tableAttach atable hscroll 1 2 2 3 gtkTabAll [Gtk.Fill] 0 0
-    Gtk.tableAttach atable vruler 0 1 1 2 [Gtk.Fill] gtkTabAll 0 0
-    Gtk.tableAttach atable vscroll 2 3 1 2 [Gtk.Fill] gtkTabAll 0 0
-    Gtk.tableAttach atable viewport 1 2 1 2 gtkTabView gtkTabView 0 0
+--    Gtk.tableAttach atable hruler 1 2 0 1 gtkTabAll [Gtk.Fill] 0 0
+    Gtk.tableAttach atable hscroll 0 1 1 2 gtkTabAll [Gtk.Fill] 0 0
+--    Gtk.tableAttach atable vruler 0 1 1 2 [Gtk.Fill] gtkTabAll 0 0
+    Gtk.tableAttach atable vscroll 1 2 0 1 [Gtk.Fill] gtkTabAll 0 0
+    Gtk.tableAttach atable viewport 0 1 0 1 gtkTabView gtkTabView 0 0
     Gtk.boxPackStart vbox atable Gtk.PackGrow 0
 
     -- Area list
@@ -265,7 +265,7 @@ makeGUI = do
 
     app     <- Gtk.buttonNewWithLabel $ msgStr MsgApply
     apimg   <- Gtk.imageNewFromFile $ joinPath [resDir, "dialog-accept.png"]
-    Gtk.buttonSetImage app apimg 
+    Gtk.buttonSetImage app apimg
 
     idxspin <- Gtk.spinButtonNewWithRange 0 200 1
     nlabel  <- Gtk.labelNew (Just $ msgStr MsgName)
@@ -320,10 +320,10 @@ makeGUI = do
     Gtk.widgetSetChildVisible ventry False
     Gtk.widgetSetChildVisible idxalign False
     Gtk.widgetSetChildVisible idxspin False
-    Gtk.widgetHideAll valign
-    Gtk.widgetHideAll ventry
-    Gtk.widgetHideAll idxalign
-    Gtk.widgetHideAll idxspin
+    Gtk.widgetHide valign
+    Gtk.widgetHide ventry
+    Gtk.widgetHide idxalign
+    Gtk.widgetHide idxspin
 
     -- Window configuration
     Gtk.set win [ Gtk.windowTitle          Gtk.:= msgStr MsgMainTitle
@@ -331,10 +331,9 @@ makeGUI = do
                 , Gtk.windowDefaultHeight  Gtk.:= 600
                 , Gtk.containerBorderWidth Gtk.:= 10
                 ]
-
-    Gtk.onDestroy win $ do
-                Gtk.mainQuit
-                appTerminate
+    Gtk.on win Gtk.objectDestroy $
+        do Gtk.mainQuit
+           appTerminate
 
     Gtk.widgetShowAll win
 
@@ -355,8 +354,8 @@ makeGUI = do
                 , guiDrawToggle = drwb
                 , guiDupToggle = db
                 , guiMultiSelToggle = msb
-                , guiVRuler = vruler
-                , guiHRuler = hruler
+                --, guiVRuler = vruler
+                --, guiHRuler = hruler
                 , guiDrawingArea = area
                 , guiRectStore = store
                 , guiNameEntry = pentry

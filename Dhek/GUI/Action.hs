@@ -99,7 +99,7 @@ gtkAddRect r gui = do
 gtkSetCursor :: Maybe Gtk.CursorType -> GUI -> IO ()
 gtkSetCursor t gui = do
     c     <- traverse Gtk.cursorNew t
-    frame <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
+    frame <- Gtk.widgetGetParentWindow $ guiDrawingArea gui
     Gtk.drawWindowSetCursor frame c
 
 --------------------------------------------------------------------------------
@@ -199,8 +199,8 @@ gtkSetValuePropVisible b gui
         Gtk.widgetShowAll $ guiValueEntryAlign gui
         Gtk.widgetShowAll $ guiValueEntry gui
     | otherwise = do
-        Gtk.widgetHideAll $ guiValueEntryAlign gui
-        Gtk.widgetHideAll $ guiValueEntry gui
+        Gtk.widgetHide $ guiValueEntryAlign gui
+        Gtk.widgetHide $ guiValueEntry gui
 
 --------------------------------------------------------------------------------
 gtkSetIndexPropVisible :: Bool -> GUI -> IO ()
@@ -211,8 +211,8 @@ gtkSetIndexPropVisible visible gui
         Gtk.widgetShowAll $ guiIndexAlign gui
         Gtk.widgetShowAll $ guiIndexSpin gui
     | otherwise = do
-        Gtk.widgetHideAll $ guiIndexAlign gui
-        Gtk.widgetHideAll $ guiIndexSpin gui
+        Gtk.widgetHide $ guiIndexAlign gui
+        Gtk.widgetHide $ guiIndexSpin gui
 
 --------------------------------------------------------------------------------
 gtkShowConfirm :: GUI -> String -> IO Bool
