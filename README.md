@@ -24,42 +24,66 @@ Depending on how you've installed GHC, you have 2 different prerequisites.
 
 Make sure gtk, pango, cairo and poppler are installed on your machine.
 
-#### MacPorts
+### Haskell Platform
 
-```
-port install pango poppler cairo gtk2
-```
-
-#### Haskell Platform
+#### Linux
 
 ```
 cabal update
 cabal install alex happy gtk2hs-buildtools gtk
 ```
 
-#### Dhek sources
+#### Windows 7/8
+
+TODO
+
+#### Mac OS X
+
+**Prerequisites:**
+
+- Fresh Haskell environment (no cabal installed in user space).
+- Native development libraries: `port install pango poppler cairo gtk3`
+
+**Cabal:**
+
+Setup cabal-install 1.18:
+
+```
+# Upgrade transformer in user space
+cd /tmp
+curl -o - http://hackage.haskell.org/package/transformers-0.4.1.0/transformers-0.4.1.0.tar.gz | tar -xzvf -
+cd transformers-0.4.1.0
+runghc Setup.hs configure --user
+runghc Setup.hs install
+
+# Build cabal-install with updated dependencies (mtl, transformers, http)
+git clone git@github.com:haskell/cabal.git --branch 1.18
+cd cabal/cabal-install
+sed -e 's/MTL_VER="2.1.2"/MTL_VER="2.2.1"/;s/TRANS_VER="0.3.0.0"/TRANS_VER="0.4.1.0";s/HTTP_VER="4000.2.11"/HTTP_VER="4000.2.17"/' < bootstrap.sh > .tmp && mv .tmp bootstrap.sh
+
+# Setup cabal in user space
+cabal update
+cabal install alex happy gtk2hs-buildtools
+```
+
+> In case of linking error about `_iconv`, re-run `cabal configure` with `--extra-lib-dir=/usr/lib` to enforce system version of libiconv is used.
+
+### Dhek sources
 
 In order to build Dhek:
 
 ```
+# Resolve dependencies
 cabal install --only-dependencies
+
+# Resolve poppler again, with required gtk3 flag
+cabal install --reinstall poppler -f gtk3
+
 cabal configure
 cabal build
 ```
 
-In case of linking error about `_iconv`, re-run `cabal configure` with `--extra-lib-dir=/usr/lib` to enforce system version of libiconv is used.
-
-You can install an executable by doing:
-
-```
-cabal install
-```
-
 At this point, Dhek can be launched with `./dist/build/dhek/dhek`
-
-### Windows 7/8
-
-TODO
 
 ### Template format
 
