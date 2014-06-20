@@ -48,10 +48,10 @@ executable dhek
 
   default-extensions:  TemplateHaskell
   build-depends:       base          == 4.7.*
-                       --, gtk3         >= 0.12.5
-                       --, poppler     == 0.12.3
+                       , gtk3        >= 0.12.5
+                       , poppler-gtk3 == 0.12.3
                        , mtl         >= 2.1.2
-                       --, cairo       >= 0.12.5
+                       , cairo       >= 0.12.5
                        , filepath    >= 1.3.0    && < 1.3.1
                        , executable-path == 0.0.3
                        , aeson       == 0.7.*
@@ -69,10 +69,10 @@ executable dhek
                        , transformers >= 0.4
 
   if os(windows)
-    ghc-options: -O2 -threaded -optl-mwindows -user-package-db -package cairo -package glib -package gio -package gtk3 -package poppler
+    ghc-options: -O2 -threaded -optl-mwindows
   if os(darwin)
-    ghc-options: -O2 -threaded -optl-ObjC++ -optl-mmacosx-version-min=10.9 -framework AppKit -user-package-db -package cairo -package glib -package gio -package gtk3 -package poppler
+    ghc-options: -O2 -threaded -optl-ObjC++ -optl-mmacosx-version-min=10.9 -framework AppKit
   if !os(windows) && !os(darwin)
-    ghc-options: -O2 -threaded -user-package-db -package cairo -package glib -package gio -package gtk3 -package poppler
+    ghc-options: -O2 -threaded
 
   default-language: Haskell2010
