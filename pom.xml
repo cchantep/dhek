@@ -1,0 +1,85 @@
+<?xml version="1.0"?><project>
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>fr.applicius</groupId>
+  <artifactId>dhek</artifactId>
+  <packaging>jar</packaging>
+  <name>iText view</name>
+  <version>1.0-SNAPSHOP</version>
+  <url>https://github.com/applicius/dhek/</url>
+
+  <scm>
+    <connection>scm:git:git@github.com:applicius/dhek.git</connection>
+    <developerConnection>
+      scm:git:git@github.com:applicius/dhek.git
+    </developerConnection>
+    <url>git@github.com:applicius/dhek.git</url>
+  </scm>
+  <issueManagement>
+    <system>GitHub</system>
+    <url>https://github.com/applicius/dhek/issues</url>
+  </issueManagement>
+  <ciManagement>
+    <system>Travis CI</system>
+    <url>https://travis-ci.org/applicius/dhek</url>
+  </ciManagement>
+  <developers>
+    <developer>
+      <id>cchantep</id>
+      <name>Cedric Chantepie</name>
+    </developer>
+  </developers>
+
+  <prerequisites>
+    <maven>3.0.4</maven>
+  </prerequisites>
+
+  <repositories>
+    <repository>
+      <id>applicius-releases</id>
+      <name>Applicius Releases Repo</name>
+      <url>https://raw.github.com/applicius/mvn-repo/master/releases</url>
+    </repository>
+  </repositories>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+      <version>1.8.5</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+	<groupId>org.apache.maven.plugins</groupId>
+	<artifactId>maven-jar-plugin</artifactId>
+        <version>2.4</version>
+	<configuration>
+	  <archive>
+	    <manifest>
+	      <mainClass>fr.applicius.Dhek</mainClass>
+	    </manifest>
+	  </archive>
+	</configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>2.2</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <outputFile>${project.build.directory}/dist/dhek-${project.version}.jar</outputFile>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
