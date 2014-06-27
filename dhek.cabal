@@ -94,7 +94,7 @@ executable dhek
                        , dhek
 
   if os(windows)
-    ghc-options: -O2 -threaded -optl-mwindows
+    ghc-options: -O2 -optc-mms-bitfields -optl-mwindows
   if os(darwin)
     ghc-options: -O2 -threaded -optl-ObjC++ -optl-mmacosx-version-min=10.9 -framework AppKit
   if !os(windows) && !os(darwin)
