@@ -11,6 +11,7 @@ cp dist/build/dhek/dhek.exe "$DISTDIR/bin/"
 cp util/win-dist/dlls/*.dll "$DISTDIR/bin/"
 cp -R util/win-dist/gtk-theme/* "$DISTDIR/"
 cp -R resources "$DISTDIR/bin/resources"
+rm -f "$DISTDIR/bin/resources/*.png"
 
 cat > "$DISTDIR/dhek.bat" << EOF
 start bin\dhek.exe
