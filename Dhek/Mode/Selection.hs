@@ -27,13 +27,14 @@ import           System.FilePath (joinPath, dropFileName)
 import           System.Environment.Executable (getExecutablePath)
 
 --------------------------------------------------------------------------------
-import Dhek.Engine.Type
-import Dhek.Geometry
-import Dhek.GUI
-import Dhek.GUI.Action
-import Dhek.Instr
-import Dhek.Mode.Common.Draw
-import Dhek.Types
+import           Dhek.Engine.Type
+import           Dhek.Geometry
+import           Dhek.GUI
+import           Dhek.GUI.Action
+import           Dhek.Instr
+import           Dhek.Mode.Common.Draw
+import qualified Dhek.Resources as Resources
+import           Dhek.Types
 
 --------------------------------------------------------------------------------
 data Input
@@ -302,11 +303,10 @@ selectionModeManager :: ((forall m. EngineCtx m => m ()) -> IO ())
 selectionModeManager handler gui = do
     Gtk.treeSelectionSetMode (guiRectTreeSelection gui) Gtk.SelectionMultiple
     execPath <- getExecutablePath
-    let resDir = joinPath [dropFileName execPath, "resources"]
 
     -- Top button
     btop <- Gtk.buttonNew
-    bimg <- Gtk.imageNewFromFile $ joinPath [resDir, "align-vertical-top.png"]
+    bimg <- loadImage Resources.alignVerticalTop
     vsep <- Gtk.vSeparatorNew
 
     Gtk.buttonSetImage btop bimg
@@ -317,7 +317,7 @@ selectionModeManager handler gui = do
 
     -- Distribute button
     bdist <- Gtk.buttonNew
-    dimg  <- Gtk.imageNewFromFile $ joinPath [resDir, "distribute.png"]
+    dimg  <- loadImage Resources.distribute
     Gtk.buttonSetImage bdist dimg
     Gtk.containerAdd toolbar bdist
     Gtk.widgetSetSensitive bdist False
@@ -325,7 +325,7 @@ selectionModeManager handler gui = do
 
     -- Distribute create button
     bdistcreate <- Gtk.buttonNew
-    bdimg <- Gtk.imageNewFromFile $ joinPath [resDir, "distribute-create.png"]
+    bdimg <- loadImage Resources.distributeCreate
     Gtk.buttonSetImage bdistcreate bdimg
     Gtk.containerAdd toolbar bdistcreate
     Gtk.widgetSetSensitive bdistcreate False

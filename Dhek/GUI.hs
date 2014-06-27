@@ -9,7 +9,9 @@ module Dhek.GUI where
 
 --------------------------------------------------------------------------------
 import Prelude hiding (foldr)
+import Control.Monad ((>=>))
 import Data.Foldable (traverse_, foldr)
+import Foreign.Ptr
 
 --------------------------------------------------------------------------------
 import           Control.Lens ((^.))
@@ -18,9 +20,10 @@ import           System.FilePath (joinPath, dropFileName)
 import           System.Environment.Executable (getExecutablePath)
 
 --------------------------------------------------------------------------------
-import Dhek.I18N
-import Dhek.Types
-import Dhek.AppUtil (appTerminate)
+import           Dhek.AppUtil (appTerminate)
+import           Dhek.I18N
+import           Dhek.Types
+import qualified Dhek.Resources as Resources
 
 --------------------------------------------------------------------------------
 data GUI =
@@ -67,7 +70,7 @@ data GUI =
 initGUI :: IO [String]
 initGUI = do
     gtk      <- Gtk.initGUI
-    Gtk.settingsGetDefault >>= 
+    Gtk.settingsGetDefault >>=
         foldr (\s err -> settings gtk s) (fail "No GTK default settings")
   where
     settings :: [String] -> Gtk.Settings -> IO [String]
@@ -77,7 +80,7 @@ initGUI = do
 
 makeGUI :: IO GUI
 makeGUI = do
-    gtkUI <- initGUI 
+    gtkUI <- initGUI
 
     -- Window creation
     win   <- Gtk.windowNew
@@ -140,38 +143,38 @@ makeGUI = do
 
     -- Button Next
     next <- Gtk.buttonNew
-    nimg <- Gtk.imageNewFromFile $ joinPath [resDir, "go-next.png"]
+    nimg <- loadImage Resources.goNext
     Gtk.buttonSetImage next nimg
 
      -- Previous Prev
     prev <- Gtk.buttonNew
-    pimg <- Gtk.imageNewFromFile $ joinPath [resDir, "go-previous.png"]
+    pimg <- loadImage Resources.goPrevious
     Gtk.buttonSetImage prev pimg
 
     -- Button Zoom out
     minus <- Gtk.buttonNew
-    oimg  <- Gtk.imageNewFromFile $ joinPath [resDir, "zoom-out.png"]
+    oimg  <- loadImage Resources.zoomOut
     Gtk.buttonSetImage minus oimg
 
     -- Button Zoom in
     plus <- Gtk.buttonNew
-    iimg <- Gtk.imageNewFromFile $ joinPath [resDir, "zoom-in.png"]
+    iimg <- loadImage Resources.zoomIn
     Gtk.buttonSetImage plus iimg
 
     -- Button Draw
     drwb <- Gtk.toggleButtonNew
-    dimg <- Gtk.imageNewFromFile $ joinPath [resDir, "draw-rectangle.png"]
+    dimg <- loadImage Resources.drawRectangle
     Gtk.buttonSetImage drwb dimg
     Gtk.toggleButtonSetActive drwb True
 
     -- Button Duplicate
     db   <- Gtk.toggleButtonNew
-    dimg <- Gtk.imageNewFromFile $ joinPath [resDir, "duplicate-rectangle.png"]
+    dimg <- loadImage Resources.duplicateRectangle
     Gtk.buttonSetImage db dimg
 
     -- Button MultiSelection
     msb  <- Gtk.toggleButtonNew
-    simg <- Gtk.imageNewFromFile $ joinPath [resDir, "rectangular-selection.png"]
+    simg <- loadImage Resources.rectangularSelection
     Gtk.buttonSetImage msb simg
 
     -- Toolbar
@@ -193,7 +196,7 @@ makeGUI = do
 
     -- Button Applidok
     akb  <- Gtk.buttonNew
-    kimg <- Gtk.imageNewFromFile $ joinPath [resDir, "applidok.png"]
+    kimg <- loadImage Resources.applidok
     Gtk.buttonSetImage akb kimg
 
     -- Mode toolbar
@@ -260,12 +263,12 @@ makeGUI = do
 
     -- Properties
     rem     <- Gtk.buttonNewWithLabel $ msgStr MsgRemove
-    rmimg   <- Gtk.imageNewFromFile $ joinPath [resDir, "draw-eraser.png"]
+    rmimg   <- loadImage Resources.drawEraser
     Gtk.buttonSetImage rem rmimg
 
     app     <- Gtk.buttonNewWithLabel $ msgStr MsgApply
-    apimg   <- Gtk.imageNewFromFile $ joinPath [resDir, "dialog-accept.png"]
-    Gtk.buttonSetImage app apimg 
+    apimg   <- loadImage Resources.dialogAccept
+    Gtk.buttonSetImage app apimg
 
     idxspin <- Gtk.spinButtonNewWithRange 0 200 1
     nlabel  <- Gtk.labelNew (Just $ msgStr MsgName)
@@ -399,3 +402,7 @@ createDialog win title pat filtName action msgStr = do
 --------------------------------------------------------------------------------
 runGUI :: GUI -> IO ()
 runGUI _ = Gtk.mainGUI
+
+--------------------------------------------------------------------------------
+loadImage :: Ptr (Gtk.InlineImage) -> IO Gtk.Image
+loadImage = Gtk.pixbufNewFromInline >=> Gtk.imageNewFromPixbuf
