@@ -41,14 +41,11 @@ connectSignals g i = do
                 return $ not resp
               | otherwise -> return False
 
-    Gtk.on (guiPdfOpenMenuItem g) Gtk.menuItemActivate $ do
-        resp <- Gtk.dialogRun $ guiPdfDialog g
-        Gtk.widgetHide $ guiPdfDialog g
-        case resp of
-            Gtk.ResponseOk -> do
-                uriOpt  <- Gtk.fileChooserGetURI $ guiPdfDialog g
-                traverse_ (loadPdf i) uriOpt
-            _ -> return ()
+    Gtk.on (guiPdfOpenMenuItem g) Gtk.menuItemActivate $ dhekOpenPdf g i
+
+    Gtk.on (guiSplashOpen g) Gtk.buttonActivated $ dhekOpenPdf g i
+
+    Gtk.on (guiSplashDok g) Gtk.buttonActivated onApplidok
 
     Gtk.on (guiJsonOpenMenuItem g) Gtk.menuItemActivate $
         void $ runProgram i onJsonImport
@@ -224,3 +221,14 @@ connectSignals g i = do
     Gtk.on (guiDokButton g) Gtk.buttonActivated $ onApplidok
 
     return ()
+
+--------------------------------------------------------------------------------
+dhekOpenPdf :: GUI -> Interpreter -> IO ()
+dhekOpenPdf g i
+    = do resp <- Gtk.dialogRun $ guiPdfDialog g
+         Gtk.widgetHide $ guiPdfDialog g
+         case resp of
+             Gtk.ResponseOk ->
+                 do uriOpt  <- Gtk.fileChooserGetURI $ guiPdfDialog g
+                    traverse_ (loadPdf i) uriOpt
+             _ -> return ()

@@ -64,6 +64,9 @@ data GUI =
     , guiDokButton :: Gtk.Button
     , guiIndexAlign :: Gtk.Alignment
     , guiIndexSpin :: Gtk.SpinButton
+    , guiSplashAlign :: Gtk.Alignment
+    , guiSplashOpen :: Gtk.Button
+    , guiSplashDok :: Gtk.Button
     }
 
 --------------------------------------------------------------------------------
@@ -206,6 +209,26 @@ makeGUI = do
     Gtk.containerAdd mtoolbar akb
     Gtk.boxPackStart vbox mtalign Gtk.PackNatural 0
     Gtk.widgetSetSizeRequest mtoolbar (-1) 32
+
+    -- Splash screen
+    splash   <- Gtk.vBoxNew False 40
+    splalign <- Gtk.alignmentNew 0.5 0.4 0 0
+    splelign <- Gtk.alignmentNew 0 0 0 0
+    splslign <- Gtk.alignmentNew 0 0 0 0
+    splopen  <- Gtk.buttonNewWithLabel $ msgStr MsgSplashOpenPDFFile
+    spledit  <- Gtk.labelNew $ Just $ msgStr MsgSplashEdit
+    splsave  <- Gtk.labelNew $ Just $ msgStr MsgSplashSave
+    spldok   <- Gtk.buttonNewWithLabel $ msgStr MsgSplashCopy
+    Gtk.containerAdd splalign splash
+    Gtk.containerAdd splelign spledit
+    Gtk.containerAdd splslign splsave
+    Gtk.buttonSetAlignment splopen (0, 0)
+    Gtk.buttonSetAlignment spldok (0, 0)
+    Gtk.boxPackStart splash splopen Gtk.PackRepel 0
+    Gtk.boxPackStart splash splelign Gtk.PackNatural 0
+    Gtk.boxPackStart splash splslign Gtk.PackNatural 0
+    Gtk.boxPackStart splash spldok Gtk.PackNatural 0
+    Gtk.containerAdd wvbox splalign
 
     -- Drawing Area
     area     <- Gtk.drawingAreaNew
@@ -377,6 +400,9 @@ makeGUI = do
                 , guiDokButton = akb
                 , guiIndexAlign = idxalign
                 , guiIndexSpin = idxspin
+                , guiSplashAlign = splalign
+                , guiSplashOpen = splopen
+                , guiSplashDok = spldok
                 }
 
 --------------------------------------------------------------------------------

@@ -494,6 +494,7 @@ loadPdf i path = do
                 name = _engineFilename env
                 nb   = v ^. viewerPageCount
                 s'   = s & engineBoards .~ boardsNew nb
+            Gtk.widgetDestroy (guiSplashAlign gui)
             writeIORef (_internal i) (Just v)
             writeIORef (_env i) env
             writeIORef (_state i) s'
