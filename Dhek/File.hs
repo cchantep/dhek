@@ -10,6 +10,7 @@ module Dhek.File where
 --------------------------------------------------------------------------------
 import Control.Exception
 import Data.Foldable (traverse_)
+import Data.Traversable (traverse)
 
 --------------------------------------------------------------------------------
 import           Data.Aeson (encode, eitherDecode)
@@ -22,10 +23,11 @@ import Dhek.Instr
 import Dhek.Types
 
 --------------------------------------------------------------------------------
-onJsonSave :: DhekProgram ()
+onJsonSave :: DhekProgram Bool
 onJsonSave = compile $ do
     fOpt <- selectJsonFile
-    traverse_ go fOpt
+    r    <- traverse go fOpt
+    return $ maybe False id r
   where
     go path = do
         rs <- getAllRects
@@ -36,7 +38,8 @@ onJsonSave = compile $ do
                 | otherwise                     = path ++ ".json"
 
         e <- performIO $ try $ B.writeFile path1 (encode save)
-        either exception (const clearEvents) e
+        either (\x -> exception x >> return False)
+            (const (clearEvents >> return True)) e
 
 --------------------------------------------------------------------------------
 onJsonImport :: DhekProgram ()

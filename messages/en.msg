@@ -21,9 +21,10 @@ Apply: Apply
 Value: Value
 Yes: Yes
 No: No
-Confirm: Model has been modified. Do you want to quit anyway ?
+ConfirmQuit: Do you want to save changes?
 Index: Index
 SplashOpenPDFFile: 1. Open a PDF File
 SplashEdit: 2. Edit areas to be filled over choosen document
 SplashSave: 3. Save areas as a separate template file
 SplashCopy: 4. Copy PDF by filling data according template
+DontSave: Don't save

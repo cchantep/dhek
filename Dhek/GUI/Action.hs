@@ -4,7 +4,8 @@
 --
 --------------------------------------------------------------------------------
 module Dhek.GUI.Action
-    ( gtkUnselect
+    ( DhekClosingChoice(..)
+    , gtkUnselect
     , gtkSelectRect
     , gtkAddRect
     , gtkSetCursor
@@ -40,6 +41,12 @@ import qualified Graphics.UI.Gtk as Gtk
 import Dhek.GUI
 import Dhek.I18N
 import Dhek.Types
+
+--------------------------------------------------------------------------------
+data DhekClosingChoice
+    = DhekSave
+    | DhekDontSave
+    | DhekCancel
 
 --------------------------------------------------------------------------------
 -- | When a rectangle is unselected
@@ -215,17 +222,19 @@ gtkSetIndexPropVisible visible gui
         Gtk.widgetHideAll $ guiIndexSpin gui
 
 --------------------------------------------------------------------------------
-gtkShowConfirm :: GUI -> String -> IO Bool
+gtkShowConfirm :: GUI -> String -> IO DhekClosingChoice
 gtkShowConfirm gui msg = do
     m    <- Gtk.messageDialogNew (Just $ guiWindow gui)
             [Gtk.DialogModal] Gtk.MessageWarning Gtk.ButtonsNone msg
-    Gtk.dialogAddButton m (guiTranslate gui MsgNo) Gtk.ResponseNo
-    Gtk.dialogAddButton m (guiTranslate gui MsgYes) Gtk.ResponseYes
+    Gtk.dialogAddButton m (guiTranslate gui MsgSave) $ Gtk.ResponseUser 1
+    Gtk.dialogAddButton m (guiTranslate gui MsgDontSave) $ Gtk.ResponseUser 2
+    Gtk.dialogAddButton m (guiTranslate gui MsgCancel) $ Gtk.ResponseUser 3
     resp <- Gtk.dialogRun m
     Gtk.widgetHide m
     case resp of
-        Gtk.ResponseYes -> return True
-        _               -> return False
+        Gtk.ResponseUser 1 -> return DhekSave
+        Gtk.ResponseUser 2 -> return DhekDontSave
+        Gtk.ResponseUser 3 -> return DhekCancel
 
 --------------------------------------------------------------------------------
 gtkGetIndexPropValue :: GUI -> IO (Maybe Int)

@@ -33,13 +33,18 @@ import Dhek.Types
 --------------------------------------------------------------------------------
 connectSignals :: GUI -> Interpreter -> IO ()
 connectSignals g i = do
-    Gtk.onDelete (guiWindow g) $ \_ -> do
-        hasEvent <- engineHasEvents i
-        case () of
-            _ | hasEvent -> do
-                resp <- gtkShowConfirm g (guiTranslate g $ MsgConfirm)
-                return $ not resp
-              | otherwise -> return False
+    Gtk.onDelete (guiWindow g) $ \_ ->
+        do hasEvent <- engineHasEvents i
+           case () of
+               _ | hasEvent ->
+                   do resp <- gtkShowConfirm g (guiTranslate g $ MsgConfirmQuit)
+                      case resp of
+                          DhekSave ->
+                              do r <- runProgram i onJsonSave
+                                 return $ maybe False not r
+                          DhekDontSave -> return False
+                          DhekCancel   -> return True
+                 | otherwise -> return False
 
     Gtk.on (guiPdfOpenMenuItem g) Gtk.menuItemActivate $ dhekOpenPdf g i
 
