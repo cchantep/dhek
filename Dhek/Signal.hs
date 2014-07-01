@@ -59,16 +59,25 @@ connectSignals g i = do
             active Overlap (not b)
 
     -- Previous Button ---
-    Gtk.on (guiPrevButton g) Gtk.buttonActivated $ void $ runProgram i onPrev
+    Gtk.on (guiPrevButton g) Gtk.buttonActivated $
+        do runProgram i onPrev
+           guiClearPdfCache g
 
     --- Next Button ---
-    Gtk.on (guiNextButton g) Gtk.buttonActivated $ void $ runProgram i onNext
+    Gtk.on (guiNextButton g) Gtk.buttonActivated $
+        do runProgram i onNext
+           guiClearPdfCache g
 
     --- Minus Button ---
-    Gtk.on (guiZoomOutButton g) Gtk.buttonActivated $ void $ runProgram i onMinus
+    Gtk.on (guiZoomOutButton g) Gtk.buttonActivated $
+        do runProgram i onMinus
+           guiClearPdfCache g
 
     --- Plus Button ---
-    Gtk.on (guiZoomInButton g) Gtk.buttonActivated $ void $ runProgram i onPlus
+    Gtk.on (guiZoomInButton g) Gtk.buttonActivated $
+        do runProgram i onPlus
+           guiClearPdfCache g
+
     Gtk.on (guiRemoveButton g) Gtk.buttonActivated $ void $ runProgram i onRem
     _ <- Gtk.on (guiApplyButton g) Gtk.buttonActivated $
         void $ runProgram i (onProp g)

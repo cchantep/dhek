@@ -10,12 +10,16 @@ module Dhek.GUI where
 --------------------------------------------------------------------------------
 import Prelude hiding (foldr)
 import Control.Monad ((>=>))
+import Control.Monad.Trans (MonadIO(..))
 import Data.Foldable (traverse_, foldr)
+import Data.IORef
 import Foreign.Ptr
 
 --------------------------------------------------------------------------------
 import           Control.Lens ((^.))
-import qualified Graphics.UI.Gtk as Gtk
+import qualified Graphics.Rendering.Cairo as Cairo
+import qualified Graphics.UI.Gtk          as Gtk
+import qualified Graphics.UI.Gtk.Poppler.Page as Poppler
 import           System.FilePath (joinPath, dropFileName)
 import           System.Environment.Executable (getExecutablePath)
 
@@ -67,6 +71,7 @@ data GUI =
     , guiSplashAlign :: Gtk.Alignment
     , guiSplashOpen :: Gtk.Button
     , guiSplashDok :: Gtk.Button
+    , guiPdfCache :: IORef (Maybe Cairo.Surface)
     }
 
 --------------------------------------------------------------------------------
@@ -364,6 +369,8 @@ makeGUI = do
 
     Gtk.widgetShowAll win
 
+    cache <- newIORef Nothing
+
     return $ GUI{ guiWindow = win
                 , guiPdfDialog = pdfch
                 , guiJsonOpenDialog = jsonLch
@@ -403,6 +410,7 @@ makeGUI = do
                 , guiSplashAlign = splalign
                 , guiSplashOpen = splopen
                 , guiSplashDok = spldok
+                , guiPdfCache = cache
                 }
 
 --------------------------------------------------------------------------------
@@ -432,3 +440,34 @@ runGUI _ = Gtk.mainGUI
 --------------------------------------------------------------------------------
 loadImage :: Ptr (Gtk.InlineImage) -> IO Gtk.Image
 loadImage = Gtk.pixbufNewFromInline >=> Gtk.imageNewFromPixbuf
+
+--------------------------------------------------------------------------------
+guiPdfSurface :: MonadIO m => PageItem -> Double -> GUI -> m Cairo.Surface
+guiPdfSurface pg ratio gui
+    = liftIO $
+          do opt <- readIORef (guiPdfCache gui)
+             let pgw = pageWidth pg  * ratio
+                 pgh = pageHeight pg * ratio
+                 nocache
+                     = do suf <- Cairo.createImageSurface Cairo.FormatARGB32
+                                 (truncate pgw) (truncate pgh)
+                          Cairo.renderWith suf $
+                              do Cairo.setSourceRGB 1.0 1.0 1.0
+                                 Cairo.rectangle 0 0 pgw pgh
+                                 Cairo.fill
+                                 Cairo.scale ratio ratio
+                                 Poppler.pageRender (pagePtr pg)
+
+                          writeIORef (guiPdfCache gui) $ Just suf
+                          return suf
+             maybe nocache return opt
+
+--------------------------------------------------------------------------------
+guiClearPdfCache :: MonadIO m => GUI -> m ()
+guiClearPdfCache gui
+    = liftIO $
+          do opt <- readIORef (guiPdfCache gui)
+             let oncache suf
+                     = do Cairo.surfaceFinish suf
+                          writeIORef (guiPdfCache gui) Nothing
+             maybe (return ()) oncache opt

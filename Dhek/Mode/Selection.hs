@@ -22,7 +22,6 @@ import           Control.Monad.RWS hiding (mapM_)
 import           Control.Monad.State (evalState)
 import qualified Graphics.Rendering.Cairo     as Cairo
 import qualified Graphics.UI.Gtk              as Gtk
-import qualified Graphics.UI.Gtk.Poppler.Page as Poppler
 import           System.FilePath (joinPath, dropFileName)
 import           System.Environment.Executable (getExecutablePath)
 
@@ -131,13 +130,11 @@ instance ModeMonad SelectionMode where
 
             Gtk.widgetSetSizeRequest area (truncate width) (truncate height)
             Gtk.renderWithDrawable frame $ do
-                -- Paint page background in white
-                Cairo.setSourceRGB 1.0 1.0 1.0
-                Cairo.rectangle 0 0 fw fh
-                Cairo.fill
+                suf <- guiPdfSurface page ratio gui
+                Cairo.setSourceSurface suf 0 0
+                Cairo.paint
 
                 Cairo.scale ratio ratio
-                Poppler.pageRender (pagePtr page)
                 mapM_ (drawGuide fw fh) guides
                 mapM_ (drawGuide fw fh) curGuide
                 Cairo.closePath

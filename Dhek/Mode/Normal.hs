@@ -22,7 +22,6 @@ import           Control.Monad.Trans
 import qualified Data.IntMap                  as I
 import qualified Graphics.Rendering.Cairo     as Cairo
 import qualified Graphics.UI.Gtk              as Gtk
-import qualified Graphics.UI.Gtk.Poppler.Page as Poppler
 
 --------------------------------------------------------------------------------
 import Dhek.Engine.Type
@@ -255,13 +254,11 @@ instance ModeMonad NormalMode where
 
             Gtk.widgetSetSizeRequest area (truncate width) (truncate height)
             Gtk.renderWithDrawable frame $ do
-                -- Paint page background in white
-                Cairo.setSourceRGB 1.0 1.0 1.0
-                Cairo.rectangle 0 0 fw fh
-                Cairo.fill
+                suf <- guiPdfSurface page ratio gui
+                Cairo.setSourceSurface suf 0 0
+                Cairo.paint
 
                 Cairo.scale ratio ratio
-                Poppler.pageRender (pagePtr page)
                 mapM_ (drawGuide fw fh) guides
                 mapM_ (drawGuide fw fh) curGuide
                 Cairo.closePath
