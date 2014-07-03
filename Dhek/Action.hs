@@ -1,49 +1,59 @@
+--------------------------------------------------------------------------------
+-- |
+-- Module : Dhek.Action
+--
+--------------------------------------------------------------------------------
 module Dhek.Action where
 
-import Data.Foldable (traverse_)
+--------------------------------------------------------------------------------
+import Data.Foldable (for_)
 
-import Dhek.Free
-import Dhek.Instr
+--------------------------------------------------------------------------------
 import Dhek.AppUtil (browserOpen)
+import Dhek.Engine.Instr
 
-onPrev :: DhekProgram ()
-onPrev = compile $ do
-    decrPage
-    i    <- getCurPage
-    nb   <- getPageCount
-    name <- getFilename
-    setTitle (name ++ " (page " ++ show i ++ " / " ++ show nb ++ ")")
-    draw
+--------------------------------------------------------------------------------
+onPrev :: Instr ()
+onPrev
+    = do decrPage
+         i    <- getCurrentPage
+         nb   <- getPageCount
+         name <- getFilename
+         setTitle (name ++ " (page " ++ show i ++ " / " ++ show nb ++ ")")
+         draw
 
-onNext :: DhekProgram ()
-onNext = compile $ do
-    incrPage
-    i    <- getCurPage
-    nb   <- getPageCount
-    name <- getFilename
-    setTitle (name ++ " (page " ++ show i ++ " / " ++ show nb ++ ")")
-    draw
+--------------------------------------------------------------------------------
+onNext :: Instr ()
+onNext
+    = do incrPage
+         i    <- getCurrentPage
+         nb   <- getPageCount
+         name <- getFilename
+         setTitle (name ++ " (page " ++ show i ++ " / " ++ show nb ++ ")")
+         draw
 
-onMinus :: DhekProgram ()
-onMinus = compile $ do
-    decrZoom
-    draw
+--------------------------------------------------------------------------------
+onMinus :: Instr ()
+onMinus
+    = do decrZoom
+         draw
 
-onPlus :: DhekProgram ()
-onPlus = compile $ do
-    incrZoom
-    draw
+--------------------------------------------------------------------------------
+onPlus :: Instr ()
+onPlus
+    = do incrZoom
+         draw
 
-onRem :: DhekProgram ()
-onRem = compile $ do
-    sOpt <- getSelected
-    traverse_ go sOpt
-  where
-    go r = do
-        removeRect r
-        unselectRect
-        addEvent DeleteRect
-        draw
+--------------------------------------------------------------------------------
+onRem :: Instr ()
+onRem
+    = do sOpt <- getSelected
+         for_ sOpt $ \r ->
+             do removeRect r
+                unselectRect
+                addEvent DeleteRect
+                draw
 
+--------------------------------------------------------------------------------
 onApplidok :: IO ()
 onApplidok = browserOpen "http://go.applidok.com"

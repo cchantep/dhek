@@ -49,10 +49,9 @@ executable dhek
   other-modules: Dhek.Launcher
                  Dhek.Action
                  Dhek.Engine
-                 Dhek.Engine.Interpreter
+                 Dhek.Engine.Instr
                  Dhek.Engine.Type
                  Dhek.File
-                 Dhek.Free
                  Dhek.Geometry
                  Dhek.GUI
                  Dhek.I18N
@@ -61,6 +60,7 @@ executable dhek
                  Dhek.Mode.Normal
                  Dhek.Mode.Selection
                  Dhek.Property
+                 Dhek.Engine.Runtime
                  Dhek.Selection
                  Dhek.Signal
                  Dhek.Version
@@ -84,7 +84,6 @@ executable dhek
                        , array       >= 0.4.0.1
                        , lens        == 4.1.*
                        , vector      >= 0.7.1
-                       , free        >= 3.1.1    && < 5
                        , shakespeare >= 2.0.0    && < 2.1.0
                        , text
                        , Cabal == 1.18.*

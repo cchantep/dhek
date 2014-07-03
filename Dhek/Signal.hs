@@ -19,19 +19,18 @@ import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
 import Dhek.Action (onNext, onPrev, onMinus, onPlus, onRem, onApplidok)
+import Dhek.Engine.Instr
 import Dhek.GUI
 import Dhek.GUI.Action
 import Dhek.File (onJsonImport, onJsonSave)
-import Dhek.Free
 import Dhek.I18N
-import Dhek.Instr
 import Dhek.Property (onProp)
 import Dhek.Engine
 import Dhek.Selection (onSel)
 import Dhek.Types
 
 --------------------------------------------------------------------------------
-connectSignals :: GUI -> Interpreter -> IO ()
+connectSignals :: GUI -> RuntimeEnv -> IO ()
 connectSignals g i = do
     Gtk.onDelete (guiWindow g) $ \_ ->
         do hasEvent <- engineHasEvents i
@@ -41,7 +40,7 @@ connectSignals g i = do
                       case resp of
                           DhekSave ->
                               do r <- runProgram i onJsonSave
-                                 return $ maybe False not r
+                                 return $ not r
                           DhekDontSave -> return False
                           DhekCancel   -> return True
                  | otherwise -> return False
@@ -59,9 +58,8 @@ connectSignals g i = do
         void $ runProgram i onJsonSave
 
     Gtk.on (guiOverlapMenuItem g) Gtk.menuItemActivate $ void $ runProgram i $
-        compile $ do
-            b <- isActive Overlap
-            active Overlap (not b)
+        do b <- isActive Overlap
+           active Overlap (not b)
 
     -- Previous Button ---
     Gtk.on (guiPrevButton g) Gtk.buttonActivated $
@@ -163,7 +161,7 @@ connectSignals g i = do
             gtkSetIndexPropVisible (c == "textcell") g
 
     Gtk.on (guiVRuler g) Gtk.buttonPressEvent $ Gtk.tryEvent $ liftIO $
-        void $ runProgram i $ compile $ newGuide GuideVertical
+        void $ runProgram i $ guideNew GuideVertical
 
     Gtk.on (guiVRuler g) Gtk.motionNotifyEvent $ Gtk.tryEvent $ do
         (x',y') <- Gtk.eventCoordinates
@@ -177,17 +175,17 @@ connectSignals g i = do
                 Gtk.set (guiHRuler g) [Gtk.rulerPosition Gtk.:= x]
                 Gtk.set (guiVRuler g) [Gtk.rulerPosition Gtk.:= y]
 
-            void $ runProgram i $ compile $ do
-                updateGuide
+            void $ runProgram i $ do
+                guideUpdate
                 draw
 
     Gtk.on (guiVRuler g) Gtk.buttonReleaseEvent $ Gtk.tryEvent $ liftIO $
-        void $ runProgram i $ compile $ do
-            addGuide
+        void $ runProgram i $ do
+            guideAdd
             draw
 
     Gtk.on (guiHRuler g) Gtk.buttonPressEvent $ Gtk.tryEvent $ liftIO $
-        void $ runProgram i $ compile $ newGuide GuideHorizontal
+        void $ runProgram i $ guideNew GuideHorizontal
 
     Gtk.on (guiHRuler g)  Gtk.motionNotifyEvent $ Gtk.tryEvent $ do
         (x',y') <- Gtk.eventCoordinates
@@ -201,13 +199,13 @@ connectSignals g i = do
                 Gtk.set (guiHRuler g) [Gtk.rulerPosition Gtk.:= x]
                 Gtk.set (guiVRuler g) [Gtk.rulerPosition Gtk.:= y]
 
-            void $ runProgram i $ compile $ do
-                updateGuide
+            void $ runProgram i $ do
+                guideUpdate
                 draw
 
     Gtk.on (guiHRuler g) Gtk.buttonReleaseEvent $ Gtk.tryEvent $ liftIO $
-        liftIO $ void $ runProgram i $ compile $ do
-            addGuide
+        liftIO $ void $ runProgram i $ do
+            guideAdd
             draw
 
     Gtk.on (guiDrawToggle g) Gtk.buttonActivated $ liftIO $ do
@@ -237,7 +235,7 @@ connectSignals g i = do
     return ()
 
 --------------------------------------------------------------------------------
-dhekOpenPdf :: GUI -> Interpreter -> IO ()
+dhekOpenPdf :: GUI -> RuntimeEnv -> IO ()
 dhekOpenPdf g i
     = do resp <- Gtk.dialogRun $ guiPdfDialog g
          Gtk.widgetHide $ guiPdfDialog g

@@ -8,7 +8,7 @@ module Dhek.Engine
     ( Collision(..)
     , DrawEnv(..)
     , EngineState
-    , Interpreter
+    , RuntimeEnv
     , M
     , Pos
     , drawInterpret
@@ -38,10 +38,10 @@ module Dhek.Engine
     , engineRatio
     , getRects
     , loadPdf
-    , makeInterpreter
+    , makeRuntimeEnv
     , runProgram
     ) where
 
 --------------------------------------------------------------------------------
-import Dhek.Engine.Interpreter
+import Dhek.Engine.Runtime
 import Dhek.Engine.Type

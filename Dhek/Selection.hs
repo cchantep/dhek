@@ -1,10 +1,16 @@
+--------------------------------------------------------------------------------
+-- |
+-- Module : Dhek.Selection
+--
+--------------------------------------------------------------------------------
 module Dhek.Selection where
 
-import Dhek.Free
-import Dhek.Instr
+--------------------------------------------------------------------------------
+import Dhek.Engine.Instr
 
-onSel :: DhekProgram ()
-onSel = compile $ do
-    rOpt <- getTreeSelection
-    setSelected rOpt
-    draw
+--------------------------------------------------------------------------------
+onSel :: Instr ()
+onSel
+    = do rOpt <- getTreeSelection
+         setSelected rOpt
+         draw

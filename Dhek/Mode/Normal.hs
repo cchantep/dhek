@@ -24,11 +24,11 @@ import qualified Graphics.Rendering.Cairo     as Cairo
 import qualified Graphics.UI.Gtk              as Gtk
 
 --------------------------------------------------------------------------------
+import Dhek.Engine.Instr
 import Dhek.Engine.Type
 import Dhek.Geometry
 import Dhek.GUI
 import Dhek.GUI.Action
-import Dhek.Instr
 import Dhek.Mode.Common.Draw
 import Dhek.Types
 import Dhek.Utils (findDelete)

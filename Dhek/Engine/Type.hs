@@ -19,8 +19,8 @@ import qualified Data.IntMap as I
 import           Graphics.UI.Gtk (CursorType)
 
 --------------------------------------------------------------------------------
+import Dhek.Engine.Instr
 import Dhek.Types
-import Dhek.Instr
 
 --------------------------------------------------------------------------------
 -- | Mode Monad

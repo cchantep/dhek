@@ -4,14 +4,14 @@ module Dhek.Launcher where
 
 import Foreign.C.Types
 
-import Dhek.Engine (makeInterpreter)
+import Dhek.Engine (makeRuntimeEnv)
 import Dhek.GUI (makeGUI, runGUI)
 import Dhek.Signal (connectSignals)
 
 launch :: IO ()
 launch = do
     gui <- makeGUI
-    i   <- makeInterpreter gui
+    i   <- makeRuntimeEnv gui
     connectSignals gui i
     runGUI gui
 

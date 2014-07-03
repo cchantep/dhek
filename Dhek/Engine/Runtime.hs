@@ -1,16 +1,18 @@
-{-# LANGUAGE ConstraintKinds  #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RankNTypes       #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RankNTypes                 #-}
 --------------------------------------------------------------------------------
 -- |
--- Module : Dhek.Engine.Interpreter
+-- Module : Dhek.Engine.Runtime
 --
--- Engine Intruction interpreter
+-- Runtime Intruction interpreter
 --------------------------------------------------------------------------------
-module Dhek.Engine.Interpreter where
+module Dhek.Engine.Runtime where
 
 --------------------------------------------------------------------------------
 import           Prelude hiding (foldr)
+import           Control.Applicative
 import           Control.Monad (when)
 import           Data.Array (Array, array, (!))
 import           Data.Char (isSpace)
@@ -24,26 +26,25 @@ import           Data.Traversable (for)
 --------------------------------------------------------------------------------
 import           Control.Lens
 import           Control.Monad.State
-import           Control.Monad.RWS
+import           Control.Monad.RWS.Strict
 import qualified Graphics.UI.Gtk                  as Gtk
 import qualified Graphics.UI.Gtk.Poppler.Document as Poppler
 import qualified Graphics.UI.Gtk.Poppler.Page     as Poppler
 import           System.FilePath (takeFileName)
 
 --------------------------------------------------------------------------------
+import Dhek.Engine.Instr
 import Dhek.Engine.Type
-import Dhek.Free
 import Dhek.GUI
 import Dhek.GUI.Action
-import Dhek.Instr
 import Dhek.Mode.Duplicate
 import Dhek.Mode.Normal
 import Dhek.Mode.Selection
 import Dhek.Types
 
 --------------------------------------------------------------------------------
-data Interpreter
-    = Interpreter
+data RuntimeEnv
+    = RuntimeEnv
       { _internal   :: IORef (Maybe Viewer)
       , _state      :: IORef EngineState
       , _env        :: IORef EngineEnv
@@ -61,7 +62,177 @@ data Modes
       }
 
 --------------------------------------------------------------------------------
-drawInterpret :: (DrawEnv -> M a) -> Interpreter -> Pos -> IO ()
+newtype DefaultRuntime a
+    = DR (RWST RuntimeEnv () EngineState IO a)
+    deriving ( Functor
+             , Applicative
+             , Monad
+             , MonadIO
+             , MonadState EngineState
+             , MonadReader RuntimeEnv
+             )
+
+--------------------------------------------------------------------------------
+instance Runtime DefaultRuntime where
+    rGetSelected
+        = use $ engineDrawState.drawSelected
+
+    rSetSelected r
+        = do g <- asks _gui
+             maybe (liftIO $ gtkUnselect g) (_selectRect g) r
+
+    rGetRectangles
+        = fmap getRects get
+
+    rGetCurPage
+        = use engineCurPage
+
+    rGetPageCount
+        = do ref  <- asks _internal
+             vopt <- liftIO $ readIORef ref
+             return $ maybe (-1) (\v -> v ^. viewerPageCount) vopt
+
+    rIncrPage
+        = do engineDrawState.drawSelected .= Nothing
+             ncur <- engineCurPage <+= 1
+             g    <- asks _gui
+             s    <- get
+             nb   <- rGetPageCount
+             liftIO $ gtkIncrPage ncur nb (getRects s) g
+
+    rIncrZoom
+        = do g    <- asks _gui
+             ncur <- engineCurZoom <+= 1
+             liftIO $ gtkIncrZoom ncur 10 g
+
+    rDecrPage
+        = do engineDrawState.drawSelected .= Nothing
+             ncur <- engineCurPage <-= 1
+             g    <- asks _gui
+             s    <- get
+             nb   <- rGetPageCount
+             liftIO $ gtkDecrPage ncur 1 (getRects s) g
+
+    rDecrZoom
+        = do g    <- asks _gui
+             ncur <- engineCurZoom <-= 1
+             liftIO $ gtkDecrZoom ncur 1 g
+
+    rRemoveRect r
+        = do g   <- asks _gui
+             pid <- use engineCurPage
+             let rid = r ^. rectId
+             engineBoards.boardsMap.at pid.traverse.boardRects.at rid .= Nothing
+             liftIO $ gtkRemoveRect r g
+
+    rUnselectRect
+        = do g <- asks _gui
+             engineDrawState.drawSelected .= Nothing
+             liftIO $ gtkUnselect g
+
+    rDraw
+        = engineDraw .= True
+
+    rSetTitle t
+        = do g <- asks _gui
+             liftIO $ Gtk.windowSetTitle (guiWindow g) t
+
+    rGetFilename
+        = do eref <- asks _env
+             env  <- liftIO $ readIORef eref
+             return $ _engineFilename env
+
+    rShowError e
+        = do g <- asks _gui
+             liftIO $ gtkShowError e g
+
+    rGetTreeSelection
+        = do g <- asks _gui
+             liftIO $ gtkGetTreeSelection g
+
+    rGuideNew t
+        = engineDrawState.drawCurGuide ?= Guide 0 t
+
+    rGuideUpdate
+        = do g <- asks _gui
+             x <- liftIO $ Gtk.get (guiHRuler g) Gtk.rulerPosition
+             y <- liftIO $ Gtk.get (guiVRuler g) Gtk.rulerPosition
+
+             let upd g =
+                     let v = case g ^. guideType of
+                             GuideVertical   -> x
+                             GuideHorizontal -> y in
+                     g & guideValue .~ v
+
+             engineDrawState.drawCurGuide %= fmap upd
+
+    rGuideAdd
+        = do pid  <- use engineCurPage
+             gOpt <- use $ engineDrawState.drawCurGuide
+             gs   <- use $ engineBoards.boardsMap.at pid.traverse.boardGuides
+
+             let gs1 = foldr (:) gs gOpt
+
+             engineDrawState.drawCurGuide .= Nothing
+             engineBoards.boardsMap.at pid.traverse.boardGuides .= gs1
+
+    rGuideGetCur
+        = use $ engineDrawState.drawCurGuide
+
+    rGetGuides
+        = do pid <- use engineCurPage
+             use $ engineBoards.boardsMap.at pid.traverse.boardGuides
+
+    rSelectJsonFile
+        = do g <- asks _gui
+             liftIO $ gtkSelectJsonFile  g
+
+    rGetAllRects
+        = let tup (i, b) = (i, b ^. boardRects.to I.elems)
+              list       = fmap tup . I.toList in
+          use $ engineBoards.boardsMap.to list
+
+    rSetAllRects xs
+        = do g <- asks _gui
+             engineBoards                .= b
+             engineDrawState.drawFreshId .= b ^. boardsState
+             s <- get
+
+             liftIO $ gtkSetRects (getRects s) g
+      where
+        onEach page r
+            = do id <- boardsState <+= 1
+                 let r1 = r & rectId .~ id
+                 boardsMap.at page.traverse.boardRects.at id ?= r1
+
+        go (page, rs) = traverse_ (onEach page) rs
+        action        = traverse_ go xs
+        nb            = length xs
+        b             = execState action (boardsNew nb)
+
+    rOpenJsonFile
+        = do g <- asks _gui
+             liftIO $ gtkOpenJsonFile g
+
+    rActive opt b
+        = case opt of
+            Overlap ->
+                do g <- asks _gui
+                   engineOverlap .= b
+                   liftIO $ gtkSetOverlapActive b g
+
+    rIsActive opt
+        = case opt of
+            Overlap -> use engineOverlap
+
+    rAddEvent e
+        = engineEventStack %= (e:)
+
+    rClearEvents
+        = engineEventStack .= []
+
+--------------------------------------------------------------------------------
+drawInterpret :: (DrawEnv -> M a) -> RuntimeEnv -> Pos -> IO ()
 drawInterpret k i (x,y) = do
     s   <- readIORef $ _state i
     opt <- readIORef $ _internal i
@@ -83,7 +254,7 @@ drawInterpret k i (x,y) = do
         liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
 
 --------------------------------------------------------------------------------
-engineRunDraw :: Interpreter -> IO ()
+engineRunDraw :: RuntimeEnv -> IO ()
 engineRunDraw i = do
     s   <- readIORef $ _state i
     opt <- readIORef $ _internal i
@@ -108,11 +279,11 @@ _selectRect gui r = do
      liftIO $ gtkSelectRect r gui
 
 --------------------------------------------------------------------------------
-engineCurrentState :: Interpreter -> IO EngineState
+engineCurrentState :: RuntimeEnv -> IO EngineState
 engineCurrentState  = readIORef . _state
 
 --------------------------------------------------------------------------------
-engineCurrentPage :: Interpreter -> IO (Maybe PageItem)
+engineCurrentPage :: RuntimeEnv -> IO (Maybe PageItem)
 engineCurrentPage  i = do
     opt <- readIORef $ _internal i
     s   <- readIORef $ _state i
@@ -126,7 +297,7 @@ _engineCurrentPage s v =
      pages ! pid
 
 --------------------------------------------------------------------------------
-engineDrawingArea :: Interpreter -> Gtk.DrawingArea
+engineDrawingArea :: RuntimeEnv -> Gtk.DrawingArea
 engineDrawingArea = guiDrawingArea . _gui
 
 --------------------------------------------------------------------------------
@@ -139,7 +310,7 @@ engineDrawingArea = guiDrawingArea . _gui
 --   @ModeManager@ cleanup handler of the previous mode. We get a new
 --   @EngineState@ out of cleanup handler. That new state is used to store
 --   the new @ModeManager@
-engineSetMode :: DhekMode -> Interpreter -> IO ()
+engineSetMode :: DhekMode -> RuntimeEnv -> IO ()
 engineSetMode m i = do
     s       <- readIORef $ _state i
     e       <- readIORef $ _env i
@@ -162,7 +333,7 @@ engineSetMode m i = do
 --------------------------------------------------------------------------------
 -- | Returns the current page ratio. Returns Nothing if no PDF has been loaded
 --   yet.
-engineRatio :: Interpreter -> IO (Maybe Double)
+engineRatio :: RuntimeEnv -> IO (Maybe Double)
 engineRatio i = do
     opt <- readIORef $ _internal i
     s   <- readIORef $ _state i
@@ -179,8 +350,8 @@ _engineRatio s v =
     (base * zoom) / width
 
 --------------------------------------------------------------------------------
-makeInterpreter :: GUI -> IO Interpreter
-makeInterpreter gui = do
+makeRuntimeEnv :: GUI -> IO RuntimeEnv
+makeRuntimeEnv gui = do
     let env = EngineEnv { _engineFilename = "" }
     eRef <- newIORef env
     sRef <- newIORef stateNew
@@ -198,13 +369,13 @@ makeInterpreter gui = do
 
     curMgr <- mgrNormal
     cRef   <- newIORef curMgr
-    return Interpreter{ _internal   = vRef
-                      , _state      = sRef
-                      , _env        = eRef
-                      , _gui        = gui
-                      , _modes      = modes
-                      , _curModeMgr = cRef
-                      }
+    return RuntimeEnv{ _internal   = vRef
+                     , _state      = sRef
+                     , _env        = eRef
+                     , _gui        = gui
+                     , _modes      = modes
+                     , _curModeMgr = cRef
+                     }
 
 --------------------------------------------------------------------------------
 stateNew :: EngineState
@@ -226,23 +397,24 @@ stateNew
       }
 
 --------------------------------------------------------------------------------
-runProgram :: Interpreter -> DhekProgram a -> IO (Maybe a)
-runProgram i p = do
-    s     <- readIORef $ _state i
-    opt   <- readIORef $ _internal i
-    env   <- readIORef $ _env i
-
-    for opt $ \ v ->
-        evalStateT (_evalProgram env (_gui i) (_state i) p v) s
+runProgram :: RuntimeEnv -> Instr a -> IO a
+runProgram i (Instr (DR action))
+    = do s          <- readIORef (_state i)
+         (a, s', _) <- runRWST action i s
+         let redraw = s' ^. engineDraw
+             s''    = s' & engineDraw .~ False
+         writeIORef (_state i) s''
+         when redraw (Gtk.widgetQueueDraw $ guiDrawingArea $ _gui i)
+         return a
 
 --------------------------------------------------------------------------------
-engineHasEvents :: Interpreter -> IO Bool
+engineHasEvents :: RuntimeEnv -> IO Bool
 engineHasEvents i
     = _engineWithContext i $
       use $ engineEventStack.to (not . null)
 
 --------------------------------------------------------------------------------
-_engineWithContext :: Interpreter -> (forall m. EngineCtx m => m a) -> IO a
+_engineWithContext :: RuntimeEnv -> (forall m. EngineCtx m => m a) -> IO a
 _engineWithContext i = _withContext $ _state i
 
 --------------------------------------------------------------------------------
@@ -252,173 +424,6 @@ _withContext ref state = do
     (a,s') <- runStateT state s
     writeIORef ref s'
     return a
-
---------------------------------------------------------------------------------
-_evalProgram :: EngineEnv
-             -> GUI
-             -> IORef EngineState
-             -> DhekProgram a
-             -> Viewer
-             -> StateT EngineState IO a
-_evalProgram env gui ref prg v= foldFree end susp prg where
-  nb = v ^. viewerPageCount
-
-  susp (GetCurPage k) = (use engineCurPage) >>= k
-  susp (GetPageCount k) = k (v ^. viewerPageCount)
-  susp (GetSelected k) = (use $ engineDrawState.drawSelected) >>= k
-  susp (SetSelected r k) = do
-      maybe (liftIO $ gtkUnselect gui) (_selectRect gui) r
-      k
-  susp (UnselectRect k) = do
-      engineDrawState.drawSelected .= Nothing
-      liftIO $ gtkUnselect gui
-      k
-  susp (GetRectangles k) = get >>= k . getRects
-  susp (IncrPage k) = do
-      engineDrawState.drawSelected .= Nothing
-      ncur <- engineCurPage <+= 1
-      s    <- get
-
-      liftIO $ gtkIncrPage ncur nb (getRects s) gui
-      k
-  susp (DecrPage k) = do
-      engineDrawState.drawSelected .= Nothing
-      ncur <- engineCurPage <-= 1
-      s    <- get
-
-      liftIO $ gtkDecrPage ncur 1 (getRects s) gui
-      k
-  susp (IncrZoom k) = do
-      ncur <- engineCurZoom <+= 1
-
-      liftIO $ gtkIncrZoom ncur 10 gui
-      k
-  susp (DecrZoom k) = do
-      ncur <- engineCurZoom <-= 1
-
-      liftIO $ gtkDecrZoom ncur 1 gui
-      k
-  susp (RemoveRect r k) = do
-      let id = r ^. rectId
-
-      pid <- use engineCurPage
-      engineBoards.boardsMap.at pid.traverse.boardRects.at id .= Nothing
-
-      liftIO $ gtkRemoveRect r gui
-      k
-  susp (GetEntryText e k) =
-      case e of
-          PropEntry -> do
-              r <- liftIO $ gtkLookupEntryText $ guiNameEntry gui
-              k r
-          ValueEntry -> do
-              r <- liftIO $ gtkLookupEntryText $ guiValueEntry gui
-              k r
-  susp (GetComboText e k) =
-      case e of
-          PropCombo -> do
-              tOpt <- liftIO $ Gtk.comboBoxGetActiveText $ guiTypeCombo gui
-              k tOpt
-  susp (Draw k) = do
-      engineDraw .= True
-      k
-  susp (SetTitle t k) = do
-      liftIO $ Gtk.windowSetTitle (guiWindow gui) t
-      k
-  susp (GetFilename k) = k $ _engineFilename env
-  susp (ShowError e k) = do
-            liftIO $ gtkShowError e gui
-            k
-  susp (PerformIO action k) = (liftIO action) >>= k
-  susp (GetTreeSelection k) = do
-      rOpt <- liftIO $ gtkGetTreeSelection gui
-      k rOpt
-  susp (NewGuide t k) = do
-      engineDrawState.drawCurGuide ?= Guide 0 t
-      k
-  susp (UpdateGuide k) = do
-      x <- liftIO $ Gtk.get (guiHRuler gui) Gtk.rulerPosition
-      y <- liftIO $ Gtk.get (guiVRuler gui) Gtk.rulerPosition
-
-      let upd g =
-              let v = case g ^. guideType of
-                      GuideVertical   -> x
-                      GuideHorizontal -> y in
-              g & guideValue .~ v
-
-      engineDrawState.drawCurGuide %= fmap upd
-      k
-  susp (AddGuide k) = do
-      pid  <- use engineCurPage
-      gOpt <- use $ engineDrawState.drawCurGuide
-      gs   <- use $ engineBoards.boardsMap.at pid.traverse.boardGuides
-
-      let gs1 = foldr (:) gs gOpt
-
-      engineDrawState.drawCurGuide .= Nothing
-      engineBoards.boardsMap.at pid.traverse.boardGuides .= gs1
-      k
-  susp (GetCurGuide k) =  (use $ engineDrawState.drawCurGuide) >>= k
-  susp (GetGuides k)
-      = do pid <- use engineCurPage
-           gs  <- use $ engineBoards.boardsMap.at pid.traverse.boardGuides
-           k gs
-  susp (SelectJsonFile k) = do
-      r <- liftIO $ gtkSelectJsonFile gui
-      k r
-  susp (GetAllRects k) = do
-      let tup (i, b) = (i, b ^. boardRects.to I.elems)
-          list       = fmap tup . I.toList
-      (use $ engineBoards.boardsMap.to list) >>= k
-  susp (OpenJsonFile k) = do
-      r <- liftIO $ gtkOpenJsonFile gui
-      k r
-  susp (SetRects xs k) = do
-      let onEach page r = do
-              id <- boardsState <+= 1
-              let r1 = r & rectId .~ id
-              boardsMap.at page.traverse.boardRects.at id ?= r1
-
-          go (page, rs) = traverse_ (onEach page) rs
-          action        = traverse_ go xs
-          nb            = length xs
-          b             = execState action (boardsNew nb)
-
-      engineBoards                .= b
-      engineDrawState.drawFreshId .= b ^. boardsState
-      s <- get
-
-      liftIO $ gtkSetRects (getRects s) gui
-      k
-  susp (Active o b k) =
-      case o of
-          Overlap -> do
-              engineOverlap .= b
-              liftIO $ gtkSetOverlapActive b gui
-              k
-  susp (IsActive o k) =
-      case o of
-          Overlap -> (use engineOverlap) >>= k
-  susp (SetValuePropVisible b k) = do
-      liftIO $ gtkSetValuePropVisible b gui
-      k
-  susp (AddEvent e k) = do
-      engineEventStack %= (e:)
-      k
-  susp (ClearEvents k) = do
-      engineEventStack .= []
-      k
-
-  end a = do
-      drawing <- use engineDraw
-      engineDraw .= False
-      s <- get
-
-      liftIO $ do
-          writeIORef ref s
-          when drawing (Gtk.widgetQueueDraw $ guiDrawingArea gui)
-
-      return a
 
 --------------------------------------------------------------------------------
 lookupStoreIter :: (a -> Bool) -> Gtk.ListStore a -> IO (Maybe Gtk.TreeIter)
@@ -482,7 +487,7 @@ zoomValues = array (0, 10) values
              ,(10, 8.0)]  -- 800%
 
 --------------------------------------------------------------------------------
-loadPdf :: Interpreter -> FilePath -> IO ()
+loadPdf :: RuntimeEnv -> FilePath -> IO ()
 loadPdf i path = do
     opt <- readIORef $ _internal i
     v   <- _loadPdf path
@@ -524,6 +529,7 @@ loadPdf i path = do
             writeIORef (_internal i) (Just v)
             writeIORef (_env i) env
             writeIORef (_state i) s'
+            guiClearPdfCache gui
             Gtk.listStoreClear $ guiRectStore gui
             Gtk.widgetSetSensitive (guiJsonOpenMenuItem gui) True
             Gtk.widgetSetSensitive (guiJsonSaveMenuItem gui) True

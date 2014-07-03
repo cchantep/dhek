@@ -1,31 +1,39 @@
+--------------------------------------------------------------------------------
+-- |
+-- Module : Dhek.Property
+--
+--------------------------------------------------------------------------------
 module Dhek.Property where
 
+--------------------------------------------------------------------------------
 import Prelude hiding (any)
-
 import Control.Applicative ((<*>), (<$>))
-import Control.Lens ((.~), (&))
+import Data.Foldable (for_)
 
-import Data.Foldable (traverse_)
+--------------------------------------------------------------------------------
+import           Control.Monad.Trans (liftIO)
+import           Control.Lens ((.~), (&))
+import qualified Graphics.UI.Gtk as Gtk
 
-import Dhek.Free
+--------------------------------------------------------------------------------
+import Dhek.Engine.Instr
 import Dhek.GUI
 import Dhek.GUI.Action
-import Dhek.Instr
 import Dhek.Types
 
-onProp :: GUI -> DhekProgram ()
-onProp gui = compile $ do
-    sOpt <- getSelected
-    nOpt <- getEntryText PropEntry
-    vOpt <- getEntryText ValueEntry
-    iOpt <- performIO $ gtkGetIndexPropValue gui
-    tOpt <- getComboText PropCombo
-    traverse_ (go vOpt iOpt) ((,,) <$> sOpt <*> nOpt <*> tOpt)
-  where
-    go v idx (r,n,t) = do
-        let r1  = r & rectName  .~ n
-                    & rectType  .~ t
-                    & rectValue .~ v
-                    & rectIndex .~ idx
-        setSelected (Just r1)
-        addEvent UpdateRectProps
+--------------------------------------------------------------------------------
+onProp :: GUI -> Instr ()
+onProp gui
+    = do sOpt <- getSelected
+         nOpt <- liftIO $ gtkLookupEntryText $ guiNameEntry gui
+         vOpt <- liftIO $ gtkLookupEntryText $ guiValueEntry gui
+         iOpt <- liftIO $ gtkGetIndexPropValue gui
+         tOpt <- liftIO $ Gtk.comboBoxGetActiveText $ guiTypeCombo gui
+         let r = (,,) <$> sOpt <*> nOpt <*> tOpt
+         for_  r $ \(r,n,t) ->
+             do let r1  = r & rectName  .~ n
+                            & rectType  .~ t
+                            & rectValue .~ vOpt
+                            & rectIndex .~ iOpt
+                setSelected (Just r1)
+                addEvent UpdateRectProps
