@@ -89,6 +89,7 @@ data DrawState
       , _drawFreshId   :: !Int
       , _drawMultiSel  :: ![Rect]
       , _drawCurGuide  :: !(Maybe Guide)
+      , _drawOverGuide :: !(Maybe Guide)
       }
 
 --------------------------------------------------------------------------------
@@ -126,6 +127,7 @@ drawStateNew = DrawState{ _drawEvent     = Nothing
                         , _drawFreshId   = 0
                         , _drawMultiSel  = []
                         , _drawCurGuide  = Nothing
+                        , _drawOverGuide = Nothing
                         }
 
 --------------------------------------------------------------------------------

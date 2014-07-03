@@ -94,15 +94,16 @@ drawRect fw fh (RGB red green blue) s r = do
 --------------------------------------------------------------------------------
 drawGuide :: Double -- Width
           -> Double -- Height
+          -> RGB
           -> Guide
           -> Cairo.Render ()
-drawGuide w h (Guide x typ) = do
-    Cairo.setSourceRGB 0.16 0.26 0.87
-    Cairo.setLineWidth 0.5
-    case typ of
-        GuideVertical   -> do
-            Cairo.moveTo x 0.0
-            Cairo.lineTo x h
-        GuideHorizontal -> do
-            Cairo.moveTo 0.0 x
-            Cairo.lineTo w x
+drawGuide w h (RGB red green blue) (Guide x typ)
+    = do Cairo.setSourceRGB red green blue
+         Cairo.setLineWidth 0.5
+         case typ of
+             GuideVertical   -> do
+                 Cairo.moveTo x 0.0
+                 Cairo.lineTo x h
+             GuideHorizontal -> do
+                 Cairo.moveTo 0.0 x
+                 Cairo.lineTo w x

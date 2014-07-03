@@ -116,7 +116,6 @@ instance ModeMonad SelectionMode where
         bd    <- use $ engineBoards.boardsMap.at pid.traverse
         rects <- engineStateGetRects
         let guides   = bd ^. boardGuides
-            curGuide = ds ^. drawCurGuide
 
         liftIO $ do
             frame     <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
@@ -135,8 +134,7 @@ instance ModeMonad SelectionMode where
                 Cairo.paint
 
                 Cairo.scale ratio ratio
-                mapM_ (drawGuide fw fh) guides
-                mapM_ (drawGuide fw fh) curGuide
+                mapM_ (drawGuide fw fh guideColor) guides
                 Cairo.closePath
                 Cairo.stroke
 
@@ -153,6 +151,7 @@ instance ModeMonad SelectionMode where
         regularColor   = rgbBlue
         selectedColor  = rgbRed
         selectionColor = rgbGreen
+        guideColor     = RGB 0.16 0.26 0.87
 
 --------------------------------------------------------------------------------
 -- | Called when 'Top' button, located in mode's toolbar, is clicked

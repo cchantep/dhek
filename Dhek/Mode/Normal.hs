@@ -58,7 +58,8 @@ instance ModeMonad NormalMode where
         sOpt <- use $ engineDrawState.drawSelection
         gOpt <- use $ engineDrawState.drawCurGuide
 
-        engineDrawState.drawOverRect .= oOpt
+        engineDrawState.drawOverRect  .= oOpt
+        engineDrawState.drawOverGuide .= ogOpt
 
         gui <- ask
         for_ gOpt $ \g ->
@@ -237,9 +238,10 @@ instance ModeMonad NormalMode where
         ds  <- use $ engineDrawState
         pid <- use $ engineCurPage
         bd  <- use $ engineBoards.boardsMap.at pid.traverse
-        let guides   = bd ^. boardGuides
-            curGuide = ds ^. drawCurGuide
-            rects    = bd ^. boardRects.to I.elems
+        let guides    = bd ^. boardGuides
+            curGuide  = ds ^. drawCurGuide
+            rects     = bd ^. boardRects.to I.elems
+            overGuide = ds ^. drawOverGuide
 
         liftIO $ do
             frame     <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
@@ -259,8 +261,13 @@ instance ModeMonad NormalMode where
                 Cairo.paint
 
                 Cairo.scale ratio ratio
-                mapM_ (drawGuide fw fh) guides
-                mapM_ (drawGuide fw fh) curGuide
+                mapM_ (drawGuide fw fh guideColor) guides
+                Cairo.closePath
+                Cairo.stroke
+                mapM_ (drawGuide fw fh rgbGreen) overGuide
+                Cairo.closePath
+                Cairo.stroke
+                mapM_ (drawGuide fw fh selectedColor) curGuide
                 Cairo.closePath
                 Cairo.stroke
 
@@ -291,6 +298,7 @@ instance ModeMonad NormalMode where
         selectedColor  = rgbRed
         selectionColor = rgbGreen
         rectGuideColor = RGB 0.16 0.72 0.92
+        guideColor     = RGB 0.16 0.26 0.87
 
 --------------------------------------------------------------------------------
 runNormal :: GUI -> NormalMode a -> EngineState -> IO EngineState
