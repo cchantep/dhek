@@ -12,6 +12,7 @@ import Prelude hiding (mapM_)
 --------------------------------------------------------------------------------
 import Control.Applicative
 import Data.Foldable (find, for_, mapM_)
+import Data.IORef
 import Data.Maybe (isJust, isNothing)
 import Data.Traversable
 

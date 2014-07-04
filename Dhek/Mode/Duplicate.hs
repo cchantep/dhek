@@ -59,34 +59,33 @@ instance ModeMonad DuplicateMode where
 
                 _ -> return ()
 
-    mPress opts = do
-        eOpt <- use $ engineDrawState.drawEvent
-        case eOpt of
-            Nothing -> for_ (getOverRect opts) $ \r -> do
-                rid <- engineDrawState.drawFreshId <+= 1
-                let r2    = r & rectId .~ rid
-                    (x,y) = drawPointer opts
+    mPress opts
+        = for_ (getOverRect opts) $ \r ->
+              do rid <- engineDrawState.drawFreshId <+= 1
+                 let r2    = r & rectId .~ rid
+                     (x,y) = drawPointer opts
 
-                engineDrawState.drawEvent ?= Hold r2 (x,y)
-                gui <- ask
-                liftIO $ gtkSetCursor (Just Gtk.Cross) gui
-            Just (Hold x _) -> do
-                rid <- engineDrawState.drawFreshId <+= 1
-                let r = normalize x & rectId    .~ rid
-                                    & rectIndex %~ (fmap (+1))
+                 engineDrawState.drawEvent ?= Hold r2 (x,y)
+                 gui <- ask
+                 liftIO $ gtkSetCursor (Just Gtk.Cross) gui
 
-                -- Add rectangle
-                gui <- ask
-                engineStateSetRect r
-                liftIO $ gtkAddRect r gui
+    mRelease
+        = do eOpt <- use $ engineDrawState.drawEvent
+             for_ eOpt $ \(Hold x _) ->
+                 do rid <- engineDrawState.drawFreshId <+= 1
+                    let r = normalize x & rectId    .~ rid
+                                        & rectIndex %~ (fmap (+1))
 
-                engineDrawState.drawEvent     .= Nothing
-                engineDrawState.drawCollision .= Nothing
+                    -- Add rectangle
+                    gui <- ask
+                    engineStateSetRect r
+                    liftIO $ gtkAddRect r gui
 
-                liftIO $ gtkSetCursor Nothing gui
-                engineEventStack %= (CreateRect:)
+                    engineDrawState.drawEvent     .= Nothing
+                    engineDrawState.drawCollision .= Nothing
 
-    mRelease = return ()
+                    liftIO $ gtkSetCursor Nothing gui
+                    engineEventStack %= (CreateRect:)
 
     mDrawing page ratio = do
         gui <- ask

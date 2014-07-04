@@ -28,3 +28,5 @@ SplashEdit: 2. Edit areas to be filled over choosen document
 SplashSave: 3. Save areas as a separate template file
 SplashCopy: 4. Copy PDF by filling data according template
 DontSave: Don't save
+DuplicationModePopup: Drag &amp; drop to duplicate
+DuplicationModeStatus: CTRL: Duplication mode. Drag & drop existing area to duplicate it where wanted.

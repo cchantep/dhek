@@ -122,22 +122,46 @@ connectSignals g i = do
 
     Gtk.on (guiDrawingArea g) Gtk.motionNotifyEvent $ Gtk.tryEvent $ do
         pos@(x,y) <- Gtk.eventCoordinates
+        mod       <- Gtk.eventModifier
         liftIO $ do
+            if (statusModPressed mod)
+                then
+                do updatePopupPos g
+                   Gtk.statusbarPop (guiStatusBar g) (guiContextId g)
+                   Gtk.statusbarPush (guiStatusBar g) (guiContextId g)
+                       (guiTranslate g $ MsgDuplicationModeStatus)
+                   Gtk.widgetShowAll $ guiDrawPopup g
+                else
+                do Gtk.statusbarPop (guiStatusBar g) (guiContextId g)
+                   Gtk.widgetHide $ guiDrawPopup g
             opt <- engineRatio i
             for_ opt $ \r -> do
                 drawInterpret move i pos
                 Gtk.set (guiHRuler g) [Gtk.rulerPosition Gtk.:= x/r]
                 Gtk.set (guiVRuler g) [Gtk.rulerPosition Gtk.:= y/r]
 
+    Gtk.on (guiDrawingArea g) Gtk.enterNotifyEvent $ Gtk.tryEvent $ liftIO $
+        Gtk.widgetGrabFocus $ guiDrawingArea g
+
+    Gtk.on (guiDrawingArea g) Gtk.leaveNotifyEvent $ Gtk.tryEvent $ liftIO $
+        do Gtk.set (guiDrawingArea g) [Gtk.widgetHasFocus Gtk.:= False] -- noop ?
+           Gtk.statusbarPop (guiStatusBar g) (guiContextId g)
+           Gtk.widgetHide (guiDrawPopup g)
+
     Gtk.on (guiDrawingArea g) Gtk.buttonPressEvent $ Gtk.tryEvent $ do
        pos <- Gtk.eventCoordinates
        b   <- Gtk.eventButton
+       mod <- Gtk.eventModifier
        when (b == Gtk.LeftButton) $
-           liftIO $ drawInterpret press i pos
+           do when (statusModPressed mod) $ liftIO $
+                  engineSetMode DhekDuplication i
+              liftIO $ drawInterpret press i pos
 
     Gtk.on (guiDrawingArea g) Gtk.buttonReleaseEvent $ Gtk.tryEvent $ do
         pos <- Gtk.eventCoordinates
-        liftIO $ drawInterpret (const release) i pos
+        liftIO $
+            do drawInterpret (const release) i pos
+               engineSetMode DhekNormal i
 
     Gtk.on (guiDrawingArea g) Gtk.scrollEvent $ Gtk.tryEvent $ do
         dir <- Gtk.eventScrollDirection
@@ -235,6 +259,8 @@ connectSignals g i = do
     return ()
 
 --------------------------------------------------------------------------------
+-- Utilities
+--------------------------------------------------------------------------------
 dhekOpenPdf :: GUI -> RuntimeEnv -> IO ()
 dhekOpenPdf g i
     = do resp <- Gtk.dialogRun $ guiPdfDialog g
@@ -244,3 +270,22 @@ dhekOpenPdf g i
                  do uriOpt  <- Gtk.fileChooserGetURI $ guiPdfDialog g
                     traverse_ (loadPdf i) uriOpt
              _ -> return ()
+
+--------------------------------------------------------------------------------
+statusModPressed :: [Gtk.Modifier] -> Bool
+statusModPressed xs
+    | [Gtk.Control] <- xs = True
+    | otherwise           = False
+
+--------------------------------------------------------------------------------
+statusNamePressed :: String -> Bool
+statusNamePressed n
+    | "Control_L" <- n = True
+    | "Control_R" <- n = True
+    | otherwise        = False
+
+--------------------------------------------------------------------------------
+updatePopupPos :: GUI -> IO ()
+updatePopupPos g
+    = do (x,y) <- Gtk.widgetGetPointer $ guiWindow g
+         Gtk.windowMove (guiDrawPopup g) x (y+40)

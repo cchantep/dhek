@@ -9,7 +9,7 @@ module Dhek.GUI where
 
 --------------------------------------------------------------------------------
 import Prelude hiding (foldr)
-import Control.Monad ((>=>))
+import Control.Monad ((>=>), forM)
 import Control.Monad.Trans (MonadIO(..))
 import Data.Foldable (traverse_, foldr)
 import Data.IORef
@@ -72,6 +72,9 @@ data GUI =
     , guiSplashOpen :: Gtk.Button
     , guiSplashDok :: Gtk.Button
     , guiPdfCache :: IORef (Maybe Cairo.Surface)
+    , guiStatusBar :: Gtk.Statusbar
+    , guiContextId :: Gtk.ContextId
+    , guiDrawPopup :: Gtk.Window
     }
 
 --------------------------------------------------------------------------------
@@ -235,6 +238,15 @@ makeGUI = do
     Gtk.boxPackStart splash spldok Gtk.PackNatural 0
     Gtk.containerAdd wvbox splalign
 
+    -- Drawing Area tooltip
+    drawpop <- Gtk.windowNewPopup
+    dplabel <- Gtk.labelNew Nothing
+    Gtk.labelSetMarkup dplabel $ msgStr MsgDuplicationModePopup
+    Gtk.containerAdd drawpop dplabel
+    Gtk.windowSetTypeHint drawpop Gtk.WindowTypeHintTooltip
+    Gtk.widgetModifyBg drawpop Gtk.StateNormal (Gtk.Color 0 0 0)
+    Gtk.widgetModifyFg dplabel Gtk.StateNormal (Gtk.Color 65000 65000 65000)
+
     -- Drawing Area
     area     <- Gtk.drawingAreaNew
     vruler   <- Gtk.vRulerNew
@@ -252,7 +264,11 @@ makeGUI = do
     Gtk.containerAdd viewport area
     Gtk.set vruler [Gtk.rulerMetric Gtk.:= Gtk.Pixels]
     Gtk.set hruler [Gtk.rulerMetric Gtk.:= Gtk.Pixels]
-    Gtk.widgetAddEvents area [Gtk.PointerMotionMask]
+    Gtk.widgetAddEvents area [ Gtk.PointerMotionMask
+                             , Gtk.KeyPressMask
+                             , Gtk.KeyReleaseMask
+                             ]
+    Gtk.widgetSetCanFocus area True
     Gtk.widgetSetSizeRequest viewport 200 200
     Gtk.widgetSetSizeRequest hruler 25 25
     Gtk.widgetSetSizeRequest vruler 25 25
@@ -363,6 +379,14 @@ makeGUI = do
                 , Gtk.containerBorderWidth Gtk.:= 10
                 ]
 
+    -- Status bar
+    sbar    <- Gtk.statusbarNew
+    sbalign <- Gtk.alignmentNew 0 1 1 0
+    ctxId   <- Gtk.statusbarGetContextId sbar "mode"
+    Gtk.statusbarSetHasResizeGrip sbar False
+    Gtk.containerAdd sbalign sbar
+    Gtk.boxPackEnd vbox sbalign Gtk.PackNatural 0
+
     Gtk.onDestroy win $ do
                 Gtk.mainQuit
                 appTerminate
@@ -411,6 +435,9 @@ makeGUI = do
                 , guiSplashOpen = splopen
                 , guiSplashDok = spldok
                 , guiPdfCache = cache
+                , guiContextId = ctxId
+                , guiStatusBar = sbar
+                , guiDrawPopup = drawpop
                 }
 
 --------------------------------------------------------------------------------

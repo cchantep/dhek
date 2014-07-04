@@ -539,8 +539,10 @@ loadPdf i path = do
             Gtk.windowSetTitle (guiWindow gui)
                 (name ++ " (page 1 / " ++ show nb ++ ")")
             engineSetMode DhekNormal i
+    Gtk.widgetGrabFocus (guiDrawingArea gui)
   where
     gui = _gui i
+
 --------------------------------------------------------------------------------
 _loadPdf :: FilePath -> IO Viewer
 _loadPdf path = do
