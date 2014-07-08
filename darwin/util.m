@@ -3,6 +3,7 @@
 
 /** Wraps ObjC call to be used as foreign function. */
 void nsappTerminate() {
+  NSLog(@"Terminate Cocoa application...");
   [NSApp terminate: nil];
 }
 

@@ -20,26 +20,27 @@ Binary distributions for Windows (7+) and Mac OS X (10.8/10.9) can be found in [
 
 You can also build Dhek by yourself with following information.
 
-Depending on how you've installed GHC, you have 2 different prerequisites.
+### Setup environment
 
 Make sure gtk, pango, cairo and poppler are installed on your machine.
 
-#### MacPorts
+#### Mac OS X
 
-```
-port install pango poppler cairo gtk2
-```
+Build on Mac OS X has following requirements.
+
+- [GTK2 with Quartz](http://applicius-en.tumblr.com/post/91636015743/gtk2-with-osx-quartz).
+- [GTK2 Murrine theme engine](git://git.gnome.org/murrine); Optional but recommanded to make it look nice (see [Mac OS X patch](https://bugzilla.gnome.org/show_bug.cgi?id=733124) to build it).
 
 #### Haskell Platform
 
 ```
 cabal update
-cabal install alex happy gtk2hs-buildtools gtk
+cabal install alex happy gtk2hs-buildtools
 ```
 
-#### Dhek sources
+#### Dhek
 
-In order to build Dhek:
+In order to build Dhek itself (finally):
 
 ```
 cabal install --only-dependencies
@@ -47,7 +48,7 @@ cabal configure
 cabal build
 ```
 
-In case of linking error about `_iconv`, re-run `cabal configure` with `--extra-lib-dir=/usr/lib` to enforce system version of libiconv is used.
+> In case of linking error about `_iconv`, re-run `cabal configure` with `--extra-lib-dir=/usr/lib` to enforce system version of libiconv is used.
 
 You can install an executable by doing:
 

@@ -22,8 +22,17 @@
   launch();
 }
 
+- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)theApplication {
+  return YES;
+}
+
+- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender {
+  return NSTerminateNow;
+}
+
 - (void)applicationWillTerminate:(NSNotification *)aNotification
 {
+  NSLog(@"Termination of Cocoa application has been accepted");
   [self performSelectorOnMainThread:@selector(tearDown) 
                          withObject:nil waitUntilDone:NO];
 }
@@ -34,7 +43,8 @@
 */
 - (void)tearDown
 {
-  hs_exit();
+  NSLog(@"Tear down");
+  hs_exit(); // Already stopped???
 }
 
 @end

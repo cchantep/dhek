@@ -11,9 +11,15 @@
 module Dhek.AppUtil where
 
 import Foreign.C
+import System.Exit (exitSuccess)
 
-foreign import ccall "util.h nsappTerminate" appTerminate :: IO ()
+foreign import ccall "util.h nsappTerminate" nsappTerminate :: IO ()
 foreign import ccall "util.h nsbrowserOpen" nsbrowserOpen :: CString -> IO ()
+
+appTerminate :: IO ()
+appTerminate = do
+  exitSuccess -- ???
+  nsappTerminate
 
 browserOpen :: String -> IO ()
 browserOpen url = do
