@@ -384,6 +384,7 @@ makeGUI = do
     sbalign <- Gtk.alignmentNew 0 1 1 0
     ctxId   <- Gtk.statusbarGetContextId sbar "mode"
     Gtk.statusbarSetHasResizeGrip sbar False
+    Gtk.statusbarPush sbar ctxId $ msgStr MsgModeHelp
     Gtk.containerAdd sbalign sbar
     Gtk.boxPackEnd vbox sbalign Gtk.PackNatural 0
 

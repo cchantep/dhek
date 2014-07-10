@@ -133,6 +133,8 @@ connectSignals g i = do
                    Gtk.widgetShowAll $ guiDrawPopup g
                 else
                 do Gtk.statusbarPop (guiStatusBar g) (guiContextId g)
+                   Gtk.statusbarPush (guiStatusBar g) (guiContextId g)
+                       (guiTranslate g $ MsgModeHelp)
                    Gtk.widgetHide $ guiDrawPopup g
             opt <- engineRatio i
             for_ opt $ \r -> do
@@ -146,6 +148,8 @@ connectSignals g i = do
     Gtk.on (guiDrawingArea g) Gtk.leaveNotifyEvent $ Gtk.tryEvent $ liftIO $
         do Gtk.set (guiDrawingArea g) [Gtk.widgetHasFocus Gtk.:= False] -- noop ?
            Gtk.statusbarPop (guiStatusBar g) (guiContextId g)
+           Gtk.statusbarPush (guiStatusBar g) (guiContextId g)
+               (guiTranslate g $ MsgModeHelp)
            Gtk.widgetHide (guiDrawPopup g)
 
     Gtk.on (guiDrawingArea g) Gtk.buttonPressEvent $ Gtk.tryEvent $ do
