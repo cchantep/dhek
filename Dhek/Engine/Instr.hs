@@ -30,12 +30,6 @@ data DhekCombo = PropCombo
 data DhekOption = Overlap
 
 --------------------------------------------------------------------------------
-data DhekMode
-    = DhekNormal
-    | DhekDuplication
-    | DhekSelection
-
---------------------------------------------------------------------------------
 data Event
     = CreateRect
     | UpdateRectPos

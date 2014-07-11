@@ -7,6 +7,7 @@
 module Dhek.Engine
     ( Collision(..)
     , DrawEnv(..)
+    , DhekMode(..)
     , EngineState
     , RuntimeEnv
     , M
@@ -18,6 +19,9 @@ module Dhek.Engine
     , engineRunDraw
     , engineSetMode
     , engineHasEvents
+    , engineIsNormalMode
+    , engineRevertMode
+    , engineIsDuplicateCtrlMode
       -- Draw lenses
     , drawCollision
     , drawCursor

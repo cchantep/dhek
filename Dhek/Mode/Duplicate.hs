@@ -4,7 +4,13 @@
 -- Module : Dhek.Mode.Duplicate
 --
 --------------------------------------------------------------------------------
-module Dhek.Mode.Duplicate (duplicateModeManager) where
+module Dhek.Mode.Duplicate
+    ( DuplicateMode
+    , duplicateModeManager
+    , dupStart
+    , dupEnd
+    , runDuplicate
+    ) where
 
 --------------------------------------------------------------------------------
 import Prelude hiding (mapM_)
@@ -59,33 +65,13 @@ instance ModeMonad DuplicateMode where
 
                 _ -> return ()
 
-    mPress opts
-        = for_ (getOverRect opts) $ \r ->
-              do rid <- engineDrawState.drawFreshId <+= 1
-                 let r2    = r & rectId .~ rid
-                     (x,y) = drawPointer opts
+    mPress opts = do
+        eOpt <- use $ engineDrawState.drawEvent
+        case eOpt of
+            Nothing         -> dupStart opts
+            Just (Hold x _) -> dupEnd x
 
-                 engineDrawState.drawEvent ?= Hold r2 (x,y)
-                 gui <- ask
-                 liftIO $ gtkSetCursor (Just Gtk.Cross) gui
-
-    mRelease
-        = do eOpt <- use $ engineDrawState.drawEvent
-             for_ eOpt $ \(Hold x _) ->
-                 do rid <- engineDrawState.drawFreshId <+= 1
-                    let r = normalize x & rectId    .~ rid
-                                        & rectIndex %~ (fmap (+1))
-
-                    -- Add rectangle
-                    gui <- ask
-                    engineStateSetRect r
-                    liftIO $ gtkAddRect r gui
-
-                    engineDrawState.drawEvent     .= Nothing
-                    engineDrawState.drawCollision .= Nothing
-
-                    liftIO $ gtkSetCursor Nothing gui
-                    engineEventStack %= (CreateRect:)
+    mRelease = return ()
 
     mDrawing page ratio = do
         gui <- ask
@@ -131,6 +117,35 @@ instance ModeMonad DuplicateMode where
         selectionColor = rgbGreen
         rectGuideColor = RGB 0.16 0.72 0.92
         guideColor     = RGB 0.16 0.26 0.87
+
+--------------------------------------------------------------------------------
+dupStart :: DrawEnv -> DuplicateMode ()
+dupStart opts
+    = for_ (getOverRect opts) $ \r ->
+          do rid <- engineDrawState.drawFreshId <+= 1
+             let r2    = r & rectId .~ rid
+                 (x,y) = drawPointer opts
+
+             engineDrawState.drawEvent ?= Hold r2 (x,y)
+             gui <- ask
+             liftIO $ gtkSetCursor (Just Gtk.Cross) gui
+
+--------------------------------------------------------------------------------
+dupEnd :: Rect -> DuplicateMode ()
+dupEnd x
+    = do rid <- engineDrawState.drawFreshId <+= 1
+         let r = normalize x & rectId    .~ rid
+                             & rectIndex %~ (fmap (+1))
+         -- Add rectangle
+         gui <- ask
+         engineStateSetRect r
+         liftIO $ gtkAddRect r gui
+
+         engineDrawState.drawEvent     .= Nothing
+         engineDrawState.drawCollision .= Nothing
+
+         liftIO $ gtkSetCursor Nothing gui
+         engineEventStack %= (CreateRect:)
 
 --------------------------------------------------------------------------------
 runDuplicate :: GUI -> DuplicateMode a -> EngineState -> IO EngineState

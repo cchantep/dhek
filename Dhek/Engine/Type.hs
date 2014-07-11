@@ -16,7 +16,7 @@ import Control.Applicative
 import           Control.Lens
 import           Control.Monad.State
 import qualified Data.IntMap as I
-import           Graphics.UI.Gtk (CursorType)
+import           Graphics.UI.Gtk (CursorType, Modifier)
 
 --------------------------------------------------------------------------------
 import Dhek.Engine.Instr
@@ -38,6 +38,13 @@ type Pos   = (Double, Double)
 type Ratio = Double
 type Width = Double
 type Zoom  = Double
+
+--------------------------------------------------------------------------------
+data DhekMode
+    = DhekNormal
+    | DhekDuplication
+    | DhekDuplicationCtrl
+    | DhekSelection
 
 --------------------------------------------------------------------------------
 newtype M a = M (forall m. ModeMonad m => m a)
@@ -62,10 +69,11 @@ data ModeManager
 --------------------------------------------------------------------------------
 data DrawEnv
     = DrawEnv
-      { drawOverlap :: Bool             -- ^ Rectangle overlap
-      , drawPointer :: (Double, Double) -- ^ (x, y) pointer position
-      , drawRects   :: [Rect]           -- ^ Page rectangle
-      , drawRatio   :: Double           -- ^ Page ratio
+      { drawOverlap  :: Bool             -- ^ Rectangle overlap
+      , drawPointer  :: (Double, Double) -- ^ (x, y) pointer position
+      , drawRects    :: [Rect]           -- ^ Page rectangle
+      , drawRatio    :: Double           -- ^ Page ratio
+      , drawModifier :: [Modifier]
       }
 
 --------------------------------------------------------------------------------

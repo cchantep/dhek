@@ -57,6 +57,7 @@ executable dhek
                  Dhek.I18N
                  Dhek.Mode.Common.Draw
                  Dhek.Mode.Duplicate
+                 Dhek.Mode.DuplicateCtrl
                  Dhek.Mode.Normal
                  Dhek.Mode.Selection
                  Dhek.Property

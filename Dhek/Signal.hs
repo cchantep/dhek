@@ -123,24 +123,31 @@ connectSignals g i = do
     Gtk.on (guiDrawingArea g) Gtk.motionNotifyEvent $ Gtk.tryEvent $ do
         pos@(x,y) <- Gtk.eventCoordinates
         mod       <- Gtk.eventModifier
-        liftIO $ do
-            if (statusModPressed mod)
-                then
-                do updatePopupPos g
-                   Gtk.statusbarPop (guiStatusBar g) (guiContextId g)
-                   Gtk.statusbarPush (guiStatusBar g) (guiContextId g)
-                       (guiTranslate g $ MsgDuplicationModeStatus)
-                   Gtk.widgetShowAll $ guiDrawPopup g
-                else
-                do Gtk.statusbarPop (guiStatusBar g) (guiContextId g)
-                   Gtk.statusbarPush (guiStatusBar g) (guiContextId g)
-                       (guiTranslate g $ MsgModeHelp)
-                   Gtk.widgetHide $ guiDrawPopup g
-            opt <- engineRatio i
-            for_ opt $ \r -> do
-                drawInterpret move i pos
-                Gtk.set (guiHRuler g) [Gtk.rulerPosition Gtk.:= x/r]
-                Gtk.set (guiVRuler g) [Gtk.rulerPosition Gtk.:= y/r]
+        liftIO $
+            do opt <- engineRatio i
+               for_ opt $ \r ->
+                   do drawInterpret mod move i pos
+                      Gtk.set (guiHRuler g) [Gtk.rulerPosition Gtk.:= x/r]
+                      Gtk.set (guiVRuler g) [Gtk.rulerPosition Gtk.:= y/r]
+
+    Gtk.on (guiDrawingArea g) Gtk.keyPressEvent $ Gtk.tryEvent $
+        do name <- Gtk.eventKeyName
+           liftIO $
+               do normal <- engineIsNormalMode i
+                  when (normal && statusNamePressed name) $
+                      do Gtk.statusbarPush (guiStatusBar g) (guiContextId g)
+                             (guiTranslate g $ MsgDuplicationModeStatus)
+                         Gtk.widgetShowAll $ guiDrawPopup g
+                         engineSetMode DhekDuplicationCtrl i
+
+    Gtk.on (guiDrawingArea g) Gtk.keyReleaseEvent $ Gtk.tryEvent $
+        do name <- Gtk.eventKeyName
+           liftIO $
+               do dupCtrl <- engineIsDuplicateCtrlMode i
+                  when (dupCtrl && statusNamePressed name) $
+                      do Gtk.statusbarPop (guiStatusBar g) (guiContextId g)
+                         Gtk.widgetHide $ guiDrawPopup g
+                         engineRevertMode i
 
     Gtk.on (guiDrawingArea g) Gtk.enterNotifyEvent $ Gtk.tryEvent $ liftIO $
         Gtk.widgetGrabFocus $ guiDrawingArea g
@@ -156,16 +163,13 @@ connectSignals g i = do
        pos <- Gtk.eventCoordinates
        b   <- Gtk.eventButton
        mod <- Gtk.eventModifier
-       when (b == Gtk.LeftButton) $
-           do when (statusModPressed mod) $ liftIO $
-                  engineSetMode DhekDuplication i
-              liftIO $ drawInterpret press i pos
+       when (b == Gtk.LeftButton) $ liftIO $
+           drawInterpret mod press i pos
 
     Gtk.on (guiDrawingArea g) Gtk.buttonReleaseEvent $ Gtk.tryEvent $ do
         pos <- Gtk.eventCoordinates
-        liftIO $
-            do drawInterpret (const release) i pos
-               engineSetMode DhekNormal i
+        mod <- Gtk.eventModifier
+        liftIO $ drawInterpret mod (const release) i pos
 
     Gtk.on (guiDrawingArea g) Gtk.scrollEvent $ Gtk.tryEvent $ do
         dir <- Gtk.eventScrollDirection
@@ -287,9 +291,3 @@ statusNamePressed n
     | "Control_L" <- n = True
     | "Control_R" <- n = True
     | otherwise        = False
-
---------------------------------------------------------------------------------
-updatePopupPos :: GUI -> IO ()
-updatePopupPos g
-    = do (x,y) <- Gtk.widgetGetPointer $ guiWindow g
-         Gtk.windowMove (guiDrawPopup g) x (y+40)

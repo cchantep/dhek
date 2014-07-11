@@ -38,27 +38,37 @@ import Dhek.Engine.Type
 import Dhek.GUI
 import Dhek.GUI.Action
 import Dhek.Mode.Duplicate
+import Dhek.Mode.DuplicateCtrl
 import Dhek.Mode.Normal
 import Dhek.Mode.Selection
 import Dhek.Types
 
 --------------------------------------------------------------------------------
+data ModeInfo
+    = ModeInfo
+      { _modeInfoMgr  :: !ModeManager
+      , _modeInfoPrev :: !(Maybe DhekMode)
+      , _modeInfoCur  :: !DhekMode
+      }
+
+--------------------------------------------------------------------------------
 data RuntimeEnv
     = RuntimeEnv
-      { _internal   :: IORef (Maybe Viewer)
-      , _state      :: IORef EngineState
-      , _env        :: IORef EngineEnv
-      , _gui        :: GUI
-      , _modes      :: Modes
-      , _curModeMgr :: IORef ModeManager
+      { _internal :: IORef (Maybe Viewer)
+      , _state    :: IORef EngineState
+      , _env      :: IORef EngineEnv
+      , _gui      :: GUI
+      , _modes    :: Modes
+      , _modeInfo :: IORef ModeInfo
       }
 
 --------------------------------------------------------------------------------
 data Modes
     = Modes
-      { modeDraw        :: IO ModeManager
-      , modeDuplication :: IO ModeManager
-      , modeSelection   :: IO ModeManager
+      { modeDraw            :: IO ModeManager
+      , modeDuplication     :: IO ModeManager
+      , modeSelection       :: IO ModeManager
+      , modeDuplicationCtrl :: IO ModeManager
       }
 
 --------------------------------------------------------------------------------
@@ -232,24 +242,25 @@ instance Runtime DefaultRuntime where
         = engineEventStack .= []
 
 --------------------------------------------------------------------------------
-drawInterpret :: (DrawEnv -> M a) -> RuntimeEnv -> Pos -> IO ()
-drawInterpret k i (x,y) = do
+drawInterpret :: [Gtk.Modifier] -> (DrawEnv -> M a) -> RuntimeEnv -> Pos -> IO ()
+drawInterpret xs k i (x,y) = do
     s   <- readIORef $ _state i
     opt <- readIORef $ _internal i
-    mgr <- readIORef $ _curModeMgr i
+    mi  <- readIORef $ _modeInfo i
 
     for_ opt $ \v -> do
         let gui   = _gui i
             ratio = _engineRatio s v
             pid   = s ^. engineCurPage
             opts  = DrawEnv
-                    { drawOverlap = s ^. engineOverlap
-                    , drawPointer = (x/ratio, y/ratio)
-                    , drawRects   = getRects s
-                    , drawRatio   = ratio
+                    { drawOverlap  = s ^. engineOverlap
+                    , drawPointer  = (x/ratio, y/ratio)
+                    , drawRects    = getRects s
+                    , drawRatio    = ratio
+                    , drawModifier = xs
                     }
 
-        s2 <- runMode (mgrMode mgr) s (k opts)
+        s2 <- runMode (mgrMode $ _modeInfoMgr mi) s (k opts)
         writeIORef (_state i) s2
         liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
 
@@ -258,12 +269,12 @@ engineRunDraw :: RuntimeEnv -> IO ()
 engineRunDraw i = do
     s   <- readIORef $ _state i
     opt <- readIORef $ _internal i
-    mgr <- readIORef $ _curModeMgr i
+    mi  <- readIORef $ _modeInfo i
     for_ opt $ \v -> do
         let pages = v ^. viewerPages
             page  = pages ! (s ^. engineCurPage)
             ratio = _engineRatio s v
-        s2 <- runMode (mgrMode mgr) s (drawing page ratio)
+        s2 <- runMode (mgrMode $ _modeInfoMgr mi) s (drawing page ratio)
         writeIORef (_state i) s2
 
 --------------------------------------------------------------------------------
@@ -312,23 +323,56 @@ engineDrawingArea = guiDrawingArea . _gui
 --   the new @ModeManager@
 engineSetMode :: DhekMode -> RuntimeEnv -> IO ()
 engineSetMode m i = do
-    s       <- readIORef $ _state i
-    e       <- readIORef $ _env i
-    prevMgr <- readIORef $ _curModeMgr i
-    let cleanup = mgrCleanup prevMgr
+    s  <- readIORef $ _state i
+    e  <- readIORef $ _env i
+    mi <- readIORef $ _modeInfo i
+    let prevMgr = _modeInfoMgr mi
+        cleanup  = mgrCleanup prevMgr
     s2  <- execStateT cleanup s
     mgr <- selector modes
+    let prevMode = _modeInfoCur mi
+        mi'      = mi { _modeInfoPrev = Just prevMode
+                      , _modeInfoCur  = m
+                      , _modeInfoMgr  = mgr
+                      }
     writeIORef (_state i) s2
-    writeIORef (_curModeMgr i) mgr
+    writeIORef (_modeInfo i) mi'
+
     Gtk.widgetQueueDraw area
 
   where
     modes    = _modes i
     area     = guiDrawingArea $ _gui i
     selector = case m of
-        DhekNormal      -> modeDraw
-        DhekDuplication -> modeDuplication
-        DhekSelection   -> modeSelection
+        DhekNormal          -> modeDraw
+        DhekDuplication     -> modeDuplication
+        DhekSelection       -> modeSelection
+        DhekDuplicationCtrl -> modeDuplicationCtrl
+
+--------------------------------------------------------------------------------
+-- | Reverts to the last mode if exists
+engineRevertMode :: RuntimeEnv -> IO ()
+engineRevertMode i
+    = do mi <- readIORef $ _modeInfo i
+         case _modeInfoPrev mi of
+             Nothing   -> return ()
+             Just prev -> engineSetMode prev i
+
+--------------------------------------------------------------------------------
+engineIsNormalMode :: RuntimeEnv -> IO Bool
+engineIsNormalMode i
+    = do mi <- readIORef $ _modeInfo i
+         case _modeInfoCur mi of
+             DhekNormal -> return True
+             _          -> return False
+
+--------------------------------------------------------------------------------
+engineIsDuplicateCtrlMode :: RuntimeEnv -> IO Bool
+engineIsDuplicateCtrlMode i
+    = do mi <- readIORef $ _modeInfo i
+         case _modeInfoCur mi of
+             DhekDuplicationCtrl -> return True
+             _                   -> return False
 
 --------------------------------------------------------------------------------
 -- | Returns the current page ratio. Returns Nothing if no PDF has been loaded
@@ -358,23 +402,30 @@ makeRuntimeEnv gui = do
     vRef <- newIORef Nothing
 
     -- Instanciates ModeManagers
-    let mgrNormal      = normalModeManager gui
-        mgrDuplication = duplicateModeManager gui
-        mgrSelection   = selectionModeManager (_withContext sRef) gui
+    let mgrNormal        = normalModeManager gui
+        mgrDuplication   = duplicateModeManager gui
+        mgrSelection     = selectionModeManager (_withContext sRef) gui
+        mgrDuplicateCtrl = duplicateCtrlModeManager gui
         modes = Modes
-                { modeDraw        = mgrNormal
-                , modeDuplication = mgrDuplication
-                , modeSelection   = mgrSelection
+                { modeDraw            = mgrNormal
+                , modeDuplication     = mgrDuplication
+                , modeSelection       = mgrSelection
+                , modeDuplicationCtrl = mgrDuplicateCtrl
                 }
 
     curMgr <- mgrNormal
-    cRef   <- newIORef curMgr
+    let mi = ModeInfo
+             { _modeInfoMgr  = curMgr
+             , _modeInfoCur  = DhekNormal
+             , _modeInfoPrev = Nothing
+             }
+    cRef   <- newIORef mi
     return RuntimeEnv{ _internal   = vRef
                      , _state      = sRef
                      , _env        = eRef
                      , _gui        = gui
                      , _modes      = modes
-                     , _curModeMgr = cRef
+                     , _modeInfo   = cRef
                      }
 
 --------------------------------------------------------------------------------
