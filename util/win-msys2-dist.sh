@@ -8,7 +8,14 @@ DISTDIR=dist/dhek-win$OSVER-$VER
 mkdir -p "$DISTDIR/bin"
 
 cp dist/build/dhek/dhek.exe "$DISTDIR/bin/"
-cp util/win-dist/dlls/*.dll "$DISTDIR/bin/"
+
+# Dependencies
+DEPS=`ldd dist/build/Dhek/dhek.exe | grep -vi '/Windows' | awk '{ printf("%s\n", $3); }'`
+
+for D in $DEPS; do
+  cp "$D" "$DISTDIR/bin"
+done
+
 cp -R util/win-dist/gtk-theme/* "$DISTDIR/"
 cp -R resources "$DISTDIR/bin/resources"
 rm -f "$DISTDIR/bin/resources/*.png"
