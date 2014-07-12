@@ -226,12 +226,12 @@ distCreateButtonActivated gui
              name = r0 ^. rectName
              s -- Horizontal space between 0 & 1
                  = r1 ^. rectX - (r0 ^. rectX + w)
-             d -- Distance between 0 & N
+             d -- Distance between left of 1 & right of N
                  = rn ^. rectX - (r1 ^. rectX + w + s)
              m -- Number of cells to be created between cell 1 & N
                  = floor (((realToFrac d) / realToFrac (w + s) :: Double))
              rn' -- N index is updated according to 'm' new rectangles
-                 = rn & rectIndex ?~ m+1
+                 = rn & rectIndex ?~ m+2 -- 'm' rect after 2nd rect(1) + 1
 
              -- Create 'm' new rectangles
              loop _ _ []
