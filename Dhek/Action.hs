@@ -47,12 +47,12 @@ onPlus
 --------------------------------------------------------------------------------
 onRem :: Instr ()
 onRem
-    = do sOpt <- getSelected
-         for_ sOpt $ \r ->
+    = do rs <- getAllSelected
+         for_ rs $ \r ->
              do removeRect r
-                unselectRect
                 addEvent DeleteRect
-                draw
+         unselectRect
+         draw
 
 --------------------------------------------------------------------------------
 onApplidok :: IO ()

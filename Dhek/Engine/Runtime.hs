@@ -87,6 +87,10 @@ instance Runtime DefaultRuntime where
     rGetSelected
         = use $ engineDrawState.drawSelected
 
+    rGetAllSelected
+        = do gui <- asks _gui
+             liftIO $ gtkGetTreeAllSelection gui
+
     rSetSelected r
         = do g <- asks _gui
              maybe (liftIO $ gtkUnselect g) (_selectRect g) r

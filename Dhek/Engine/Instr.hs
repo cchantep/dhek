@@ -42,6 +42,7 @@ newtype Instr a = Instr (forall m. Runtime m => m a)
 --------------------------------------------------------------------------------
 class (Applicative m, Monad m, MonadIO m) => Runtime m where
     rGetSelected      :: m (Maybe Rect)
+    rGetAllSelected   :: m [Rect]
     rSetSelected      :: Maybe Rect -> m ()
     rGetRectangles    :: m [Rect]
     rGetCurPage       :: m Int
@@ -94,6 +95,7 @@ instance MonadIO Instr where
 --------------------------------------------------------------------------------
 instance Runtime Instr where
     rGetSelected = getSelected
+    rGetAllSelected = getAllSelected
     rSetSelected = setSelected
     rGetRectangles = getRectangles
     rGetCurPage = getCurrentPage
@@ -126,6 +128,10 @@ instance Runtime Instr where
 --------------------------------------------------------------------------------
 getSelected :: Instr (Maybe Rect)
 getSelected = Instr rGetSelected
+
+--------------------------------------------------------------------------------
+getAllSelected :: Instr [Rect]
+getAllSelected = Instr rGetAllSelected
 
 --------------------------------------------------------------------------------
 setSelected :: Maybe Rect -> Instr ()

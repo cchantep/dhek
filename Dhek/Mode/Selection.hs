@@ -70,7 +70,6 @@ instance ModeMonad SelectionMode where
             newSelection = rectNew x y 0 0
 
         engineDrawState.drawSelection ?= newSelection
-        engineDrawState.drawMultiSel  .= []
 
         gui <- asks inputGUI
         liftIO $ do
@@ -100,7 +99,6 @@ instance ModeMonad SelectionMode where
             for_ crs $ \cr ->
                 liftIO $ gtkSelectRect cr $ inputGUI input
 
-            engineDrawState.drawMultiSel .= crs
             liftIO $ gtkSetCursor Nothing $ inputGUI input
 
       where
@@ -118,6 +116,7 @@ instance ModeMonad SelectionMode where
         let guides   = bd ^. boardGuides
 
         liftIO $ do
+            rsSel     <- gtkGetTreeAllSelection gui
             frame     <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
             (fw',fh') <- Gtk.drawableGetSize frame
 
@@ -145,7 +144,7 @@ instance ModeMonad SelectionMode where
                 for_ (ds ^. drawSelection) $ \r ->
                     drawRect fw fh selectionColor Dash r
 
-                for_ (ds ^. drawMultiSel) $ \r ->
+                for_ rsSel $ \r ->
                     drawRect fw fh selectedColor Line r
       where
         regularColor   = rgbBlue
@@ -157,7 +156,7 @@ instance ModeMonad SelectionMode where
 -- | Called when 'Top' button, located in mode's toolbar, is clicked
 topButtonActivated :: EngineCtx m => GUI -> m ()
 topButtonActivated gui = do
-    rs <- use $ engineDrawState.drawMultiSel
+    rs <- liftIO $ gtkGetTreeAllSelection gui
     case rs of
         []   -> return ()
         x:xs -> do
@@ -165,9 +164,9 @@ topButtonActivated gui = do
                 topY     = toppest ^. rectY
                 toppedRs = fmap (updY topY) rs
 
-            -- TODO: better mulitiselection management
             engineStateSetRects toppedRs
-            engineDrawState.drawMultiSel .= toppedRs
+            forM_ toppedRs $ \r ->
+                liftIO $ gtkSelectRect r gui
             engineEventStack %= (UpdateRectPos:)
             liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
   where
@@ -181,7 +180,7 @@ topButtonActivated gui = do
 -- | Called when 'Distribute' button, located in mode's toolbar, is clicked
 distButtonActivated :: EngineCtx m => GUI -> m ()
 distButtonActivated gui = do
-    rs <- use $ engineDrawState.drawMultiSel
+    rs <- liftIO $ gtkGetTreeAllSelection gui
     case rs of
         []   -> return ()
         x:xs -> do
@@ -201,10 +200,9 @@ distButtonActivated gui = do
                     return r'
                 spaced = _L:(evalState action _L) -- homogeneous-spaced
                                                   -- rectangle list
-
-            -- TODO: better mulitiselection management
             engineStateSetRects spaced
-            engineDrawState.drawMultiSel .= spaced
+            forM_ spaced $ \r ->
+                liftIO $ gtkSelectRect r gui
             engineEventStack %= (UpdateRectPos:)
             liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
 
@@ -218,7 +216,7 @@ distButtonActivated gui = do
 --   is clicked
 distCreateButtonActivated :: EngineCtx m => GUI -> m ()
 distCreateButtonActivated gui
-    = do sel <- use $ engineDrawState.drawMultiSel
+    = do sel <- liftIO $ gtkGetTreeAllSelection gui
          let (r0:r1:rn:_) = sortBy rectCompareIndex sel
              y    = r0 ^. rectY
              w    = r0 ^. rectWidth
@@ -245,7 +243,6 @@ distCreateButtonActivated gui
                                                 & rectIndex ?~ idx
                       engineStateSetRect r
                       liftIO $ gtkAddRect r gui
-                      engineDrawState.drawMultiSel %= (r:)
                       loop r (idx+1) rest
 
          loop r1 2 (replicate m ())
@@ -275,9 +272,9 @@ runSelection :: GUI
              -> SelectionMode a
              -> EngineState
              -> IO EngineState
-runSelection gui btop bdist bdistcreate (SelectionMode m)  s = do
-    (s', _) <- execRWST m input s
-    return s'
+runSelection gui btop bdist bdistcreate (SelectionMode m) s
+    = do (s', _) <- execRWST m input s
+         return s'
   where
     input
         = Input
@@ -288,9 +285,13 @@ runSelection gui btop bdist bdistcreate (SelectionMode m)  s = do
           }
 
 --------------------------------------------------------------------------------
-selectionMode :: GUI -> Gtk.Button -> Gtk.Button -> Gtk.Button -> Mode
+selectionMode :: GUI
+              -> Gtk.Button
+              -> Gtk.Button
+              -> Gtk.Button
+              -> Mode
 selectionMode gui btop bdist bdistcreate
-    = Mode (runSelection gui btop bdist bdistcreate. runM)
+    = Mode (runSelection gui btop bdist bdistcreate . runM)
 
 --------------------------------------------------------------------------------
 selectionModeManager :: ((forall m. EngineCtx m => m ()) -> IO ())
@@ -298,7 +299,6 @@ selectionModeManager :: ((forall m. EngineCtx m => m ()) -> IO ())
                      -> IO ModeManager
 selectionModeManager handler gui = do
     Gtk.treeSelectionSetMode (guiRectTreeSelection gui) Gtk.SelectionMultiple
-    execPath <- getExecutablePath
 
     -- Top button
     btop <- Gtk.buttonNew
@@ -334,8 +334,7 @@ selectionModeManager handler gui = do
     Gtk.widgetShowAll bdistcreate
 
     return $ ModeManager (selectionMode gui btop bdist bdistcreate) $
-        do engineDrawState.drawMultiSel .= []
-           liftIO $
+        do liftIO $
                do Gtk.signalDisconnect cid
                   Gtk.signalDisconnect did
                   Gtk.signalDisconnect dcid

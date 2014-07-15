@@ -95,7 +95,6 @@ data DrawState
       , _drawCollision :: !(Maybe Collision)
       , _drawOverRect  :: !(Maybe Rect)
       , _drawFreshId   :: !Int
-      , _drawMultiSel  :: ![Rect]
       , _drawCurGuide  :: !(Maybe Guide)
       , _drawOverGuide :: !(Maybe Guide)
       }
@@ -133,7 +132,6 @@ drawStateNew = DrawState{ _drawEvent     = Nothing
                         , _drawCollision = Nothing
                         , _drawOverRect  = Nothing
                         , _drawFreshId   = 0
-                        , _drawMultiSel  = []
                         , _drawCurGuide  = Nothing
                         , _drawOverGuide = Nothing
                         }

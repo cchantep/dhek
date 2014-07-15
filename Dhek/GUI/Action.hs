@@ -16,6 +16,7 @@ module Dhek.GUI.Action
     , gtkRemoveRect
     , gtkLookupEntryText
     , gtkGetTreeSelection
+    , gtkGetTreeAllSelection
     , gtkShowError
     , gtkSelectJsonFile
     , gtkOpenJsonFile
@@ -31,7 +32,8 @@ module Dhek.GUI.Action
 import Data.Char (isSpace)
 import Data.Foldable (for_, traverse_)
 import Data.List (dropWhileEnd)
-import Data.Traversable (for, traverse)
+import Data.Maybe (fromMaybe)
+import Data.Traversable (for, traverse, sequenceA)
 
 --------------------------------------------------------------------------------
 import           Control.Lens
@@ -168,6 +170,16 @@ gtkGetTreeSelection gui = do
     for iOpt $ \it ->
         let idx = Gtk.listStoreIterToIndex it in
         Gtk.listStoreGetValue (guiRectStore gui) idx
+
+--------------------------------------------------------------------------------
+gtkGetTreeAllSelection :: GUI -> IO [Rect]
+gtkGetTreeAllSelection gui
+    = do tps  <- Gtk.treeSelectionGetSelectedRows $ guiRectTreeSelection gui
+         itsO <- traverse (Gtk.treeModelGetIter $ guiRectStore gui) tps
+         let its = fromMaybe [] $ sequenceA itsO
+         for its $ \it ->
+             let idx = Gtk.listStoreIterToIndex it in
+             Gtk.listStoreGetValue (guiRectStore gui) idx
 
 --------------------------------------------------------------------------------
 gtkSelectJsonFile :: GUI -> IO (Maybe FilePath)
