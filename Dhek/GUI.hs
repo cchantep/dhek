@@ -507,4 +507,9 @@ layoutMapping r
             name  = r ^. rectName
             label = name ++ " (" ++ value ++ ")" in
         [Gtk.cellText Gtk.:= label]
+    | r ^. rectType == "textcell" =
+        let idx   = maybe "" show (r ^. rectIndex)
+            name  = r ^. rectName
+            label = name ++ " (" ++ idx ++ ")" in
+        [Gtk.cellText Gtk.:= label]
     | otherwise = [Gtk.cellText Gtk.:= r ^. rectName]
