@@ -85,14 +85,14 @@ instance ModeMonad SelectionMode where
             rs <- engineStateGetRects
 
             -- get rectangles located in selection area
-            let crs          = foldMap (collectSelected r) rs
-                hasSelection = not $ null crs
-                atLeast3     = length crs >= 3
-                cDistCreate  = canActiveDistCreate crs
+            let crs         = foldMap (collectSelected r) rs
+                atLeast2    = length crs >= 2
+                atLeast3    = length crs >= 3
+                cDistCreate = canActiveDistCreate crs
 
             -- if no area is selected, we disable 'top' and 'distribute' button
             liftIO $ do
-                Gtk.widgetSetSensitive (inputTop input) hasSelection
+                Gtk.widgetSetSensitive (inputTop input) atLeast2
                 Gtk.widgetSetSensitive (inputDist input) atLeast3
                 Gtk.widgetSetSensitive (inputDistCreate input) cDistCreate
 
