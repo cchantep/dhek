@@ -13,6 +13,7 @@ import Control.Monad ((>=>), forM)
 import Control.Monad.Trans (MonadIO(..))
 import Data.Foldable (traverse_, foldr)
 import Data.IORef
+import Data.Maybe
 import Foreign.Ptr
 
 --------------------------------------------------------------------------------
@@ -292,11 +293,9 @@ makeGUI = do
     col    <- Gtk.treeViewColumnNew
     trend  <- Gtk.cellRendererTextNew
 
-    let mapping r = [Gtk.cellText Gtk.:= r ^. rectName]
-
     Gtk.treeViewColumnSetTitle col $ msgStr $ MsgAreas
     Gtk.cellLayoutPackStart col trend False
-    Gtk.cellLayoutSetAttributes col trend store mapping
+    Gtk.cellLayoutSetAttributes col trend store layoutMapping
     Gtk.treeViewAppendColumn treeV col
     Gtk.scrolledWindowAddWithViewport tswin treeV
     Gtk.scrolledWindowSetPolicy tswin Gtk.PolicyAutomatic Gtk.PolicyAutomatic
@@ -499,3 +498,13 @@ guiClearPdfCache gui
                      = do Cairo.surfaceFinish suf
                           writeIORef (guiPdfCache gui) Nothing
              maybe (return ()) oncache opt
+
+--------------------------------------------------------------------------------
+layoutMapping :: Rect -> [Gtk.AttrOp Gtk.CellRendererText]
+layoutMapping r
+    | r ^. rectType == "radio" =
+        let value = fromMaybe "" (r ^. rectValue)
+            name  = r ^. rectName
+            label = name ++ " (" ++ value ++ ")" in
+        [Gtk.cellText Gtk.:= label]
+    | otherwise = [Gtk.cellText Gtk.:= r ^. rectName]
