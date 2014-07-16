@@ -6,7 +6,7 @@
 
 #include <HsFFI.h>
 #ifdef __GLASGOW_HASKELL__
-#include "../dist/build/dhek/dhek-tmp/Dhek/Launcher_stub.h"
+#include "Dhek/Launcher_stub.h"
 extern void __stginit_DhekziLauncher(void);
 #endif
 

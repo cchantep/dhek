@@ -35,8 +35,10 @@ APPNAME="Dhek"
 VER=`grep '^version:' dhek.cabal | cut -d ':' -f 2 | sed -e 's/^[ ]*//'`
 
 # Path to previously built binary
-BINPATH=`dirname $0`/../dist/build/dhek/dhek
- 
+if [ "$BINPATH" = "" ]; then
+    BINPATH=`dirname $0`/../dist/build/dhek/dhek
+fi
+
 BUILDDIR=`dirname $0`/../dist
 BINFILE=`basename "$BINPATH"`
 UTILDIR=`dirname $0`
