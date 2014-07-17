@@ -262,7 +262,7 @@ connectSignals g i = do
             engineSetMode DhekSelection i
 
     --- Applidok Button ---
-    Gtk.on (guiDokButton g) Gtk.buttonActivated $ onApplidok
+    _ <- Gtk.onToolButtonClicked (guiDokButton g) onApplidok
 
     return ()
 

@@ -12,7 +12,12 @@ cabal-version:       >=1.18
 
 library
     hs-source-dirs: resources
-    c-sources: resources/align_vertical_top.c
+    c-sources: resources/align_horizontal_center.c
+               resources/align_horizontal_left.c
+               resources/align_horizontal_right.c
+               resources/align_vertical_bottom.c
+               resources/align_vertical_center.c
+               resources/align_vertical_top.c
                resources/applidok.c
                resources/dialog_accept.c
                resources/distribute.c

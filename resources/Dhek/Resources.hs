@@ -14,6 +14,11 @@ import Foreign.Ptr
 import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
+foreign import ccall "&align_horizontal_center" alignHorizontalCenter :: Ptr Gtk.InlineImage
+foreign import ccall "&align_horizontal_left" alignHorizontalLeft :: Ptr Gtk.InlineImage
+foreign import ccall "&align_horizontal_right" alignHorizontalRight :: Ptr Gtk.InlineImage
+foreign import ccall "&align_vertical_bottom" alignVerticalBottom :: Ptr Gtk.InlineImage
+foreign import ccall "&align_vertical_center" alignVerticalCenter :: Ptr Gtk.InlineImage
 foreign import ccall "&align_vertical_top" alignVerticalTop :: Ptr Gtk.InlineImage
 foreign import ccall "&applidok" applidok :: Ptr Gtk.InlineImage
 foreign import ccall "&dialog_accept" dialogAccept :: Ptr Gtk.InlineImage

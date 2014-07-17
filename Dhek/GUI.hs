@@ -64,9 +64,9 @@ data GUI =
     , guiWindowHBox :: Gtk.HBox
     , guiVRulerAdjustment :: Gtk.Adjustment
     , guiHRulerAdjustment :: Gtk.Adjustment
-    , guiModeToolbar :: Gtk.HButtonBox
+    , guiModeToolbar :: Gtk.Toolbar
     , guiTranslate :: DhekMessage -> String
-    , guiDokButton :: Gtk.Button
+    , guiDokButton :: Gtk.ToolButton
     , guiIndexAlign :: Gtk.Alignment
     , guiIndexSpin :: Gtk.SpinButton
     , guiSplashAlign :: Gtk.Alignment
@@ -206,17 +206,22 @@ makeGUI = do
     Gtk.boxPackStart vbox toolbar Gtk.PackNatural 0
 
     -- Button Applidok
-    akb  <- Gtk.buttonNew
     kimg <- loadImage Resources.applidok
-    Gtk.buttonSetImage akb kimg
+    akb  <- Gtk.toolButtonNew (Just kimg) Nothing
+
 
     -- Mode toolbar
-    mtoolbar <- Gtk.hButtonBoxNew
-    mtalign  <- Gtk.alignmentNew 0 1 0 0
-    Gtk.containerAdd mtalign mtoolbar
-    Gtk.containerAdd mtoolbar akb
-    Gtk.boxPackStart vbox mtalign Gtk.PackNatural 0
-    Gtk.widgetSetSizeRequest mtoolbar (-1) 32
+    mtoolbar <- Gtk.toolbarNew
+    Gtk.toolbarSetStyle mtoolbar Gtk.ToolbarIcons
+    Gtk.toolbarSetIconSize mtoolbar (Gtk.IconSizeUser 32)
+    --mtalign  <- Gtk.alignmentNew 0 0 0 0
+    -- Gtk.boxSetSpacing mtoolbar 2
+    -- Gtk.buttonBoxSetLayout mtoolbar Gtk.ButtonboxEdge
+    -- Gtk.containerAdd mtalign mtoolbar
+    -- Gtk.containerAdd mtoolbar akb
+    Gtk.toolbarInsert mtoolbar akb 0
+    Gtk.boxPackStart vbox mtoolbar Gtk.PackNatural 0
+    --Gtk.widgetSetSizeRequest mtoolbar (-1) 32
 
     -- Splash screen
     splash   <- Gtk.vBoxNew False 40

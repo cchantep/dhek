@@ -15,6 +15,7 @@ import Control.Applicative
 import Data.Foldable (for_, foldMap, mapM_, traverse_)
 import Data.List (replicate, sortBy)
 import Data.Traversable
+import Foreign.Ptr
 
 --------------------------------------------------------------------------------
 import           Control.Lens
@@ -39,9 +40,14 @@ import           Dhek.Types
 data Input
     = Input
       { inputGUI        :: GUI
-      , inputTop        :: Gtk.Button
-      , inputDist       :: Gtk.Button
-      , inputDistCreate :: Gtk.Button
+      , inputTop        :: Gtk.ToolButton
+      , inputDist       :: Gtk.ToolButton
+      , inputDistCreate :: Gtk.ToolButton
+      , inputRight      :: Gtk.ToolButton
+      , inputBottom     :: Gtk.ToolButton
+      , inputLeft       :: Gtk.ToolButton
+      , inputHCenter    :: Gtk.ToolButton
+      , inputVCenter    :: Gtk.ToolButton
       }
 
 --------------------------------------------------------------------------------
@@ -95,6 +101,11 @@ instance ModeMonad SelectionMode where
                 Gtk.widgetSetSensitive (inputTop input) atLeast2
                 Gtk.widgetSetSensitive (inputDist input) atLeast3
                 Gtk.widgetSetSensitive (inputDistCreate input) cDistCreate
+                Gtk.widgetSetSensitive (inputRight input) atLeast2
+                Gtk.widgetSetSensitive (inputBottom input) atLeast2
+                Gtk.widgetSetSensitive (inputLeft input) atLeast2
+                Gtk.widgetSetSensitive (inputHCenter input) atLeast2
+                Gtk.widgetSetSensitive (inputVCenter input) atLeast2
 
             for_ crs $ \cr ->
                 liftIO $ gtkSelectRect cr $ inputGUI input
@@ -155,26 +166,148 @@ instance ModeMonad SelectionMode where
 --------------------------------------------------------------------------------
 -- | Called when 'Top' button, located in mode's toolbar, is clicked
 topButtonActivated :: EngineCtx m => GUI -> m ()
-topButtonActivated gui = do
-    rs <- liftIO $ gtkGetTreeAllSelection gui
-    case rs of
-        []   -> return ()
-        x:xs -> do
-            let toppest  = foldr cmp x xs
-                topY     = toppest ^. rectY
-                toppedRs = fmap (updY topY) rs
+topButtonActivated gui = alignmentM gui AlignTop
 
-            engineStateSetRects toppedRs
-            forM_ toppedRs $ \r ->
-                liftIO $ gtkSelectRect r gui
-            engineEventStack %= (UpdateRectPos:)
-            liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
+--------------------------------------------------------------------------------
+bottomButtonActivated :: EngineCtx m => GUI -> m ()
+bottomButtonActivated gui = alignmentM gui AlignBottom
+
+--------------------------------------------------------------------------------
+rightButtonActivated :: EngineCtx m => GUI -> m ()
+rightButtonActivated gui = alignmentM gui AlignRight
+
+--------------------------------------------------------------------------------
+leftButtonActivated :: EngineCtx m => GUI -> m ()
+leftButtonActivated gui = alignmentM gui AlignLeft
+
+--------------------------------------------------------------------------------
+alignmentM :: EngineCtx m => GUI -> Align -> m ()
+alignmentM gui align
+    = do rs <- liftIO $ gtkGetTreeAllSelection gui
+         let rs' = alignment align rs
+
+         engineStateSetRects rs'
+         forM_ rs' $ \r ->
+             liftIO $ gtkSelectRect r gui
+         engineEventStack %= (UpdateRectPos:)
+         liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
+
+--------------------------------------------------------------------------------
+data Align
+    = AlignTop
+    | AlignRight
+    | AlignBottom
+    | AlignLeft
+    | AlignHCenter
+    | AlignVCenter
+
+--------------------------------------------------------------------------------
+data Bin a b = Bin a b
+
+--------------------------------------------------------------------------------
+alignment :: Align -> [Rect] -> [Rect]
+alignment align rects
+    | (x:xs) <- rects =
+        case align of
+            AlignTop     -> go id topCmp topUpd x xs
+            AlignRight   -> go id rightCmp rightUpd x xs
+            AlignBottom  -> go id bottomCmp bottomUpd x xs
+            AlignLeft    -> go id leftCmp leftUpd x xs
+            AlignHCenter -> go hcInit hcCmp hcUpd x xs
+            AlignVCenter -> go vcInit vcCmp vcUpd x xs
+
+    | otherwise = []
+
   where
-    cmp r1 r2
+    go initK cmpK updK r rs
+        = let res = foldr cmpK (initK r) rs in
+          fmap (updK res) rects
+
+    -- Top
+    topCmp r1 r2
         | r1 ^. rectY < r2 ^. rectY = r1
         | otherwise                 = r2
 
-    updY y r = r & rectY .~ y
+    topUpd toppest r
+        = r & rectY .~ (toppest ^. rectY)
+
+    --Right
+    rightCmp r1 r2
+        | r1 ^. rectX + r1 ^. rectWidth > r2 ^. rectX + r2 ^. rectWidth = r1
+        | otherwise = r2
+
+    rightUpd rightest r
+        = r & rectX +~ delta
+      where
+        rmx   = r ^. rectX + r ^. rectWidth
+        mx    = rightest ^. rectX + rightest ^. rectWidth
+        delta = mx - rmx
+
+    -- Bottom
+    bottomCmp r1 r2
+        | r1 ^. rectY + r1 ^. rectHeight > r2 ^. rectY + r2 ^. rectHeight = r1
+        | otherwise = r2
+
+    bottomUpd bottomest r
+        = r & rectY +~ delta
+      where
+        rmy   = r ^. rectY + r ^. rectHeight
+        my    = bottomest ^. rectY + bottomest ^. rectHeight
+        delta = my - rmy
+
+    -- Left
+    leftCmp r1 r2
+        | r1 ^. rectX < r2 ^. rectX = r1
+        | otherwise                 = r2
+
+    leftUpd leftest r
+        = r & rectX .~ (leftest ^. rectX)
+
+    -- Horizontal Center
+    lenX r = r ^. rectX + r ^. rectWidth
+
+    hcInit r =
+        Bin (r ^. rectX) (lenX r)
+
+    hcCmp r s@(Bin leftest rightest)
+        = let newLeftest = if r ^. rectX < leftest
+                           then r ^. rectX
+                           else leftest
+
+              newRightest = if lenX r > rightest
+                            then lenX r
+                            else rightest in
+
+          Bin newLeftest newRightest
+
+    hcUpd (Bin leftest rightest) r
+        = r & rectX .~ center - (r ^. rectWidth / 2)
+      where
+        len    = rightest - leftest
+        center = leftest + len / 2
+
+    -- Vertical Center
+    lenY r = r ^. rectY + r ^. rectHeight
+
+    vcInit r =
+        Bin (r ^. rectY) (lenY r)
+
+    vcCmp r s@(Bin toppest bottomest)
+        = let newToppest = if r ^. rectY < toppest
+                           then r ^. rectY
+                           else toppest
+
+              newBottomest = if lenY r > bottomest
+                             then lenY r
+                             else bottomest in
+
+          Bin newToppest newBottomest
+
+    vcUpd (Bin toppest bottomest) r
+        = r & rectY .~ center - (r ^. rectHeight / 2)
+      where
+        len    = bottomest - toppest
+        center = toppest + len / 2
 
 --------------------------------------------------------------------------------
 -- | Called when 'Distribute' button, located in mode's toolbar, is clicked
@@ -249,6 +382,14 @@ distCreateButtonActivated gui
          engineStateSetRect rn'
 
 --------------------------------------------------------------------------------
+hCenterActivated :: EngineCtx m => GUI -> m ()
+hCenterActivated gui = alignmentM gui AlignHCenter
+
+--------------------------------------------------------------------------------
+vCenterActivated :: EngineCtx m => GUI -> m ()
+vCenterActivated gui = alignmentM gui AlignVCenter
+
+--------------------------------------------------------------------------------
 -- | Dist create button is enabled if only 3 textcells with same name property
 --   are selected, and if indexes of these cells are 0, 1 and N>2.
 canActiveDistCreate :: [Rect] -> Bool
@@ -265,33 +406,14 @@ canActiveDistCreate _
     = False
 
 --------------------------------------------------------------------------------
-runSelection :: GUI
-             -> Gtk.Button
-             -> Gtk.Button
-             -> Gtk.Button
-             -> SelectionMode a
-             -> EngineState
-             -> IO EngineState
-runSelection gui btop bdist bdistcreate (SelectionMode m) s
+runSelection :: Input -> SelectionMode a -> EngineState -> IO EngineState
+runSelection input (SelectionMode m) s
     = do (s', _) <- execRWST m input s
          return s'
-  where
-    input
-        = Input
-          { inputGUI        = gui
-          , inputTop        = btop
-          , inputDist       = bdist
-          , inputDistCreate = bdistcreate
-          }
 
 --------------------------------------------------------------------------------
-selectionMode :: GUI
-              -> Gtk.Button
-              -> Gtk.Button
-              -> Gtk.Button
-              -> Mode
-selectionMode gui btop bdist bdistcreate
-    = Mode (runSelection gui btop bdist bdistcreate . runM)
+selectionMode :: Input -> Mode
+selectionMode input = Mode (runSelection input . runM)
 
 --------------------------------------------------------------------------------
 selectionModeManager :: ((forall m. EngineCtx m => m ()) -> IO ())
@@ -300,53 +422,97 @@ selectionModeManager :: ((forall m. EngineCtx m => m ()) -> IO ())
 selectionModeManager handler gui = do
     Gtk.treeSelectionSetMode (guiRectTreeSelection gui) Gtk.SelectionMultiple
 
-    -- Top button
-    btop <- Gtk.buttonNew
-    bimg <- loadImage Resources.alignVerticalTop
-    vsep <- Gtk.vSeparatorNew
+    vsep1 <- Gtk.separatorToolItemNew
+    Gtk.separatorToolItemSetDraw vsep1 False
+    Gtk.toolbarInsert toolbar vsep1 (-1)
+    Gtk.widgetShowAll vsep1
 
-    Gtk.buttonSetImage btop bimg
-    Gtk.containerAdd toolbar vsep
-    Gtk.containerAdd toolbar btop
-    Gtk.widgetSetSensitive btop False
-    cid <- Gtk.on btop Gtk.buttonActivated $ handler $ topButtonActivated gui
+    -- Top button
+    btop <- createToolbarButton gui Resources.alignVerticalTop
+    cid <- Gtk.onToolButtonClicked btop $ handler $ topButtonActivated gui
+
+    -- Vertical Center button
+    bvcenter <- createToolbarButton gui Resources.alignVerticalCenter
+    bvid     <- Gtk.onToolButtonClicked bvcenter $ handler $
+                vCenterActivated gui
+
+    -- Bottom button
+    bbottom <- createToolbarButton gui Resources.alignVerticalBottom
+    bbid    <- Gtk.onToolButtonClicked bbottom $ handler $
+               bottomButtonActivated gui
+
+    -- Left button
+    bleft <- createToolbarButton gui Resources.alignHorizontalLeft
+    lid   <- Gtk.onToolButtonClicked bleft $ handler $
+             leftButtonActivated gui
+
+    -- Horizontal Center button
+    bhcenter <- createToolbarButton gui Resources.alignHorizontalCenter
+    bhid     <- Gtk.onToolButtonClicked bhcenter $ handler $
+                hCenterActivated gui
+
+    -- Right button
+    bright <- createToolbarButton gui Resources.alignHorizontalRight
+    rid    <- Gtk.onToolButtonClicked bright $ handler $
+              rightButtonActivated gui
+
+    vsep2 <- Gtk.separatorToolItemNew
+    Gtk.separatorToolItemSetDraw vsep2 False
+    Gtk.toolbarInsert toolbar vsep2 (-1)
+    Gtk.widgetShowAll vsep2
 
     -- Distribute button
-    bdist <- Gtk.buttonNew
-    dimg  <- loadImage Resources.distribute
-    Gtk.buttonSetImage bdist dimg
-    Gtk.containerAdd toolbar bdist
-    Gtk.widgetSetSensitive bdist False
-    did <- Gtk.on bdist Gtk.buttonActivated $ handler $ distButtonActivated gui
+    bdist <- createToolbarButton gui Resources.distribute
+    did   <- Gtk.onToolButtonClicked bdist $ handler $ distButtonActivated gui
 
     -- Distribute create button
-    bdistcreate <- Gtk.buttonNew
-    bdimg <- loadImage Resources.distributeCreate
-    Gtk.buttonSetImage bdistcreate bdimg
-    Gtk.containerAdd toolbar bdistcreate
-    Gtk.widgetSetSensitive bdistcreate False
-    dcid <- Gtk.on bdistcreate Gtk.buttonActivated $ handler $
-            distCreateButtonActivated gui
+    bdistcreate <- createToolbarButton gui Resources.distributeCreate
+    dcid        <- Gtk.onToolButtonClicked bdistcreate $ handler $
+                   distCreateButtonActivated gui
 
-    Gtk.widgetShowAll vsep
-    Gtk.widgetShowAll btop
-    Gtk.widgetShowAll bdist
-    Gtk.widgetShowAll bdistcreate
+    let input = Input
+                { inputGUI        = gui
+                , inputTop        = btop
+                , inputDist       = bdist
+                , inputDistCreate = bdistcreate
+                , inputRight      = bright
+                , inputBottom     = bbottom
+                , inputLeft       = bleft
+                , inputHCenter    = bhcenter
+                , inputVCenter    = bvcenter
+                }
 
-    return $ ModeManager (selectionMode gui btop bdist bdistcreate) $
-        do liftIO $
-               do Gtk.signalDisconnect cid
-                  Gtk.signalDisconnect did
-                  Gtk.signalDisconnect dcid
-                  Gtk.widgetDestroy vsep
-                  Gtk.widgetDestroy btop
-                  Gtk.widgetDestroy bdist
-                  Gtk.widgetDestroy bdistcreate
-                  Gtk.widgetDestroy vsep
-                  Gtk.treeSelectionSetMode (guiRectTreeSelection gui)
-                      Gtk.SelectionSingle
+    return $ ModeManager (selectionMode input) $
+        liftIO $ do Gtk.signalDisconnect cid
+                    Gtk.signalDisconnect did
+                    Gtk.signalDisconnect dcid
+                    Gtk.signalDisconnect rid
+                    Gtk.signalDisconnect bbid
+                    Gtk.signalDisconnect lid
+                    Gtk.signalDisconnect bhid
+                    Gtk.signalDisconnect bvid
+
+                    Gtk.containerForeach toolbar $ \w ->
+                        do i <- Gtk.toolbarGetItemIndex toolbar $
+                                Gtk.castToToolItem w
+                           if i == 0
+                               then return ()
+                               else Gtk.containerRemove toolbar w
+
+                    Gtk.treeSelectionSetMode (guiRectTreeSelection gui)
+                        Gtk.SelectionSingle
   where
     toolbar = guiModeToolbar gui
+
+--------------------------------------------------------------------------------
+createToolbarButton :: GUI -> Ptr Gtk.InlineImage -> IO Gtk.ToolButton
+createToolbarButton gui img
+    = do img <- loadImage img
+         b   <- Gtk.toolButtonNew (Just img) Nothing
+         Gtk.toolbarInsert (guiModeToolbar gui) b (-1)
+         Gtk.widgetShowAll b
+         Gtk.widgetSetSensitive b False
+         return b
 
 --------------------------------------------------------------------------------
 -- | Utilities
