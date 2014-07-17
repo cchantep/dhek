@@ -16,6 +16,46 @@ You can also use a [service](http://go.applidok.com) allowing Web visitor to fil
 
 Binary distributions for Windows (7+) and Mac OS X (10.8/10.9) can be found in [releases section](https://github.com/applicius/dhek/releases).
 
+### Mac OS X
+
+First time launching a Dhek release, system will warn you about 'unidentifed developer'.
+
+![Warning on Mac OS X](doc/osx-warn.png)
+
+In this case, you open the System Preferences to ajust Security & Privacy.
+
+![System Preferences on Mac OS X](doc/osx-prefs.png)
+
+In Security & Privacy preferences, you will have the chance to indicate that you do know Dhek origin, and want to 'Open Anyway'.
+
+![Open Dhek anyway on Mac OS X](doc/osx-security.png)
+
+> This is necessary only at first launch of a Dhek release. Then OS X won't display is warning anymore.
+
+### Windows 7
+
+On Windows 7, for security purposes system will warn you first time you execute application.
+
+![Warning on Windows 7](doc/win7.png)
+
+Being sure that involved application is Dhek you wanted to start, you can click on Execute button.
+
+### Windows 8
+
+First time you click on a download Dhek release in Windows 8, system will warn you that the system has been protected, and application start prevented.
+
+![Initial warning on Windows 8](doc/win8-warn1.png)
+
+This is a security warning in case some malicious application try to execute pas operations, but is not appropriate in case you know the application to be started and do want to open it.
+
+At the bottom of this warning, there is a link to display information to be sure which application has been stopped by the system.
+
+![Details about stopped application on Windows 8](doc/win8-warn2.png)
+
+At this step, being sure application prevented to launch is Dhek release you wanted to start, you can click on button in warning details to Execute Anyway.
+
+> After you have first executed Dhek, the system won't display the warning anymore, and application will start normally.
+
 ## Build
 
 You can also build Dhek by yourself with following information.
