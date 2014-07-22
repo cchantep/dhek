@@ -109,6 +109,7 @@ makeGUI = do
              (msgStr MsgOpenPDF)
              "*.pdf"
              (msgStr MsgPdfFilter)
+             (msgStr MsgOpen)
              Gtk.FileChooserActionOpen
              msgStr
 
@@ -117,6 +118,7 @@ makeGUI = do
               (msgStr MsgSaveMappings)
               "*.json"
               (msgStr MsgJsonFilter)
+              (msgStr MsgSave)
               Gtk.FileChooserActionSave
               msgStr
 
@@ -125,6 +127,7 @@ makeGUI = do
               (msgStr MsgLoadMappings)
               "*.json"
               (msgStr MsgJsonFilter)
+              (msgStr MsgOpen)
               Gtk.FileChooserActionOpen
               msgStr
 
@@ -442,13 +445,14 @@ makeGUI = do
 
 --------------------------------------------------------------------------------
 createDialog :: Gtk.Window
-             -> String
-             -> String
-             -> String
+             -> String -- title
+             -> String -- file pattern
+             -> String -- filter name
+             -> String -- affirmative action label
              -> Gtk.FileChooserAction
              -> (DhekMessage -> String)
              -> IO Gtk.FileChooserDialog
-createDialog win title pat filtName action msgStr = do
+createDialog win title pat filtName afflabel action msgStr = do
     ch   <- Gtk.fileChooserDialogNew (Just title) (Just win) action responses
     filt <- Gtk.fileFilterNew
     Gtk.fileFilterAddPattern filt pat
@@ -456,7 +460,7 @@ createDialog win title pat filtName action msgStr = do
     Gtk.fileChooserAddFilter ch filt
     return ch
   where
-    responses = [ (msgStr MsgOpen  , Gtk.ResponseOk)
+    responses = [ (afflabel        , Gtk.ResponseOk)
                 , (msgStr MsgCancel, Gtk.ResponseCancel)
                 ]
 
