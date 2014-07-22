@@ -29,5 +29,5 @@ SplashSave: 3. Save areas as a separate template file
 SplashCopy: 4. Copy PDF by filling data according template
 DontSave: Don't save
 DuplicationModePopup: Drag &amp; drop to duplicate
-DuplicationModeStatus: CTRL: Duplication mode. Drag & drop existing area to duplicate it where wanted.
-ModeHelp: Click to draw, CTRL + drag&drop to duplicate
+DuplicationModeStatus: ALT: Duplication mode. Drag & drop existing area to duplicate it where wanted.
+ModeHelp: Click to draw, ALT + drag&drop to duplicate

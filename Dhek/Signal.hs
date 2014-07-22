@@ -282,12 +282,12 @@ dhekOpenPdf g i
 --------------------------------------------------------------------------------
 statusModPressed :: [Gtk.Modifier] -> Bool
 statusModPressed xs
-    | [Gtk.Control] <- xs = True
-    | otherwise           = False
+    | [Gtk.Alt] <- xs = True
+    | otherwise       = False
 
 --------------------------------------------------------------------------------
 statusNamePressed :: String -> Bool
 statusNamePressed n
-    | "Control_L" <- n = True
-    | "Control_R" <- n = True
-    | otherwise        = False
+    | "Alt_L" <- n = True
+    | "Alt_R" <- n = True
+    | otherwise    = False
