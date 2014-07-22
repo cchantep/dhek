@@ -41,15 +41,15 @@ data GUI =
     , guiJsonOpenMenuItem :: Gtk.MenuItem
     , guiJsonSaveMenuItem :: Gtk.MenuItem
     , guiOverlapMenuItem :: Gtk.CheckMenuItem
-    , guiPrevButton :: Gtk.Button
-    , guiNextButton :: Gtk.Button
-    , guiZoomInButton :: Gtk.Button
-    , guiZoomOutButton :: Gtk.Button
+    , guiPrevButton :: Gtk.ToolButton
+    , guiNextButton :: Gtk.ToolButton
+    , guiZoomInButton :: Gtk.ToolButton
+    , guiZoomOutButton :: Gtk.ToolButton
     , guiRemoveButton :: Gtk.Button
     , guiApplyButton :: Gtk.Button
-    , guiDrawToggle :: Gtk.ToggleButton
-    , guiDupToggle :: Gtk.ToggleButton
-    , guiMultiSelToggle :: Gtk.ToggleButton
+    , guiDrawToggle :: Gtk.ToggleToolButton
+    , guiDupToggle :: Gtk.ToggleToolButton
+    , guiMultiSelToggle :: Gtk.ToggleToolButton
     , guiVRuler :: Gtk.VRuler
     , guiHRuler :: Gtk.HRuler
     , guiDrawingArea :: Gtk.DrawingArea
@@ -157,57 +157,53 @@ makeGUI = do
     Gtk.boxPackStart wvbox malign Gtk.PackNatural 0
 
     -- Button Next
-    next <- Gtk.buttonNew
     nimg <- loadImage Resources.goNext
-    Gtk.buttonSetImage next nimg
+    next <- Gtk.toolButtonNew (Just nimg) Nothing
 
      -- Previous Prev
-    prev <- Gtk.buttonNew
     pimg <- loadImage Resources.goPrevious
-    Gtk.buttonSetImage prev pimg
+    prev <- Gtk.toolButtonNew (Just pimg) Nothing
 
     -- Button Zoom out
-    minus <- Gtk.buttonNew
     oimg  <- loadImage Resources.zoomOut
-    Gtk.buttonSetImage minus oimg
+    minus <- Gtk.toolButtonNew (Just oimg) Nothing
 
     -- Button Zoom in
-    plus <- Gtk.buttonNew
     iimg <- loadImage Resources.zoomIn
-    Gtk.buttonSetImage plus iimg
+    plus <- Gtk.toolButtonNew (Just iimg) Nothing
 
     -- Button Draw
-    drwb <- Gtk.toggleButtonNew
+    drwb <- Gtk.toggleToolButtonNew
     dimg <- loadImage Resources.drawRectangle
-    Gtk.buttonSetImage drwb dimg
-    Gtk.toggleButtonSetActive drwb True
+    Gtk.toolButtonSetIconWidget drwb $ Just dimg
+    Gtk.toggleToolButtonSetActive drwb True
 
     -- Button Duplicate
-    db   <- Gtk.toggleButtonNew
+    db   <- Gtk.toggleToolButtonNew
     dimg <- loadImage Resources.duplicateRectangle
-    Gtk.buttonSetImage db dimg
+    Gtk.toolButtonSetIconWidget db $ Just dimg
 
     -- Button MultiSelection
-    msb  <- Gtk.toggleButtonNew
+    msb  <- Gtk.toggleToolButtonNew
     simg <- loadImage Resources.rectangularSelection
-    Gtk.buttonSetImage msb simg
+    Gtk.toolButtonSetIconWidget msb $ Just simg
 
-    -- Toolbar
-    toolbar <- Gtk.hButtonBoxNew
-    align   <- Gtk.alignmentNew 0 0 0 0
-    vsep1   <- Gtk.vSeparatorNew
-    vsep2   <- Gtk.vSeparatorNew
-    Gtk.containerAdd align toolbar
-    Gtk.containerAdd toolbar prev
-    Gtk.containerAdd toolbar next
-    Gtk.containerAdd toolbar vsep1
-    Gtk.containerAdd toolbar minus
-    Gtk.containerAdd toolbar plus
-    Gtk.containerAdd toolbar vsep2
-    Gtk.containerAdd toolbar drwb
-    Gtk.containerAdd toolbar db
-    Gtk.containerAdd toolbar msb
-    Gtk.boxPackStart vbox align Gtk.PackNatural 0
+    -- Main Toolbar
+    toolbar <- Gtk.toolbarNew
+    Gtk.toolbarSetStyle toolbar Gtk.ToolbarIcons
+    Gtk.toolbarSetIconSize toolbar (Gtk.IconSizeUser 32)
+    vsep1   <- Gtk.separatorToolItemNew
+    vsep2   <- Gtk.separatorToolItemNew
+    Gtk.toolbarInsert toolbar prev (-1)
+    Gtk.toolbarInsert toolbar next (-1)
+    Gtk.toolbarInsert toolbar vsep1 (-1)
+    Gtk.toolbarInsert toolbar minus (-1)
+    Gtk.toolbarInsert toolbar plus (-1)
+    Gtk.toolbarInsert toolbar vsep2 (-1)
+    Gtk.toolbarInsert toolbar drwb (-1)
+    Gtk.toolbarInsert toolbar db (-1)
+    Gtk.toolbarInsert toolbar msb (-1)
+    Gtk.boxPackStart vbox toolbar Gtk.PackNatural 0
 
     -- Button Applidok
     akb  <- Gtk.buttonNew

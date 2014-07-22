@@ -62,22 +62,22 @@ connectSignals g i = do
            active Overlap (not b)
 
     -- Previous Button ---
-    Gtk.on (guiPrevButton g) Gtk.buttonActivated $
+    Gtk.onToolButtonClicked (guiPrevButton g) $
         do runProgram i onPrev
            guiClearPdfCache g
 
     --- Next Button ---
-    Gtk.on (guiNextButton g) Gtk.buttonActivated $
+    Gtk.onToolButtonClicked (guiNextButton g) $
         do runProgram i onNext
            guiClearPdfCache g
 
     --- Minus Button ---
-    Gtk.on (guiZoomOutButton g) Gtk.buttonActivated $
+    Gtk.onToolButtonClicked (guiZoomOutButton g) $
         do runProgram i onMinus
            guiClearPdfCache g
 
     --- Plus Button ---
-    Gtk.on (guiZoomInButton g) Gtk.buttonActivated $
+    Gtk.onToolButtonClicked (guiZoomInButton g) $
         do runProgram i onPlus
            guiClearPdfCache g
 
@@ -240,25 +240,25 @@ connectSignals g i = do
             guideAdd
             draw
 
-    Gtk.on (guiDrawToggle g) Gtk.buttonActivated $ liftIO $ do
-        active <- Gtk.toggleButtonGetActive (guiDrawToggle g)
+    Gtk.onToolButtonToggled (guiDrawToggle g) $ liftIO $ do
+        active <- Gtk.toggleToolButtonGetActive (guiDrawToggle g)
         when active $ do
-            Gtk.toggleButtonSetActive (guiDupToggle g) False
-            Gtk.toggleButtonSetActive (guiMultiSelToggle g) False
+            Gtk.toggleToolButtonSetActive (guiDupToggle g) False
+            Gtk.toggleToolButtonSetActive (guiMultiSelToggle g) False
             engineSetMode DhekNormal i
 
-    Gtk.on (guiDupToggle g) Gtk.toggled $ liftIO $ do
-        active <- Gtk.toggleButtonGetActive (guiDupToggle g)
+    Gtk.onToolButtonToggled (guiDupToggle g) $ liftIO $ do
+        active <- Gtk.toggleToolButtonGetActive (guiDupToggle g)
         when active $ do
-            Gtk.toggleButtonSetActive (guiDrawToggle g) False
-            Gtk.toggleButtonSetActive (guiMultiSelToggle g) False
+            Gtk.toggleToolButtonSetActive (guiDrawToggle g) False
+            Gtk.toggleToolButtonSetActive (guiMultiSelToggle g) False
             engineSetMode DhekDuplication i
 
-    Gtk.on (guiMultiSelToggle g) Gtk.toggled $ liftIO $ do
-        active <- Gtk.toggleButtonGetActive (guiMultiSelToggle g)
+    Gtk.onToolButtonToggled (guiMultiSelToggle g) $ liftIO $ do
+        active <- Gtk.toggleToolButtonGetActive (guiMultiSelToggle g)
         when active $ do
-            Gtk.toggleButtonSetActive (guiDupToggle g) False
-            Gtk.toggleButtonSetActive (guiDrawToggle g) False
+            Gtk.toggleToolButtonSetActive (guiDupToggle g) False
+            Gtk.toggleToolButtonSetActive (guiDrawToggle g) False
             engineSetMode DhekSelection i
 
     --- Applidok Button ---
