@@ -71,7 +71,7 @@ instance ModeMonad DuplicateMode where
             Nothing         -> dupStart opts
             Just (Hold x _) -> dupEnd x
 
-    mRelease = return ()
+    mRelease _ = return ()
 
     mDrawing page ratio = do
         gui <- ask

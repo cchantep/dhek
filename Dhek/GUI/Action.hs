@@ -26,6 +26,7 @@ module Dhek.GUI.Action
     , gtkShowConfirm
     , gtkSetIndexPropVisible
     , gtkGetIndexPropValue
+    , gtkClearSelection
     ) where
 
 --------------------------------------------------------------------------------
@@ -259,6 +260,9 @@ gtkGetIndexPropValue gui = do
             then Just idxvalue
             else Nothing
 
+--------------------------------------------------------------------------------
+gtkClearSelection :: GUI -> IO ()
+gtkClearSelection gui = Gtk.treeSelectionUnselectAll $ guiRectTreeSelection gui
 
 --------------------------------------------------------------------------------
 -- | Utilities

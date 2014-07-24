@@ -28,7 +28,7 @@ import Dhek.Types
 class (Monad m, Applicative m) => ModeMonad m where
     mMove    :: DrawEnv -> m ()
     mPress   :: DrawEnv -> m ()
-    mRelease :: m ()
+    mRelease :: DrawEnv -> m ()
     mDrawing :: PageItem -> Ratio -> m ()
 
 --------------------------------------------------------------------------------
@@ -187,8 +187,8 @@ press :: DrawEnv -> M ()
 press e = M $ mPress e
 
 --------------------------------------------------------------------------------
-release :: M ()
-release = M mRelease
+release :: DrawEnv -> M ()
+release e = M $ mRelease e
 
 drawing :: PageItem -> Ratio -> M ()
 drawing p r = M $ mDrawing p r

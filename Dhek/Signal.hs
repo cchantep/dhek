@@ -169,7 +169,7 @@ connectSignals g i = do
     Gtk.on (guiDrawingArea g) Gtk.buttonReleaseEvent $ Gtk.tryEvent $ do
         pos <- Gtk.eventCoordinates
         mod <- Gtk.eventModifier
-        liftIO $ drawInterpret mod (const release) i pos
+        liftIO $ drawInterpret mod release i pos
 
     Gtk.on (guiDrawingArea g) Gtk.scrollEvent $ Gtk.tryEvent $ do
         dir <- Gtk.eventScrollDirection

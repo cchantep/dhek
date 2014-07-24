@@ -184,7 +184,7 @@ instance ModeMonad NormalMode where
         --      - click on a rectangle: we enter in event mode (Resize or Hold).
         maybe noEvent onEvent oOpt
 
-    mRelease = do
+    mRelease _ = do
         sOpt <- use $ engineDrawState.drawSelection
         eOpt <- use $ engineDrawState.drawEvent
         gOpt <- use $ engineDrawState.drawCurGuide

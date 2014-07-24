@@ -83,6 +83,7 @@ drawRect fw fh (RGB red green blue) s r = do
         h = r ^. rectHeight
         w = r ^. rectWidth
 
+    Cairo.save
     Cairo.setSourceRGB red green blue
     case s of
         Line -> Cairo.setLineWidth 1
@@ -90,6 +91,7 @@ drawRect fw fh (RGB red green blue) s r = do
     Cairo.rectangle x y w h
     Cairo.closePath
     Cairo.stroke
+    Cairo.restore
 
 --------------------------------------------------------------------------------
 drawGuide :: Double -- Width

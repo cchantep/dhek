@@ -13,7 +13,8 @@ module Dhek.Mode.Selection (selectionModeManager) where
 import Prelude hiding (mapM_)
 import Control.Applicative
 import Data.Foldable (for_, foldMap, mapM_, traverse_)
-import Data.List (replicate, sortBy)
+import Data.IORef
+import Data.List ((\\), replicate, sortBy)
 import Data.Traversable
 import Foreign.Ptr
 
@@ -21,6 +22,7 @@ import Foreign.Ptr
 import           Control.Lens
 import           Control.Monad.RWS hiding (mapM_)
 import           Control.Monad.State (evalState)
+import qualified Data.IntMap                  as M
 import qualified Graphics.Rendering.Cairo     as Cairo
 import qualified Graphics.UI.Gtk              as Gtk
 import           System.FilePath (joinPath, dropFileName)
@@ -40,6 +42,7 @@ import           Dhek.Types
 data Input
     = Input
       { inputGUI        :: GUI
+      , inputSelType    :: IORef (Maybe SelectionType)
       , inputTop        :: Gtk.ToolButton
       , inputDist       :: Gtk.ToolButton
       , inputDistCreate :: Gtk.ToolButton
@@ -49,6 +52,10 @@ data Input
       , inputHCenter    :: Gtk.ToolButton
       , inputVCenter    :: Gtk.ToolButton
       }
+
+--------------------------------------------------------------------------------
+data SelectionType
+    = Increase
 
 --------------------------------------------------------------------------------
 newtype SelectionMode a
@@ -74,29 +81,43 @@ instance ModeMonad SelectionMode where
     mPress opts = do
         let (x,y)        = drawPointer opts
             newSelection = rectNew x y 0 0
+            mod          = drawModifier opts
 
         engineDrawState.drawSelection ?= newSelection
 
-        gui <- asks inputGUI
-        liftIO $ do
-            gtkSetCursor (Just Gtk.Crosshair) gui
-            Gtk.treeSelectionUnselectAll $ guiRectTreeSelection gui
+        input <- ask
+        liftIO $
+            do when (metaModifierPressed mod) $
+                   writeIORef (inputSelType input) (Just Increase)
+               gtkSetCursor (Just Gtk.Crosshair) $ inputGUI input
 
-    mRelease = do
+    mRelease opts = do
         input <- ask
         sOpt  <- use $ engineDrawState.drawSelection
         engineDrawState.drawSelection .= Nothing
 
         for_ (fmap normalize sOpt) $ \r -> do
-            rs <- engineStateGetRects
+            rs       <- engineStateGetRects
+            rsSel    <- liftIO $ gtkGetTreeAllSelection $ inputGUI input
+            oSelType <- liftIO $ readIORef (inputSelType input)
 
             -- get rectangles located in selection area
-            let crs         = foldMap (collectSelected r) rs
+            let collected = foldMap (collectSelected r) rs
+                mod       = drawModifier opts
+                crs =
+                    case oSelType of
+                        Nothing -> collected
+                        Just t
+                            | Increase <- t, metaModifierPressed mod
+                              -> let indexes = fmap (\r -> r ^. rectId) rsSel
+                                     rsMap   = M.fromList (zip indexes rsSel) in
+                                 foldl (increaseSelection rsMap) rsSel collected
+
                 atLeast2    = length crs >= 2
                 atLeast3    = length crs >= 3
                 cDistCreate = canActiveDistCreate crs
 
-            -- if no area is selected, we disable 'top' and 'distribute' button
+            -- Update mode buttons state
             liftIO $ do
                 Gtk.widgetSetSensitive (inputTop input) atLeast2
                 Gtk.widgetSetSensitive (inputDist input) atLeast3
@@ -107,16 +128,23 @@ instance ModeMonad SelectionMode where
                 Gtk.widgetSetSensitive (inputHCenter input) atLeast2
                 Gtk.widgetSetSensitive (inputVCenter input) atLeast2
 
+            -- Update selection
+            liftIO $ gtkClearSelection $ inputGUI input
             for_ crs $ \cr ->
                 liftIO $ gtkSelectRect cr $ inputGUI input
 
-            liftIO $ gtkSetCursor Nothing $ inputGUI input
+            liftIO $
+                do gtkSetCursor Nothing $ inputGUI input
+                   writeIORef (inputSelType input) Nothing
 
       where
         collectSelected r c
             | rectInArea c r = [c]
             | otherwise      = []
 
+        increaseSelection mm rs r
+            | M.notMember (r ^. rectId) mm = (r:rs)
+            | otherwise                    = rs
 
     mDrawing page ratio = do
         gui   <- asks inputGUI
@@ -149,7 +177,7 @@ instance ModeMonad SelectionMode where
                 Cairo.stroke
 
                 -- We consider every rectangle as regular one (e.g not selected)
-                traverse_ (drawRect fw fh regularColor Line) rects
+                traverse_ (drawRect fw fh regularColor Line) (rects \\ rsSel)
 
                 -- Draw drawing selection rectangle
                 for_ (ds ^. drawSelection) $ \r ->
@@ -163,6 +191,13 @@ instance ModeMonad SelectionMode where
         selectionColor = rgbGreen
         guideColor     = RGB 0.16 0.26 0.87
 
+
+--------------------------------------------------------------------------------
+metaModifierPressed :: [Gtk.Modifier] -> Bool
+metaModifierPressed [Gtk.Control]
+    = True
+metaModifierPressed _
+    = False
 --------------------------------------------------------------------------------
 -- | Called when 'Top' button, located in mode's toolbar, is clicked
 topButtonActivated :: EngineCtx m => GUI -> m ()
@@ -470,8 +505,11 @@ selectionModeManager handler gui = do
     dcid        <- Gtk.onToolButtonClicked bdistcreate $ handler $
                    distCreateButtonActivated gui
 
+    refType <- newIORef Nothing
+
     let input = Input
                 { inputGUI        = gui
+                , inputSelType    = refType
                 , inputTop        = btop
                 , inputDist       = bdist
                 , inputDistCreate = bdistcreate

@@ -39,7 +39,7 @@ instance ModeMonad DuplicateCtrlMode where
     mPress opts
         = DuplicateCtrlMode $ dupStart opts
 
-    mRelease
+    mRelease _
         = DuplicateCtrlMode $
               do eOpt <- use $ engineDrawState.drawEvent
                  case eOpt of
