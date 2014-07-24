@@ -10,13 +10,16 @@ module Dhek.Engine
     , DhekMode(..)
     , EngineState
     , RuntimeEnv
-    , M
     , Pos
-    , drawInterpret
     , engineDrawingArea
     , engineCurrentPage
     , engineCurrentState
-    , engineRunDraw
+    , engineModeMove
+    , engineModePress
+    , engineModeRelease
+    , engineModeDraw
+    , engineModeKeyPress
+    , engineModeKeyRelease
     , engineSetMode
     , engineHasEvents
     , engineIsNormalMode
@@ -33,11 +36,6 @@ module Dhek.Engine
       -- Engine lenses
     , engineBoards
     , engineDrawState
-      -- Mode API
-    , move
-    , press
-    , release
-    , drawing
       --
     , engineRatio
     , getRects

@@ -118,6 +118,10 @@ instance ModeMonad DuplicateMode where
         rectGuideColor = RGB 0.16 0.72 0.92
         guideColor     = RGB 0.16 0.26 0.87
 
+    mKeyPress _ = return ()
+
+    mKeyRelease _ = return ()
+
 --------------------------------------------------------------------------------
 dupStart :: DrawEnv -> DuplicateMode ()
 dupStart opts

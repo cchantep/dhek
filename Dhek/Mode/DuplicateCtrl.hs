@@ -49,6 +49,10 @@ instance ModeMonad DuplicateCtrlMode where
     mDrawing page ratio
         = DuplicateCtrlMode $ mDrawing page ratio
 
+    mKeyPress _ = return ()
+
+    mKeyRelease _ = return ()
+
 --------------------------------------------------------------------------------
 runDuplicateCtrl :: GUI -> DuplicateCtrlMode a -> EngineState -> IO EngineState
 runDuplicateCtrl gui (DuplicateCtrlMode m) s

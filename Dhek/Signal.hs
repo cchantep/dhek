@@ -94,7 +94,7 @@ connectSignals g i = do
         popt <- engineCurrentPage i
         opt  <- engineRatio i
         for_ ((,) <$> popt <*> opt) $ \(page, ratio)-> do
-            engineRunDraw i
+            engineModeDraw i
             hsize  <- Gtk.adjustmentGetPageSize $ guiHRulerAdjustment g
             vsize  <- Gtk.adjustmentGetPageSize $ guiVRulerAdjustment g
             hlower <- Gtk.adjustmentGetLower $ guiHRulerAdjustment g
@@ -126,28 +126,19 @@ connectSignals g i = do
         liftIO $
             do opt <- engineRatio i
                for_ opt $ \r ->
-                   do drawInterpret mod move i pos
+                   do engineModeMove mod i pos
                       Gtk.set (guiHRuler g) [Gtk.rulerPosition Gtk.:= x/r]
                       Gtk.set (guiVRuler g) [Gtk.rulerPosition Gtk.:= y/r]
 
     Gtk.on (guiDrawingArea g) Gtk.keyPressEvent $ Gtk.tryEvent $
         do name <- Gtk.eventKeyName
-           liftIO $
-               do normal <- engineIsNormalMode i
-                  when (normal && statusNamePressed name) $
-                      do Gtk.statusbarPush (guiStatusBar g) (guiContextId g)
-                             (guiTranslate g $ MsgDuplicationModeStatus)
-                         Gtk.widgetShowAll $ guiDrawPopup g
-                         engineSetMode DhekDuplicationCtrl i
+           mod  <- Gtk.eventModifier
+           liftIO $ engineModeKeyPress mod name i
 
     Gtk.on (guiDrawingArea g) Gtk.keyReleaseEvent $ Gtk.tryEvent $
         do name <- Gtk.eventKeyName
-           liftIO $
-               do dupCtrl <- engineIsDuplicateCtrlMode i
-                  when (dupCtrl && statusNamePressed name) $
-                      do Gtk.statusbarPop (guiStatusBar g) (guiContextId g)
-                         Gtk.widgetHide $ guiDrawPopup g
-                         engineRevertMode i
+           mod  <- Gtk.eventModifier
+           liftIO $ engineModeKeyRelease mod name i
 
     Gtk.on (guiDrawingArea g) Gtk.enterNotifyEvent $ Gtk.tryEvent $ liftIO $
         Gtk.widgetGrabFocus $ guiDrawingArea g
@@ -164,12 +155,12 @@ connectSignals g i = do
        b   <- Gtk.eventButton
        mod <- Gtk.eventModifier
        when (b == Gtk.LeftButton) $ liftIO $
-           drawInterpret mod press i pos
+           engineModePress mod i pos
 
     Gtk.on (guiDrawingArea g) Gtk.buttonReleaseEvent $ Gtk.tryEvent $ do
         pos <- Gtk.eventCoordinates
         mod <- Gtk.eventModifier
-        liftIO $ drawInterpret mod release i pos
+        liftIO $ engineModeRelease mod i pos
 
     Gtk.on (guiDrawingArea g) Gtk.scrollEvent $ Gtk.tryEvent $ do
         dir <- Gtk.eventScrollDirection
