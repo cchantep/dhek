@@ -191,6 +191,9 @@ instance ModeMonad SelectionMode where
         selectionColor = rgbGreen
         guideColor     = RGB 0.16 0.26 0.87
 
+    mKeyPress _ = return ()
+
+    mKeyRelease _ = return ()
 
 --------------------------------------------------------------------------------
 metaModifierPressed :: [Gtk.Modifier] -> Bool

@@ -26,10 +26,12 @@ import Dhek.Types
 -- | Mode Monad
 --------------------------------------------------------------------------------
 class (Monad m, Applicative m) => ModeMonad m where
-    mMove    :: DrawEnv -> m ()
-    mPress   :: DrawEnv -> m ()
-    mRelease :: DrawEnv -> m ()
-    mDrawing :: PageItem -> Ratio -> m ()
+    mMove       :: DrawEnv -> m ()
+    mPress      :: DrawEnv -> m ()
+    mRelease    :: DrawEnv -> m ()
+    mDrawing    :: PageItem -> Ratio -> m ()
+    mKeyPress   :: KbEnv -> m ()
+    mKeyRelease :: KbEnv -> m ()
 
 --------------------------------------------------------------------------------
 -- | Declarations
@@ -74,6 +76,13 @@ data DrawEnv
       , drawRects    :: [Rect]           -- ^ Page rectangle
       , drawRatio    :: Double           -- ^ Page ratio
       , drawModifier :: [Modifier]
+      }
+
+--------------------------------------------------------------------------------
+data KbEnv
+    = KbEnv
+      { kbKeyName  :: String
+      , kbModifier :: [Modifier]
       }
 
 --------------------------------------------------------------------------------
@@ -161,10 +170,12 @@ instance Monad M where
 
 --------------------------------------------------------------------------------
 instance ModeMonad M where
-    mMove    = move
-    mPress   = press
-    mRelease = release
-    mDrawing = drawing
+    mMove       = move
+    mPress      = press
+    mRelease    = release
+    mDrawing    = drawing
+    mKeyPress   = keyPress
+    mKeyRelease = keyRelease
 
 --------------------------------------------------------------------------------
 -- | Mode Run
@@ -190,8 +201,17 @@ press e = M $ mPress e
 release :: DrawEnv -> M ()
 release e = M $ mRelease e
 
+--------------------------------------------------------------------------------
 drawing :: PageItem -> Ratio -> M ()
 drawing p r = M $ mDrawing p r
+
+--------------------------------------------------------------------------------
+keyPress :: KbEnv -> M ()
+keyPress e = M $ mKeyPress e
+
+--------------------------------------------------------------------------------
+keyRelease :: KbEnv -> M ()
+keyRelease e = M $ mKeyRelease e
 
 --------------------------------------------------------------------------------
 -- | Helpers
