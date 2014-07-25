@@ -55,7 +55,7 @@ data Input
 
 --------------------------------------------------------------------------------
 data SelectionType
-    = Increase
+    = XOR
 
 --------------------------------------------------------------------------------
 newtype SelectionMode a
@@ -88,7 +88,7 @@ instance ModeMonad SelectionMode where
         input <- ask
         liftIO $
             do when (metaModifierPressed mod) $
-                   writeIORef (inputSelType input) (Just Increase)
+                   writeIORef (inputSelType input) (Just XOR)
                gtkSetCursor (Just Gtk.Crosshair) $ inputGUI input
 
     mRelease opts = do
@@ -108,10 +108,11 @@ instance ModeMonad SelectionMode where
                     case oSelType of
                         Nothing -> collected
                         Just t
-                            | Increase <- t, metaModifierPressed mod
+                            | XOR <- t, metaModifierPressed mod
                               -> let indexes = fmap (\r -> r ^. rectId) rsSel
-                                     rsMap   = M.fromList (zip indexes rsSel) in
-                                 foldl (increaseSelection rsMap) rsSel collected
+                                     m       = M.fromList (zip indexes rsSel)
+                                     m'      = foldl xOrSelection m collected in
+                                 M.elems m'
 
                 atLeast2    = length crs >= 2
                 atLeast3    = length crs >= 3
@@ -142,9 +143,11 @@ instance ModeMonad SelectionMode where
             | rectInArea c r = [c]
             | otherwise      = []
 
-        increaseSelection mm rs r
-            | M.notMember (r ^. rectId) mm = (r:rs)
-            | otherwise                    = rs
+        xOrSelection m r
+            = let go Nothing = Just r
+                  go _       = Nothing in
+              M.alter go (r ^. rectId) m
+
 
     mDrawing page ratio = do
         gui   <- asks inputGUI
