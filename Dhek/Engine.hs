@@ -22,9 +22,6 @@ module Dhek.Engine
     , engineModeKeyRelease
     , engineSetMode
     , engineHasEvents
-    , engineIsNormalMode
-    , engineRevertMode
-    , engineIsDuplicateCtrlMode
       -- Draw lenses
     , drawCollision
     , drawCursor

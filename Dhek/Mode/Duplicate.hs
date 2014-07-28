@@ -32,6 +32,7 @@ import Dhek.Engine.Type
 import Dhek.Geometry
 import Dhek.GUI
 import Dhek.GUI.Action
+import Dhek.I18N
 import Dhek.Mode.Common.Draw
 import Dhek.Types
 
@@ -164,4 +165,9 @@ duplicateMode gui = Mode (runDuplicate gui . runM)
 --------------------------------------------------------------------------------
 duplicateModeManager :: GUI -> IO ModeManager
 duplicateModeManager gui
-    = return $ ModeManager (duplicateMode gui) (return ())
+    = do -- Display duplicate Help message
+         Gtk.statusbarPop (guiStatusBar gui) (guiContextId gui)
+         Gtk.statusbarPush (guiStatusBar gui) (guiContextId gui)
+             (guiTranslate gui MsgDupHelp)
+
+         return $ ModeManager (duplicateMode gui) (return ())

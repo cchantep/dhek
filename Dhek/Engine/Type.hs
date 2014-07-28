@@ -45,7 +45,6 @@ type Zoom  = Double
 data DhekMode
     = DhekNormal
     | DhekDuplication
-    | DhekDuplicationCtrl
     | DhekSelection
 
 --------------------------------------------------------------------------------

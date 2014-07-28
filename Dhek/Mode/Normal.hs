@@ -32,7 +32,7 @@ import Dhek.GUI
 import Dhek.GUI.Action
 import Dhek.I18N
 import Dhek.Mode.Common.Draw
-import Dhek.Mode.DuplicateCtrl
+import Dhek.Mode.DuplicateKey
 import Dhek.Types
 import Dhek.Utils (findDelete)
 
@@ -80,7 +80,7 @@ instance ModeMonad NormalMode where
                           do Gtk.statusbarPush (guiStatusBar g) (guiContextId g)
                                  (guiTranslate g $ MsgDuplicationModeStatus)
                              Gtk.widgetShowAll $ guiDrawPopup g
-                             mgr <- duplicateCtrlModeManager g
+                             mgr <- duplicateKeyModeManager g
                              writeIORef ref $ Just mgr
 
     mKeyRelease kb
@@ -378,8 +378,7 @@ normalDrawing page ratio
 --------------------------------------------------------------------------------
 runNormal :: Input -> NormalMode a -> EngineState -> IO EngineState
 runNormal input (NormalMode m) s
-    = do ref     <- newIORef Nothing
-         (s', _) <- execRWST m input s
+    = do (s', _) <- execRWST m input s
          return s'
 
 --------------------------------------------------------------------------------
@@ -390,6 +389,12 @@ normalMode gui = Mode (runNormal gui . runM)
 normalModeManager :: GUI -> IO ModeManager
 normalModeManager gui
     = do ref <- newIORef Nothing
+
+         -- Display normal Help message
+         Gtk.statusbarPop (guiStatusBar gui) (guiContextId gui)
+         Gtk.statusbarPush (guiStatusBar gui) (guiContextId gui)
+             (guiTranslate gui MsgDrawHelp)
+
          let input = Input
                      { inputGUI        = gui
                      , inputCurModeMgr = ref

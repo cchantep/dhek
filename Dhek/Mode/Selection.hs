@@ -34,6 +34,7 @@ import           Dhek.Engine.Type
 import           Dhek.Geometry
 import           Dhek.GUI
 import           Dhek.GUI.Action
+import           Dhek.I18N
 import           Dhek.Mode.Common.Draw
 import qualified Dhek.Resources as Resources
 import           Dhek.Types
@@ -527,6 +528,11 @@ selectionModeManager handler gui = do
                 , inputVCenter    = bvcenter
                 }
 
+    -- Display selection Help message
+    Gtk.statusbarPop (guiStatusBar gui) (guiContextId gui)
+    Gtk.statusbarPush (guiStatusBar gui) (guiContextId gui)
+        (guiTranslate gui $ MsgSelectionHelp metaKey)
+
     return $ ModeManager (selectionMode input) $
         liftIO $ do Gtk.signalDisconnect cid
                     Gtk.signalDisconnect did
@@ -558,6 +564,10 @@ createToolbarButton gui img
          Gtk.widgetShowAll b
          Gtk.widgetSetSensitive b False
          return b
+
+--------------------------------------------------------------------------------
+metaKey :: String
+metaKey = "CTRL"
 
 --------------------------------------------------------------------------------
 -- | Utilities

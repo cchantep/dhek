@@ -143,13 +143,6 @@ connectSignals g i = do
     Gtk.on (guiDrawingArea g) Gtk.enterNotifyEvent $ Gtk.tryEvent $ liftIO $
         Gtk.widgetGrabFocus $ guiDrawingArea g
 
-    Gtk.on (guiDrawingArea g) Gtk.leaveNotifyEvent $ Gtk.tryEvent $ liftIO $
-        do Gtk.set (guiDrawingArea g) [Gtk.widgetHasFocus Gtk.:= False] -- noop ?
-           Gtk.statusbarPop (guiStatusBar g) (guiContextId g)
-           Gtk.statusbarPush (guiStatusBar g) (guiContextId g)
-               (guiTranslate g $ MsgModeHelp)
-           Gtk.widgetHide (guiDrawPopup g)
-
     Gtk.on (guiDrawingArea g) Gtk.buttonPressEvent $ Gtk.tryEvent $ do
        pos <- Gtk.eventCoordinates
        b   <- Gtk.eventButton

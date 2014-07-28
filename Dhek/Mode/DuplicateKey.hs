@@ -1,10 +1,10 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 --------------------------------------------------------------------------------
 -- |
--- Module : Dhek.Mode.DuplicateCtrl
+-- Module : Dhek.Mode.DuplicateKey
 --
 --------------------------------------------------------------------------------
-module Dhek.Mode.DuplicateCtrl (duplicateCtrlModeManager) where
+module Dhek.Mode.DuplicateKey (duplicateKeyModeManager) where
 
 --------------------------------------------------------------------------------
 import Control.Applicative
@@ -12,6 +12,8 @@ import Control.Applicative
 --------------------------------------------------------------------------------
 import           Control.Lens
 import           Control.Monad.Reader
+import           Data.Foldable (for_)
+import           Data.IORef
 import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
@@ -21,51 +23,51 @@ import Dhek.Mode.Duplicate
 import Dhek.Types
 
 --------------------------------------------------------------------------------
-newtype DuplicateCtrlMode a
-    = DuplicateCtrlMode (DuplicateMode a)
+newtype DuplicateKeyMode a
+    = DuplicateKeyMode (DuplicateMode a)
     deriving ( Functor
              , Applicative
              , Monad
              )
 
 --------------------------------------------------------------------------------
-instance ModeMonad DuplicateCtrlMode where
+instance ModeMonad DuplicateKeyMode where
     mMove opts
-        = DuplicateCtrlMode $
+        = DuplicateKeyMode $
               do mMove opts
                  gui <- ask
                  liftIO $ updatePopupPos gui
 
     mPress opts
-        = DuplicateCtrlMode $ dupStart opts
+        = DuplicateKeyMode $ dupStart opts
 
     mRelease _
-        = DuplicateCtrlMode $
+        = DuplicateKeyMode $
               do eOpt <- use $ engineDrawState.drawEvent
                  case eOpt of
                      Just (Hold x _) -> dupEnd x
                      _               -> return ()
 
     mDrawing page ratio
-        = DuplicateCtrlMode $ mDrawing page ratio
+        = DuplicateKeyMode $ mDrawing page ratio
 
     mKeyPress _ = return ()
 
     mKeyRelease _ = return ()
 
 --------------------------------------------------------------------------------
-runDuplicateCtrl :: GUI -> DuplicateCtrlMode a -> EngineState -> IO EngineState
-runDuplicateCtrl gui (DuplicateCtrlMode m) s
+runDuplicateKey :: GUI -> DuplicateKeyMode a -> EngineState -> IO EngineState
+runDuplicateKey gui (DuplicateKeyMode m) s
     = runDuplicate gui m s
 
 --------------------------------------------------------------------------------
-duplicateCtrlMode :: GUI -> Mode
-duplicateCtrlMode gui = Mode (runDuplicateCtrl gui . runM)
+duplicateKeyMode :: GUI -> Mode
+duplicateKeyMode gui = Mode (runDuplicateKey gui . runM)
 
 --------------------------------------------------------------------------------
-duplicateCtrlModeManager :: GUI -> IO ModeManager
-duplicateCtrlModeManager gui
-    = return $ ModeManager (duplicateCtrlMode gui) (return ())
+duplicateKeyModeManager :: GUI -> IO ModeManager
+duplicateKeyModeManager gui
+    = return $ ModeManager (duplicateKeyMode gui) (return ())
 
 --------------------------------------------------------------------------------
 statusModPressed :: [Gtk.Modifier] -> Bool
@@ -83,5 +85,8 @@ statusNamePressed n
 --------------------------------------------------------------------------------
 updatePopupPos :: GUI -> IO ()
 updatePopupPos g
-    = do (x,y) <- Gtk.widgetGetPointer $ guiWindow g
-         Gtk.windowMove (guiDrawPopup g) x (y+40)
+    = readIORef (guiCursorPixbuf g) >>= \opix ->
+          for_ opix $ \pix ->
+              do (x,y)  <- Gtk.widgetGetPointer $ guiWindow g
+                 height <- Gtk.pixbufGetHeight pix
+                 Gtk.windowMove (guiDrawPopup g) x (y-height)

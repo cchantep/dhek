@@ -38,7 +38,6 @@ import Dhek.Engine.Type
 import Dhek.GUI
 import Dhek.GUI.Action
 import Dhek.Mode.Duplicate
-import Dhek.Mode.DuplicateCtrl
 import Dhek.Mode.Normal
 import Dhek.Mode.Selection
 import Dhek.Types
@@ -68,7 +67,6 @@ data Modes
       { modeDraw            :: IO ModeManager
       , modeDuplication     :: IO ModeManager
       , modeSelection       :: IO ModeManager
-      , modeDuplicationCtrl :: IO ModeManager
       }
 
 --------------------------------------------------------------------------------
@@ -395,32 +393,6 @@ engineSetMode m i = do
         DhekNormal          -> modeDraw
         DhekDuplication     -> modeDuplication
         DhekSelection       -> modeSelection
-        DhekDuplicationCtrl -> modeDuplicationCtrl
-
---------------------------------------------------------------------------------
--- | Reverts to the last mode if exists
-engineRevertMode :: RuntimeEnv -> IO ()
-engineRevertMode i
-    = do mi <- readIORef $ _modeInfo i
-         case _modeInfoPrev mi of
-             Nothing   -> return ()
-             Just prev -> engineSetMode prev i
-
---------------------------------------------------------------------------------
-engineIsNormalMode :: RuntimeEnv -> IO Bool
-engineIsNormalMode i
-    = do mi <- readIORef $ _modeInfo i
-         case _modeInfoCur mi of
-             DhekNormal -> return True
-             _          -> return False
-
---------------------------------------------------------------------------------
-engineIsDuplicateCtrlMode :: RuntimeEnv -> IO Bool
-engineIsDuplicateCtrlMode i
-    = do mi <- readIORef $ _modeInfo i
-         case _modeInfoCur mi of
-             DhekDuplicationCtrl -> return True
-             _                   -> return False
 
 --------------------------------------------------------------------------------
 -- | Returns the current page ratio. Returns Nothing if no PDF has been loaded
@@ -453,12 +425,10 @@ makeRuntimeEnv gui = do
     let mgrNormal        = normalModeManager gui
         mgrDuplication   = duplicateModeManager gui
         mgrSelection     = selectionModeManager (_withContext sRef) gui
-        mgrDuplicateCtrl = duplicateCtrlModeManager gui
         modes = Modes
                 { modeDraw            = mgrNormal
                 , modeDuplication     = mgrDuplication
                 , modeSelection       = mgrSelection
-                , modeDuplicationCtrl = mgrDuplicateCtrl
                 }
 
     curMgr <- mgrNormal

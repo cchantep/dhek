@@ -76,6 +76,7 @@ data GUI =
     , guiStatusBar :: Gtk.Statusbar
     , guiContextId :: Gtk.ContextId
     , guiDrawPopup :: Gtk.Window
+    , guiCursorPixbuf :: IORef (Maybe Gtk.Pixbuf)
     }
 
 --------------------------------------------------------------------------------
@@ -387,7 +388,6 @@ makeGUI = do
     sbalign <- Gtk.alignmentNew 0 1 1 0
     ctxId   <- Gtk.statusbarGetContextId sbar "mode"
     Gtk.statusbarSetHasResizeGrip sbar False
-    Gtk.statusbarPush sbar ctxId $ msgStr MsgModeHelp
     Gtk.containerAdd sbalign sbar
     Gtk.boxPackEnd vbox sbalign Gtk.PackNatural 0
 
@@ -397,7 +397,8 @@ makeGUI = do
 
     Gtk.widgetShowAll win
 
-    cache <- newIORef Nothing
+    cache  <- newIORef Nothing
+    curPix <- newIORef Nothing
 
     return $ GUI{ guiWindow = win
                 , guiPdfDialog = pdfch
@@ -442,6 +443,7 @@ makeGUI = do
                 , guiContextId = ctxId
                 , guiStatusBar = sbar
                 , guiDrawPopup = drawpop
+                , guiCursorPixbuf = curPix
                 }
 
 --------------------------------------------------------------------------------
