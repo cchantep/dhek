@@ -102,9 +102,11 @@ At this point, Dhek can be launched with `./dist/build/dhek/dhek`
 
 TODO
 
-### Template format
+## Integration
 
-Dhek templates are saved in JSON files. Struture is the following:
+Dhek template can be integrated with any platform supporting PDF and JSON. Indeed, template format is the JSON one.
+
+### Template format
 
 ```json
 {
@@ -112,12 +114,35 @@ Dhek templates are saved in JSON files. Struture is the following:
     { /* mappings for first page, index 0 */
       "areas": [
         { /* first area of first page */
+          "type": "text"/* or "checkbox"*/
           "height": 10.23/* pt */,
           "width": 23.456,
           "x": 0.1234/* pt */,
           "y": 2.45,
-          "name": "Field name",
-          "type": "text"/* or "checkbox" */
+          "name": "Field name"
+        },
+        { /* second area of first page */
+          "type": "radio",
+          "height": 10.23/* pt */,
+          "width": 23.456,
+          "x": 12.34/* pt */,
+          "y": 24.5,
+          "name": "Radio name"/* same for all radio in same group */,
+          "value": "distinctInRadioGroup"
+        },
+        { /* third area of first page */
+          "type": "celltext",
+          "name": "Text cells"/* same for all cells in same text */,
+          "cells": [
+            { /* one cell = one text character */
+              "index": 0 /* first character at index 0 */,
+              "height": 10.23/* pt */,
+              "width": 23.456,
+              "x": 123.4/* pt */,
+              "y": 245
+            }
+            /* , { ... } */
+          ]
         }
         /* , { ... }, ... */
       ]
@@ -128,6 +153,73 @@ Dhek templates are saved in JSON files. Struture is the following:
 }
 ```
 
-These mappings can be used to merge dynamic data with original PDF, in order to generate a new PDF document.
-
 Dhek is using UTF-8 character set, so so there is not issue to use space, ponctuation signs or accentuated character while preparing template (e.g. in area name).
+
+### PHP integration
+
+Dhek mappings can be used in PHP using [FPDF](http://www.fpdf.org/) library.
+
+```php
+<?php
+$json = json_decode(file_get_contents("test.json"));
+
+require("fpdf/fpdf/fpdf.php");
+require("fpdf/fpdi/fpdi.php");
+
+$pdfSrcPath = "test.pdf";
+
+$pdf = new FPDI("P", //L=>Landscape / P=>Portrait
+  "pt" /* point */ );
+
+$fontSize = 14;
+
+$pagecount = $pdf->setSourceFile($pdfSrcPath);
+$testText  = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+for ($i = 0; $i < $pagecount; $i++) {
+  $pdf->AddPage();
+  $tplIdx = $pdf->importPage($i + 1);
+  $pdf->useTemplate($tplIdx, 0, 0, 0, 0, true);
+  
+  if (isset($json->pages[$i]) && isset($json->pages[$i]->areas)) {
+    for ($j = 0; $j < count($json->pages[$i]->areas); $j++) {
+      $area = $json->pages[$i]->areas[$j];
+      $x    = $area->x;
+      $y    = $area->y;
+      $w    = $area->width;
+      $h    = $area->height;
+      
+      // Draw blue rect at bounds
+      $pdf->SetDrawColor(0, 0, 255);
+      $pdf->SetLineWidth(0.2835);
+      $pdf->Rect($x, $y, $w, $h);
+      
+      if ($area->type == "checkbox") {
+        $pdf->SetDrawColor(0, 255, 0);
+        $pdf->SetLineWidth(2.0);
+        $pdf->Line($x, $y, $x + $w, $y + $h);
+        $pdf->Line($x, $y + $h, $x + $w, $y);
+      } else if ($area->type == "text") {
+        // 'Free' text
+        $pdf->SetLineWidth(1.0); // border
+        
+        $iw       = $w - 2 /* 2 x 1 */ ;
+        $v        = utf8_decode($area->name);
+        $overflow = ($pdf->GetStringWidth($v) > $iw);
+        while ($pdf->GetStringWidth($v) > $iw) {
+          $v = substr($v, 0, -1);
+        }
+        if ($overflow) {
+          $v = substr($v, 0, -1) . "\\";
+        }
+        
+        $pdf->SetXY($x, $y);
+        $pdf->MultiCell($w, intval($h), $v, true);
+      }
+    }
+  }
+}
+
+$pdf->Output("test-dhek.pdf", "F");
+?>
+```
