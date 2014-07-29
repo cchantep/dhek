@@ -5,10 +5,12 @@
 --------------------------------------------------------------------------------
 module Dhek.GUI.Action
     ( DhekClosingChoice(..)
+    , DhekCursor(..)
+    , DhekCursorType(..)
     , gtkUnselect
     , gtkSelectRect
     , gtkAddRect
-    , gtkSetCursor
+    , gtkSetDhekCursor
     , gtkIncrPage
     , gtkDecrPage
     , gtkIncrZoom
@@ -35,21 +37,32 @@ import Data.Foldable (for_, traverse_)
 import Data.List (dropWhileEnd)
 import Data.Maybe (fromMaybe)
 import Data.Traversable (for, traverse, sequenceA)
+import Foreign.Ptr
 
 --------------------------------------------------------------------------------
 import           Control.Lens
 import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
-import Dhek.GUI
-import Dhek.I18N
-import Dhek.Types
+import           Dhek.GUI
+import           Dhek.I18N
+import qualified Dhek.Resources as Resources
+import           Dhek.Types
 
 --------------------------------------------------------------------------------
 data DhekClosingChoice
     = DhekSave
     | DhekDontSave
     | DhekCancel
+
+--------------------------------------------------------------------------------
+data DhekCursor
+    = GTKCursor Gtk.CursorType
+    | DhekCursor DhekCursorType
+
+--------------------------------------------------------------------------------
+data DhekCursorType
+    = CursorDup
 
 --------------------------------------------------------------------------------
 -- | When a rectangle is unselected
@@ -106,11 +119,34 @@ gtkAddRect r gui = do
     traverse_ (Gtk.treeSelectionSelectIter $ guiRectTreeSelection gui) iOpt
 
 --------------------------------------------------------------------------------
-gtkSetCursor :: Maybe Gtk.CursorType -> GUI -> IO ()
-gtkSetCursor t gui = do
-    c     <- traverse Gtk.cursorNew t
+gtkSetDhekCursor :: GUI -> Maybe DhekCursor -> IO ()
+gtkSetDhekCursor gui odc
+    = case odc of
+        Nothing -> gtkSetImageCursor gui Resources.mouseNormal
+        Just dc
+            | GTKCursor t  <- dc -> gtkSetGtkCursor gui t
+            | DhekCursor d <- dc -> gtkSetImageCursor gui (dhekCursorImage d)
+
+--------------------------------------------------------------------------------
+gtkSetGtkCursor :: GUI -> Gtk.CursorType -> IO ()
+gtkSetGtkCursor gui t = do
+    c     <- Gtk.cursorNew t
     frame <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
-    Gtk.drawWindowSetCursor frame c
+    Gtk.drawWindowSetCursor frame (Just c)
+
+--------------------------------------------------------------------------------
+dhekCursorImage :: DhekCursorType -> Ptr Gtk.InlineImage
+dhekCursorImage CursorDup = Resources.mouseDup
+
+--------------------------------------------------------------------------------
+gtkSetImageCursor :: GUI -> Ptr Gtk.InlineImage -> IO ()
+gtkSetImageCursor gui img
+    = do odis <- Gtk.displayGetDefault
+         for_ odis $ \display ->
+             do pix   <- Gtk.pixbufNewFromInline img
+                cur   <- Gtk.cursorNewFromPixbuf display pix 1 1
+                frame <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
+                Gtk.drawWindowSetCursor frame (Just cur)
 
 --------------------------------------------------------------------------------
 gtkIncrPage :: Int -> Int -> [Rect] -> GUI -> IO ()

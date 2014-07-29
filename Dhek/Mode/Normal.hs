@@ -155,13 +155,13 @@ normalMove opts
                     else collisionMode e
 
          let cursorOpt
-                 = fmap eventCursor eOpt <|>
-                   fmap areaCursor aOpt  <|>
-                   Gtk.Hand1 <$ oOpt     <|>
-                   Gtk.Hand1 <$ (gOpt <|> ogOpt)
+                 = fmap (GTKCursor . eventCursor) eOpt <|>
+                   fmap (GTKCursor . areaCursor) aOpt  <|>
+                   (GTKCursor Gtk.Hand1) <$ oOpt       <|>
+                   (GTKCursor Gtk.Hand1) <$ (gOpt <|> ogOpt)
 
          -- Update Gtk cursor
-         liftIO $ gtkSetCursor cursorOpt gui
+         liftIO $ gtkSetDhekCursor gui cursorOpt
 
   where
     overlapMode e = do

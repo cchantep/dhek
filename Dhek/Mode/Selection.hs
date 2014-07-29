@@ -89,7 +89,8 @@ instance ModeMonad SelectionMode where
         liftIO $
             do when (metaModifierPressed mod) $
                    writeIORef (inputSelType input) (Just XOR)
-               gtkSetCursor (Just Gtk.Crosshair) $ inputGUI input
+               gtkSetDhekCursor (inputGUI input)
+                   (Just $ GTKCursor Gtk.Crosshair)
 
     mRelease opts = do
         input <- ask
@@ -135,7 +136,7 @@ instance ModeMonad SelectionMode where
                 liftIO $ gtkSelectRect cr $ inputGUI input
 
             liftIO $
-                do gtkSetCursor Nothing $ inputGUI input
+                do gtkSetDhekCursor (inputGUI input) Nothing
                    writeIORef (inputSelType input) Nothing
 
       where

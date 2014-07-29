@@ -27,6 +27,8 @@ library
                resources/duplicate_rectangle.c
                resources/go_next.c
                resources/go_previous.c
+               resources/mouse_normal.c
+               resources/mouse_dup.c
                resources/rectangular_selection.c
                resources/zoom_in.c
                resources/zoom_out.c
@@ -103,6 +105,6 @@ executable dhek
   if os(darwin)
     ghc-options: -O2 -threaded -optl-ObjC++ -optl-mmacosx-version-min=10.9 -framework AppKit
   if !os(windows) && !os(darwin)
-    ghc-options: -O2 -threaded
+    ghc-options: -O2
 
   default-language: Haskell2010

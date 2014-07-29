@@ -132,7 +132,7 @@ dupStart opts
 
              engineDrawState.drawEvent ?= Hold r2 (x,y)
              gui <- ask
-             liftIO $ gtkSetCursor (Just Gtk.Cross) gui
+             liftIO $ gtkSetDhekCursor gui (Just $ DhekCursor CursorDup)
 
 --------------------------------------------------------------------------------
 dupEnd :: Rect -> DuplicateMode ()
@@ -148,7 +148,7 @@ dupEnd x
          engineDrawState.drawEvent     .= Nothing
          engineDrawState.drawCollision .= Nothing
 
-         liftIO $ gtkSetCursor Nothing gui
+         liftIO $ gtkSetDhekCursor gui Nothing
          engineEventStack %= (CreateRect:)
 
 --------------------------------------------------------------------------------
