@@ -29,7 +29,6 @@ SplashSave: 3. Sauvegarder les zones comme modèle
 SplashCopy: 4. Copier le PDF par remplissage selon le modèle
 DontSave: Ne pas enregister
 DuplicationModePopup: Glissé-déposé pour dupliquer
-DuplicationModeStatus: ALT: Mode duplication. Fait un glissé-déposé d'une zone existante pour la dupliquer à l'endroit souhaité
 DrawHelp: Cliquer pour dessiner, ALT + glissé-déposé pour dupliquer
-DupHelp: Glissé-déposé une zone pour la dupliquer
+DupHelp: Glisser-déposer une zone pour la dupliquer
 SelectionHelp meta@String: Cliquer pour débuter une sélection, relâcher pour terminer. #{meta} + clic pour modifier la sélection.

@@ -78,7 +78,8 @@ instance ModeMonad NormalMode where
                  -- Duplication mode use ALT modifier
                  _ -> when (statusNamePressed $ kbKeyName kb) $ liftIO $
                           do Gtk.statusbarPush (guiStatusBar g) (guiContextId g)
-                                 (guiTranslate g $ MsgDuplicationModeStatus)
+                                 (guiTranslate g MsgDupHelp)
+                             updatePopupPos g
                              Gtk.widgetShowAll $ guiDrawPopup g
                              mgr <- duplicateKeyModeManager g
                              writeIORef ref $ Just mgr

@@ -4,7 +4,10 @@
 -- Module : Dhek.Mode.DuplicateKey
 --
 --------------------------------------------------------------------------------
-module Dhek.Mode.DuplicateKey (duplicateKeyModeManager) where
+module Dhek.Mode.DuplicateKey
+    ( duplicateKeyModeManager
+    , updatePopupPos
+    ) where
 
 --------------------------------------------------------------------------------
 import Control.Applicative
@@ -87,6 +90,9 @@ updatePopupPos :: GUI -> IO ()
 updatePopupPos g
     = readIORef (guiCursorPixbuf g) >>= \opix ->
           for_ opix $ \pix ->
-              do (x,y)  <- Gtk.widgetGetPointer $ guiWindow g
-                 height <- Gtk.pixbufGetHeight pix
-                 Gtk.windowMove (guiDrawPopup g) x (y-height)
+              do (wx,wy) <- Gtk.windowGetPosition $ guiWindow g
+                 (x,y)   <- Gtk.widgetGetPointer $ guiWindow g
+                 height  <- Gtk.pixbufGetHeight pix
+                 -- Workaround expected to make tooltip position work on OSX
+                 -- and Windows
+                 Gtk.windowMove (guiDrawPopup g) (x+wx) (y-height+wy)
