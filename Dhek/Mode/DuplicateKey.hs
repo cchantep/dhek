@@ -88,11 +88,9 @@ statusNamePressed n
 --------------------------------------------------------------------------------
 updatePopupPos :: GUI -> IO ()
 updatePopupPos g
-    = readIORef (guiCursorPixbuf g) >>= \opix ->
-          for_ opix $ \pix ->
-              do (wx,wy) <- Gtk.windowGetPosition $ guiWindow g
-                 (x,y)   <- Gtk.widgetGetPointer $ guiWindow g
-                 height  <- Gtk.pixbufGetHeight pix
-                 -- Workaround expected to make tooltip position work on OSX
-                 -- and Windows
-                 Gtk.windowMove (guiDrawPopup g) (x+wx) (y-height+wy)
+    = do (wx,wy)    <- Gtk.windowGetPosition $ guiWindow g
+         (x,y)      <- Gtk.widgetGetPointer $ guiWindow g
+         (_,height) <- Gtk.windowGetSize $ guiDrawPopup g
+         -- Workaround expected to make tooltip position work on OSX
+         -- and Windows
+         Gtk.windowMove (guiDrawPopup g) (x+wx) (y-height+wy-20)

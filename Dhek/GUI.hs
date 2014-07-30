@@ -76,7 +76,6 @@ data GUI =
     , guiStatusBar :: Gtk.Statusbar
     , guiContextId :: Gtk.ContextId
     , guiDrawPopup :: Gtk.Window
-    , guiCursorPixbuf :: IORef (Maybe Gtk.Pixbuf)
     }
 
 --------------------------------------------------------------------------------
@@ -398,7 +397,6 @@ makeGUI = do
     Gtk.widgetShowAll win
 
     cache  <- newIORef Nothing
-    curPix <- newIORef Nothing
 
     return $ GUI{ guiWindow = win
                 , guiPdfDialog = pdfch
@@ -443,7 +441,6 @@ makeGUI = do
                 , guiContextId = ctxId
                 , guiStatusBar = sbar
                 , guiDrawPopup = drawpop
-                , guiCursorPixbuf = curPix
                 }
 
 --------------------------------------------------------------------------------

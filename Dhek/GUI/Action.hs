@@ -34,7 +34,6 @@ module Dhek.GUI.Action
 --------------------------------------------------------------------------------
 import Data.Char (isSpace)
 import Data.Foldable (for_, traverse_)
-import Data.IORef
 import Data.List (dropWhileEnd)
 import Data.Maybe (fromMaybe)
 import Data.Traversable (for, traverse, sequenceA)
@@ -134,7 +133,6 @@ gtkSetGtkCursor gui t = do
     c     <- Gtk.cursorNew t
     frame <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
     Gtk.drawWindowSetCursor frame (Just c)
-    writeIORef (guiCursorPixbuf gui) Nothing
 
 --------------------------------------------------------------------------------
 dhekCursorImage :: DhekCursorType -> Ptr Gtk.InlineImage
@@ -149,7 +147,6 @@ gtkSetImageCursor gui img
                 cur   <- Gtk.cursorNewFromPixbuf display pix 1 1
                 frame <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
                 Gtk.drawWindowSetCursor frame (Just cur)
-                writeIORef (guiCursorPixbuf gui) $ Just pix
 
 --------------------------------------------------------------------------------
 gtkIncrPage :: Int -> Int -> [Rect] -> GUI -> IO ()
