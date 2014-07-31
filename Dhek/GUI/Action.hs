@@ -193,10 +193,10 @@ gtkLookupEntryText entry = do
     return r
 
 --------------------------------------------------------------------------------
-gtkShowError :: Show a => a -> GUI -> IO ()
+gtkShowError :: String -> GUI -> IO ()
 gtkShowError e gui = do
     m <- Gtk.messageDialogNew (Just $ guiWindow gui)
-         [Gtk.DialogModal] Gtk.MessageError Gtk.ButtonsOk (show e)
+         [Gtk.DialogModal] Gtk.MessageError Gtk.ButtonsOk e
     Gtk.dialogRun m
     Gtk.widgetHide m
 

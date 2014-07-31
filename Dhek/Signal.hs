@@ -52,7 +52,7 @@ connectSignals g i = do
     Gtk.on (guiSplashDok g) Gtk.buttonActivated onApplidok
 
     Gtk.on (guiJsonOpenMenuItem g) Gtk.menuItemActivate $
-        void $ runProgram i onJsonImport
+        void $ runProgram i $ onJsonImport g
 
     Gtk.on (guiJsonSaveMenuItem g) Gtk.menuItemActivate $
         void $ runProgram i onJsonSave

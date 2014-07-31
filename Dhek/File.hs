@@ -20,6 +20,8 @@ import           System.FilePath (takeExtension)
 
 --------------------------------------------------------------------------------
 import Dhek.Engine.Instr
+import Dhek.GUI
+import Dhek.I18N
 import Dhek.Types
 
 --------------------------------------------------------------------------------
@@ -42,8 +44,8 @@ onJsonSave =
                (const (clearEvents >> return True)) e
 
 --------------------------------------------------------------------------------
-onJsonImport :: Instr ()
-onJsonImport
+onJsonImport :: GUI -> Instr ()
+onJsonImport gui
     = do fOpt <- openJsonFile
          traverse_ go fOpt
   where
@@ -53,7 +55,10 @@ onJsonImport
                  Left e      -> exception e
                  Right bytes ->
                      do let rectsE = fmap saveToRects (eitherDecode bytes)
-                        either showError upd rectsE
+                            reportError msg
+                                = showError $
+                                  guiTranslate gui (MsgJsonFormatError msg)
+                        either reportError upd rectsE
 
     upd rs
         = do clearEvents
