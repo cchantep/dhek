@@ -24,6 +24,7 @@ foreign import ccall "&applidok" applidok :: Ptr Gtk.InlineImage
 foreign import ccall "&dialog_accept" dialogAccept :: Ptr Gtk.InlineImage
 foreign import ccall "&distribute" distribute :: Ptr Gtk.InlineImage
 foreign import ccall "&distribute_create" distributeCreate :: Ptr Gtk.InlineImage
+foreign import ccall "&distribute_vertical" distributeVertical :: Ptr Gtk.InlineImage
 foreign import ccall "&draw_eraser" drawEraser :: Ptr Gtk.InlineImage
 foreign import ccall "&draw_rectangle" drawRectangle :: Ptr Gtk.InlineImage
 foreign import ccall "&duplicate_rectangle" duplicateRectangle :: Ptr Gtk.InlineImage

@@ -22,6 +22,7 @@ library
                resources/dialog_accept.c
                resources/distribute.c
                resources/distribute_create.c
+               resources/distribute_vertical.c
                resources/draw_eraser.c
                resources/draw_rectangle.c
                resources/duplicate_rectangle.c

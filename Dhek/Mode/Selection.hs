@@ -52,6 +52,7 @@ data Input
       , inputLeft       :: Gtk.ToolButton
       , inputHCenter    :: Gtk.ToolButton
       , inputVCenter    :: Gtk.ToolButton
+      , inputDistVert   :: Gtk.ToolButton
       }
 
 --------------------------------------------------------------------------------
@@ -130,6 +131,7 @@ instance ModeMonad SelectionMode where
                 Gtk.widgetSetSensitive (inputLeft input) atLeast2
                 Gtk.widgetSetSensitive (inputHCenter input) atLeast2
                 Gtk.widgetSetSensitive (inputVCenter input) atLeast2
+                Gtk.widgetSetSensitive (inputDistVert input) atLeast3
 
             -- Update selection
             liftIO $ gtkClearSelection $ inputGUI input
@@ -357,39 +359,59 @@ alignment align rects
         center = toppest + len / 2
 
 --------------------------------------------------------------------------------
+distributing :: Lens Rect Rect Double Double
+             -> Lens Rect Rect Double Double
+             -> [Rect]
+             -> [Rect]
+distributing _ _ [] = []
+distributing ldim llen rs@(x:xs)
+    = _L:(evalState action _L) -- homogeneous-spaced rectangle list
+  where
+    sumLenF r s = s + realToFrac (r ^. llen)
+
+    compareDimF a b
+        = compare (a ^. ldim) (b ^. ldim)
+
+    sorted = sortBy compareDimF rs
+    _AN = fromIntegral $ length rs -- number of selected area
+    _AW = foldr sumLenF 0 rs -- selected areas width summed
+    _L  = head sorted -- most left rectangle
+    _R  = last sorted -- most right rectangle
+    _D  = _R ^. ldim - _L ^. ldim + _R ^. llen -- _L and _R distance
+    _S  = (_D - _AW) / (_AN - 1) -- space between rectangles
+    action = for (tail sorted) $ \r ->
+        do _P <- get
+           let _I = _P ^. ldim + _P ^. llen
+               r' = r & ldim .~ _I + _S
+           put r'
+           return r'
+
+--------------------------------------------------------------------------------
+distributingM :: EngineCtx m
+              => GUI
+              -> Lens Rect Rect Double Double
+              -> Lens Rect Rect Double Double
+              -> m ()
+distributingM gui ldim llen
+    = do rs <- liftIO $ gtkGetTreeAllSelection gui
+         let spaced = distributing ldim llen rs
+
+         engineStateSetRects spaced
+         forM_ spaced $ \r ->
+             liftIO $ gtkSelectRect r gui
+         engineEventStack %= (UpdateRectPos:)
+         liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
+
+--------------------------------------------------------------------------------
+distVerticalActivated :: EngineCtx m => GUI -> m ()
+distVerticalActivated gui
+    = distributingM gui rectY rectHeight
+
+--------------------------------------------------------------------------------
 -- | Called when 'Distribute' button, located in mode's toolbar, is clicked
 distButtonActivated :: EngineCtx m => GUI -> m ()
-distButtonActivated gui = do
-    rs <- liftIO $ gtkGetTreeAllSelection gui
-    case rs of
-        []   -> return ()
-        x:xs -> do
-            let sorted = sortBy rectCompareX rs
-                _AN = fromIntegral $ length rs -- number of selected area
-                _AW = foldr sumWidthF 0 rs -- selected areas width summed
-                _L  = head sorted -- most left rectangle
-                _R  = last sorted -- most right rectangle
-                _D  = _R ^. rectX - _L ^. rectX + _R ^. rectWidth -- _L and _R
-                                                                  -- distance
-                _S  = (_D - _AW) / (_AN - 1) -- space between rectangles
-                action = for (tail sorted) $ \r -> do
-                    _P <- get
-                    let _I = _P ^. rectX + _P ^. rectWidth
-                        r' = r & rectX .~ _I + _S
-                    put r'
-                    return r'
-                spaced = _L:(evalState action _L) -- homogeneous-spaced
-                                                  -- rectangle list
-            engineStateSetRects spaced
-            forM_ spaced $ \r ->
-                liftIO $ gtkSelectRect r gui
-            engineEventStack %= (UpdateRectPos:)
-            liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
-
-            return ()
-  where
-    sumWidthF :: Rect -> Double -> Double
-    sumWidthF r s = s + realToFrac (r ^. rectWidth)
+distButtonActivated gui
+    = distributingM gui rectX rectWidth
 
 --------------------------------------------------------------------------------
 -- | Called when 'Distribute create' button, located in mode's toolbar,
@@ -508,6 +530,11 @@ selectionModeManager handler gui = do
     Gtk.toolbarInsert toolbar vsep2 (-1)
     Gtk.widgetShowAll vsep2
 
+    -- Distribute vertical
+    bdistv <- createToolbarButton gui Resources.distributeVertical
+    dvid   <- Gtk.onToolButtonClicked bdistv $ handler $
+              distVerticalActivated gui
+
     -- Distribute button
     bdist <- createToolbarButton gui Resources.distribute
     did   <- Gtk.onToolButtonClicked bdist $ handler $ distButtonActivated gui
@@ -530,6 +557,7 @@ selectionModeManager handler gui = do
                 , inputLeft       = bleft
                 , inputHCenter    = bhcenter
                 , inputVCenter    = bvcenter
+                , inputDistVert   = bdistv
                 }
 
     -- Display selection Help message
@@ -546,6 +574,7 @@ selectionModeManager handler gui = do
                     Gtk.signalDisconnect lid
                     Gtk.signalDisconnect bhid
                     Gtk.signalDisconnect bvid
+                    Gtk.signalDisconnect dvid
 
                     Gtk.containerForeach toolbar $ \w ->
                         do i <- Gtk.toolbarGetItemIndex toolbar $
