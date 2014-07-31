@@ -200,6 +200,10 @@ instance ModeMonad SelectionMode where
 
     mKeyRelease _ = return ()
 
+    mEnter = return ()
+
+    mLeave = return ()
+
 --------------------------------------------------------------------------------
 metaModifierPressed :: [Gtk.Modifier] -> Bool
 metaModifierPressed [Gtk.Control]

@@ -141,7 +141,11 @@ connectSignals g i = do
            liftIO $ engineModeKeyRelease mod name i
 
     Gtk.on (guiDrawingArea g) Gtk.enterNotifyEvent $ Gtk.tryEvent $ liftIO $
-        Gtk.widgetGrabFocus $ guiDrawingArea g
+        do Gtk.widgetGrabFocus $ guiDrawingArea g
+           engineModeEnter i
+
+    Gtk.on (guiDrawingArea g) Gtk.leaveNotifyEvent $ Gtk.tryEvent $ liftIO $
+        engineModeLeave i
 
     Gtk.on (guiDrawingArea g) Gtk.buttonPressEvent $ Gtk.tryEvent $ do
        pos <- Gtk.eventCoordinates

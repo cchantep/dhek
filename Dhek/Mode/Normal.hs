@@ -83,6 +83,7 @@ instance ModeMonad NormalMode where
                                  (guiTranslate g MsgDupHelp)
                              Gtk.widgetShowAll $ guiDrawPopup g
                              updatePopupPos g
+                             gtkSetDhekCursor g (Just $ DhekCursor CursorDup)
 
     mKeyRelease kb
         = do input <- ask
@@ -100,6 +101,31 @@ instance ModeMonad NormalMode where
                                           (guiContextId g)
                                       Gtk.widgetHide $ guiDrawPopup g
                                       writeIORef ref Nothing
+                                      gtkSetDhekCursor g Nothing
+
+    mEnter
+        = do input <- ask
+             let g   = inputGUI input
+                 ref = inputCurModeMgr input
+             opt <- liftIO $ readIORef ref
+             case opt of
+                 Nothing -> return ()
+                 -- In duplication mode
+                 Just _
+                     -> liftIO $
+                            do Gtk.widgetShowAll $ guiDrawPopup g
+                               updatePopupPos g
+
+    mLeave
+        = do input <- ask
+             let g   = inputGUI input
+                 ref = inputCurModeMgr input
+             opt <- liftIO $ readIORef ref
+             case opt of
+                 Nothing -> return ()
+                 -- In duplication mode
+                 Just _
+                     -> liftIO $ Gtk.widgetHide $ guiDrawPopup g
 
 --------------------------------------------------------------------------------
 runOrMode :: NormalMode () -> M () -> NormalMode ()

@@ -32,6 +32,8 @@ class (Monad m, Applicative m) => ModeMonad m where
     mDrawing    :: PageItem -> Ratio -> m ()
     mKeyPress   :: KbEnv -> m ()
     mKeyRelease :: KbEnv -> m ()
+    mEnter      :: m ()
+    mLeave      :: m ()
 
 --------------------------------------------------------------------------------
 -- | Declarations
@@ -175,6 +177,8 @@ instance ModeMonad M where
     mDrawing    = drawing
     mKeyPress   = keyPress
     mKeyRelease = keyRelease
+    mEnter      = enter
+    mLeave      = leave
 
 --------------------------------------------------------------------------------
 -- | Mode Run
@@ -211,6 +215,14 @@ keyPress e = M $ mKeyPress e
 --------------------------------------------------------------------------------
 keyRelease :: KbEnv -> M ()
 keyRelease e = M $ mKeyRelease e
+
+--------------------------------------------------------------------------------
+enter :: M ()
+enter = M mEnter
+
+--------------------------------------------------------------------------------
+leave :: M ()
+leave = M mLeave
 
 --------------------------------------------------------------------------------
 -- | Helpers

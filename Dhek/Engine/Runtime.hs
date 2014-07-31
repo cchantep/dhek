@@ -244,6 +244,14 @@ instance Runtime DefaultRuntime where
         = engineEventStack .= []
 
 --------------------------------------------------------------------------------
+engineRunMode :: RuntimeEnv -> M a -> IO ()
+engineRunMode i instr
+    = do s  <- readIORef $ _state i
+         mi <- readIORef $ _modeInfo i
+         s2 <- runMode (mgrMode $ _modeInfoMgr mi) s instr
+         writeIORef (_state i) s2
+
+--------------------------------------------------------------------------------
 engineModePointerContext :: [Gtk.Modifier]
                          -> (DrawEnv -> M a)
                          -> RuntimeEnv
@@ -252,7 +260,6 @@ engineModePointerContext :: [Gtk.Modifier]
 engineModePointerContext xs k i (x,y) = do
     s   <- readIORef $ _state i
     opt <- readIORef $ _internal i
-    mi  <- readIORef $ _modeInfo i
 
     for_ opt $ \v -> do
         let gui   = _gui i
@@ -266,8 +273,7 @@ engineModePointerContext xs k i (x,y) = do
                     , drawModifier = xs
                     }
 
-        s2 <- runMode (mgrMode $ _modeInfoMgr mi) s (k opts)
-        writeIORef (_state i) s2
+        engineRunMode i (k opts)
         liftIO $ Gtk.widgetQueueDraw $ guiDrawingArea gui
 
 --------------------------------------------------------------------------------
@@ -277,18 +283,12 @@ engineModeKbContext :: [Gtk.Modifier]
                     -> (KbEnv -> M a)
                     -> IO ()
 engineModeKbContext mod kname i k
-    = do s   <- readIORef $ _state i
-         opt <- readIORef $ _internal i
-         mi  <- readIORef $ _modeInfo i
+    = do let kbenv = KbEnv
+                    { kbModifier = mod
+                    , kbKeyName  = kname
+                    }
 
-         for_ opt $ \v -> do
-             let kbenv = KbEnv
-                        { kbModifier = mod
-                        , kbKeyName  = kname
-                        }
-
-             s2 <- runMode (mgrMode $ _modeInfoMgr mi) s (k kbenv)
-             writeIORef (_state i) s2
+         engineRunMode i (k kbenv)
 
 --------------------------------------------------------------------------------
 engineModeMove :: [Gtk.Modifier] -> RuntimeEnv -> Pos -> IO ()
@@ -309,6 +309,14 @@ engineModeKeyPress mod name env = engineModeKbContext mod name env keyPress
 --------------------------------------------------------------------------------
 engineModeKeyRelease :: [Gtk.Modifier] -> String -> RuntimeEnv -> IO ()
 engineModeKeyRelease mod name env = engineModeKbContext mod name env keyRelease
+
+--------------------------------------------------------------------------------
+engineModeEnter :: RuntimeEnv -> IO ()
+engineModeEnter i = engineRunMode i enter
+
+--------------------------------------------------------------------------------
+engineModeLeave :: RuntimeEnv -> IO ()
+engineModeLeave i = engineRunMode i leave
 
 --------------------------------------------------------------------------------
 engineModeDraw :: RuntimeEnv -> IO ()

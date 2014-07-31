@@ -123,6 +123,10 @@ instance ModeMonad DuplicateMode where
 
     mKeyRelease _ = return ()
 
+    mEnter = return ()
+
+    mLeave = return ()
+
 --------------------------------------------------------------------------------
 dupStart :: DrawEnv -> DuplicateMode ()
 dupStart opts

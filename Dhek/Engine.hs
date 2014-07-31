@@ -20,6 +20,8 @@ module Dhek.Engine
     , engineModeDraw
     , engineModeKeyPress
     , engineModeKeyRelease
+    , engineModeEnter
+    , engineModeLeave
     , engineSetMode
     , engineHasEvents
       -- Draw lenses

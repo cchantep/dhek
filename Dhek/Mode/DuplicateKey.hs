@@ -58,6 +58,10 @@ instance ModeMonad DuplicateKeyMode where
 
     mKeyRelease _ = return ()
 
+    mEnter = return ()
+
+    mLeave = return ()
+
 --------------------------------------------------------------------------------
 runDuplicateKey :: GUI -> DuplicateKeyMode a -> EngineState -> IO EngineState
 runDuplicateKey gui (DuplicateKeyMode m) s
