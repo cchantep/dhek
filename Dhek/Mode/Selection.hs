@@ -12,9 +12,10 @@ module Dhek.Mode.Selection (selectionModeManager) where
 --------------------------------------------------------------------------------
 import Prelude hiding (mapM_)
 import Control.Applicative
-import Data.Foldable (for_, foldMap, mapM_, traverse_)
+import Data.Foldable (find, for_, foldMap, mapM_, traverse_)
 import Data.IORef
 import Data.List ((\\), replicate, sortBy)
+import Data.Maybe (isJust)
 import Data.Traversable
 import Foreign.Ptr
 
@@ -43,7 +44,7 @@ import           Dhek.Types
 data Input
     = Input
       { inputGUI        :: GUI
-      , inputSelType    :: IORef (Maybe SelectionType)
+      , inputSelType    :: IORef SelectionType
       , inputTop        :: Gtk.ToolButton
       , inputDist       :: Gtk.ToolButton
       , inputDistCreate :: Gtk.ToolButton
@@ -57,7 +58,9 @@ data Input
 
 --------------------------------------------------------------------------------
 data SelectionType
-    = XOR
+    = SELECTION
+    | XOR
+    | MOVE [Rect] (Double, Double)
 
 --------------------------------------------------------------------------------
 newtype SelectionMode a
@@ -72,95 +75,51 @@ newtype SelectionMode a
 
 --------------------------------------------------------------------------------
 instance ModeMonad SelectionMode where
-    mMove opts = do
-        engineDrawState.drawOverRect .= getOverRect opts
-        sOpt <- use $ engineDrawState.drawSelection
+    mMove opts
+        = currentSelectionType $ \typ ->
+              case typ of
+                  MOVE rs pos0 -> moveMove opts rs pos0
+                  _            -> selectionMove opts
 
-        for_ sOpt $ \s -> do
-            let pos = drawPointer opts
-            engineDrawState.drawSelection ?= updateDrawSelection pos s
+    mPress opts
+        = do gui <- asks inputGUI
+             rs  <- liftIO $ gtkGetTreeAllSelection gui
 
-    mPress opts = do
-        let (x,y)        = drawPointer opts
-            newSelection = rectNew x y 0 0
-            mod          = drawModifier opts
+             let pos@(x,y)    = drawPointer opts
+                 newSelection = rectNew x y 0 0
+                 mod          = drawModifier opts
+                 oOver        = getOverRect opts
+                 sameId a b   = a ^. rectId == b ^. rectId
+                 oSelected    = oOver >>= \r -> find (sameId r) rs
+                 doMove       = isJust oSelected
 
-        engineDrawState.drawSelection ?= newSelection
+             if doMove
+                 then
+                     do setSelectionType $ MOVE rs pos
+                        liftIO $ gtkSetDhekCursor gui
+                            (Just $ GTKCursor Gtk.Hand1)
+                 else
+                     do engineDrawState.drawSelection ?= newSelection
+                        gui <- asks inputGUI
+                        when (metaModifierPressed mod) $
+                            do setSelectionType XOR
+                               liftIO $ gtkSetDhekCursor gui
+                                   (Just $ GTKCursor Gtk.Crosshair)
 
-        input <- ask
-        liftIO $
-            do when (metaModifierPressed mod) $
-                   writeIORef (inputSelType input) (Just XOR)
-               gtkSetDhekCursor (inputGUI input)
-                   (Just $ GTKCursor Gtk.Crosshair)
-
-    mRelease opts = do
-        input <- ask
-        sOpt  <- use $ engineDrawState.drawSelection
-        engineDrawState.drawSelection .= Nothing
-
-        for_ (fmap normalize sOpt) $ \r -> do
-            rs       <- engineStateGetRects
-            rsSel    <- liftIO $ gtkGetTreeAllSelection $ inputGUI input
-            oSelType <- liftIO $ readIORef (inputSelType input)
-
-            -- get rectangles located in selection area
-            let collected = foldMap (collectSelected r) rs
-                mod       = drawModifier opts
-                crs =
-                    case oSelType of
-                        Nothing -> collected
-                        Just t
-                            | XOR <- t, metaModifierPressed mod
-                              -> let indexes = fmap (\r -> r ^. rectId) rsSel
-                                     m       = M.fromList (zip indexes rsSel)
-                                     m'      = foldl xOrSelection m collected in
-                                 M.elems m'
-
-                atLeast2    = length crs >= 2
-                atLeast3    = length crs >= 3
-                cDistCreate = canActiveDistCreate crs
-
-            -- Update mode buttons state
-            liftIO $ do
-                Gtk.widgetSetSensitive (inputTop input) atLeast2
-                Gtk.widgetSetSensitive (inputDist input) atLeast3
-                Gtk.widgetSetSensitive (inputDistCreate input) cDistCreate
-                Gtk.widgetSetSensitive (inputRight input) atLeast2
-                Gtk.widgetSetSensitive (inputBottom input) atLeast2
-                Gtk.widgetSetSensitive (inputLeft input) atLeast2
-                Gtk.widgetSetSensitive (inputHCenter input) atLeast2
-                Gtk.widgetSetSensitive (inputVCenter input) atLeast2
-                Gtk.widgetSetSensitive (inputDistVert input) atLeast3
-
-            -- Update selection
-            liftIO $ gtkClearSelection $ inputGUI input
-            for_ crs $ \cr ->
-                liftIO $ gtkSelectRect cr $ inputGUI input
-
-            liftIO $
-                do gtkSetDhekCursor (inputGUI input) Nothing
-                   writeIORef (inputSelType input) Nothing
-
-      where
-        collectSelected r c
-            | rectInArea c r = [c]
-            | otherwise      = []
-
-        xOrSelection m r
-            = let go Nothing = Just r
-                  go _       = Nothing in
-              M.alter go (r ^. rectId) m
-
+    mRelease opts
+        = currentSelectionType $ \typ ->
+              case typ of
+                  MOVE rs _ -> moveRelease opts rs
+                  _         -> selectionRelease opts typ
 
     mDrawing page ratio = do
-        gui   <- asks inputGUI
+        input <- ask
         ds    <- use $ engineDrawState
         pid   <- use $ engineCurPage
         bd    <- use $ engineBoards.boardsMap.at pid.traverse
         rects <- engineStateGetRects
-        let guides   = bd ^. boardGuides
-
+        let guides = bd ^. boardGuides
+            gui    = inputGUI input
         liftIO $ do
             rsSel     <- gtkGetTreeAllSelection gui
             frame     <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
@@ -183,15 +142,23 @@ instance ModeMonad SelectionMode where
                 Cairo.closePath
                 Cairo.stroke
 
-                -- We consider every rectangle as regular one (e.g not selected)
-                traverse_ (drawRect fw fh regularColor Line) (rects \\ rsSel)
+                currentSelectionTypeIO input $ \typ ->
+                    case typ of
+                        MOVE rs _
+                            -> do traverse_ (drawRect fw fh selectedColor Line)
+                                      rs
+                                  traverse_ (drawRect fw fh regularColor Line)
+                                      (rects \\ rsSel)
 
-                -- Draw drawing selection rectangle
-                for_ (ds ^. drawSelection) $ \r ->
-                    drawRect fw fh selectionColor Dash r
+                        _ -> do traverse_ (drawRect fw fh regularColor Line)
+                                    (rects \\ rsSel)
 
-                for_ rsSel $ \r ->
-                    drawRect fw fh selectedColor Line r
+                                for_ (ds ^. drawSelection) $ \r ->
+                                    drawRect fw fh selectionColor Dash r
+
+                                for_ rsSel $ \r ->
+                                    drawRect fw fh selectedColor Line r
+
       where
         regularColor   = rgbBlue
         selectedColor  = rgbRed
@@ -207,11 +174,126 @@ instance ModeMonad SelectionMode where
     mLeave = return ()
 
 --------------------------------------------------------------------------------
+currentSelectionType :: (SelectionType -> SelectionMode a) -> SelectionMode a
+currentSelectionType k
+    = do input <- ask
+         currentSelectionTypeIO input k
+
+--------------------------------------------------------------------------------
+currentSelectionTypeIO :: MonadIO m
+                       => Input
+                       -> (SelectionType -> m a)
+                       -> m a
+currentSelectionTypeIO input k
+    = do typ <- liftIO $ readIORef $ inputSelType input
+         k typ
+
+--------------------------------------------------------------------------------
+selectionMove :: DrawEnv -> SelectionMode ()
+selectionMove opts
+    = do engineDrawState.drawOverRect .= getOverRect opts
+         sOpt <- use $ engineDrawState.drawSelection
+
+         for_ sOpt $ \s -> do
+             let pos = drawPointer opts
+             engineDrawState.drawSelection ?= updateDrawSelection pos s
+
+--------------------------------------------------------------------------------
+moveMove :: DrawEnv -> [Rect] -> (Double, Double) -> SelectionMode ()
+moveMove opts rs pos0
+    = do let pos = drawPointer opts
+             rs' = fmap (updateHoldRect pos0 pos) rs
+         setSelectionType (MOVE rs' pos)
+
+--------------------------------------------------------------------------------
+moveRelease :: DrawEnv -> [Rect] -> SelectionMode ()
+moveRelease opts rs
+    = do engineStateSetRects rs
+         updateButtonsSensitivity rs
+         updateRectSelection rs
+         setSelectionType SELECTION
+         gui <- asks inputGUI
+         liftIO $ gtkSetDhekCursor gui Nothing
+
+--------------------------------------------------------------------------------
+selectionRelease :: DrawEnv -> SelectionType -> SelectionMode ()
+selectionRelease opts typ
+    = do input <- ask
+         sOpt  <- use $ engineDrawState.drawSelection
+         engineDrawState.drawSelection .= Nothing
+
+         for_ (fmap normalize sOpt) $ \r ->
+             do rs    <- engineStateGetRects
+                rsSel <- liftIO $ gtkGetTreeAllSelection $ inputGUI input
+
+                -- get rectangles located in selection area
+                let collected = foldMap (collectSelected r) rs
+                    mod       = drawModifier opts
+                    crs =
+                        case typ of
+                            SELECTION -> collected
+                            XOR | metaModifierPressed mod
+                                  -> let indexes = fmap ((^. rectId)) rsSel
+                                         m  = M.fromList (zip indexes rsSel)
+                                         m' = foldl xOrSelection m collected in
+                                     M.elems m'
+                            _ -> collected
+
+                updateButtonsSensitivity crs
+                updateRectSelection crs
+                setSelectionType SELECTION
+                liftIO $ gtkSetDhekCursor (inputGUI input) Nothing
+  where
+    collectSelected r c
+        | rectInArea c r = [c]
+        | otherwise      = []
+
+    xOrSelection m r
+        = let go Nothing = Just r
+              go _       = Nothing in
+          M.alter go (r ^. rectId) m
+
+--------------------------------------------------------------------------------
+setSelectionType :: SelectionType -> SelectionMode ()
+setSelectionType typ
+    = do ref <- asks inputSelType
+         liftIO $ writeIORef ref typ
+
+--------------------------------------------------------------------------------
+updateButtonsSensitivity :: [Rect] -> SelectionMode ()
+updateButtonsSensitivity crs
+    = do input <- ask
+         liftIO $
+             do Gtk.widgetSetSensitive (inputTop input) atLeast2
+                Gtk.widgetSetSensitive (inputDist input) atLeast3
+                Gtk.widgetSetSensitive (inputDistCreate input) cDistCreate
+                Gtk.widgetSetSensitive (inputRight input) atLeast2
+                Gtk.widgetSetSensitive (inputBottom input) atLeast2
+                Gtk.widgetSetSensitive (inputLeft input) atLeast2
+                Gtk.widgetSetSensitive (inputHCenter input) atLeast2
+                Gtk.widgetSetSensitive (inputVCenter input) atLeast2
+                Gtk.widgetSetSensitive (inputDistVert input) atLeast3
+  where
+    atLeast2    = length crs >= 2
+    atLeast3    = length crs >= 3
+    cDistCreate = canActiveDistCreate crs
+
+--------------------------------------------------------------------------------
+updateRectSelection :: [Rect] -> SelectionMode ()
+updateRectSelection crs
+    = do gui <- asks inputGUI
+         liftIO $
+            do gtkClearSelection gui
+               for_ crs $ \cr ->
+                   gtkSelectRect cr gui
+
+--------------------------------------------------------------------------------
 metaModifierPressed :: [Gtk.Modifier] -> Bool
 metaModifierPressed [Gtk.Control]
     = True
 metaModifierPressed _
     = False
+
 --------------------------------------------------------------------------------
 -- | Called when 'Top' button, located in mode's toolbar, is clicked
 topButtonActivated :: EngineCtx m => GUI -> m ()
@@ -544,7 +626,7 @@ selectionModeManager handler gui = do
     dcid        <- Gtk.onToolButtonClicked bdistcreate $ handler $
                    distCreateButtonActivated gui
 
-    refType <- newIORef Nothing
+    refType <- newIORef SELECTION
 
     let input = Input
                 { inputGUI        = gui
