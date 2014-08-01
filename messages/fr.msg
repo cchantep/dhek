@@ -33,3 +33,4 @@ DrawHelp: Cliquer pour dessiner, ALT + glissé-déposé pour dupliquer
 DupHelp: Glisser-déposer une zone pour la dupliquer
 SelectionHelp meta@String: Cliquer pour débuter une sélection, relâcher pour terminer. #{meta} + clic pour modifier la sélection.
 JsonFormatError msg@String: Format du fichier modèle incorrect: #{msg}
+NormalModeTooltip: Dessiner les zones sur le document

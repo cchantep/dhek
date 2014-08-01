@@ -175,6 +175,8 @@ makeGUI = do
     -- Button Draw
     drwb <- Gtk.toggleToolButtonNew
     dimg <- loadImage Resources.drawRectangle
+    Gtk.set drwb [Gtk.widgetTooltipText Gtk.:=
+                  Just $ msgStr MsgNormalModeTooltip]
     Gtk.toolButtonSetIconWidget drwb $ Just dimg
     Gtk.toggleToolButtonSetActive drwb True
 
