@@ -30,6 +30,7 @@ library
                resources/go_previous.c
                resources/mouse_normal.c
                resources/mouse_dup.c
+               resources/mouse_selection.c
                resources/rectangular_selection.c
                resources/zoom_in.c
                resources/zoom_out.c

@@ -63,6 +63,7 @@ data DhekCursor
 --------------------------------------------------------------------------------
 data DhekCursorType
     = CursorDup
+    | CursorSelection
 
 --------------------------------------------------------------------------------
 -- | When a rectangle is unselected
@@ -136,7 +137,8 @@ gtkSetGtkCursor gui t = do
 
 --------------------------------------------------------------------------------
 dhekCursorImage :: DhekCursorType -> Ptr Gtk.InlineImage
-dhekCursorImage CursorDup = Resources.mouseDup
+dhekCursorImage CursorDup       = Resources.mouseDup
+dhekCursorImage CursorSelection = Resources.mouseSelection
 
 --------------------------------------------------------------------------------
 gtkSetImageCursor :: GUI -> Ptr Gtk.InlineImage -> IO ()

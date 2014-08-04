@@ -107,10 +107,15 @@ instance ModeMonad SelectionMode where
                                    (Just $ GTKCursor Gtk.Crosshair)
 
     mRelease opts
-        = currentSelectionType $ \typ ->
-              case typ of
-                  MOVE rs _ -> moveRelease opts rs
-                  _         -> selectionRelease opts typ
+        = do currentSelectionType $ \typ ->
+                 case typ of
+                     MOVE rs _ -> moveRelease opts rs
+                     _         -> selectionRelease opts typ
+             setSelectionType SELECTION
+             gui <- asks inputGUI
+             liftIO $ gtkSetDhekCursor gui
+                 (Just $ DhekCursor $ CursorSelection)
+
 
     mDrawing page ratio = do
         input <- ask
@@ -211,9 +216,6 @@ moveRelease opts rs
     = do engineStateSetRects rs
          updateButtonsSensitivity rs
          updateRectSelection rs
-         setSelectionType SELECTION
-         gui <- asks inputGUI
-         liftIO $ gtkSetDhekCursor gui Nothing
 
 --------------------------------------------------------------------------------
 selectionRelease :: DrawEnv -> SelectionType -> SelectionMode ()
@@ -241,8 +243,6 @@ selectionRelease opts typ
 
                 updateButtonsSensitivity crs
                 updateRectSelection crs
-                setSelectionType SELECTION
-                liftIO $ gtkSetDhekCursor (inputGUI input) Nothing
   where
     collectSelected r c
         | rectInArea c r = [c]
@@ -647,6 +647,9 @@ selectionModeManager handler gui = do
     Gtk.statusbarPush (guiStatusBar gui) (guiContextId gui)
         (guiTranslate gui $ MsgSelectionHelp metaKey)
 
+    liftIO $ gtkSetDhekCursor gui
+        (Just $ DhekCursor $ CursorSelection)
+
     return $ ModeManager (selectionMode input) $
         liftIO $ do Gtk.signalDisconnect cid
                     Gtk.signalDisconnect did
@@ -667,6 +670,8 @@ selectionModeManager handler gui = do
 
                     Gtk.treeSelectionSetMode (guiRectTreeSelection gui)
                         Gtk.SelectionSingle
+
+                    gtkSetDhekCursor gui Nothing
   where
     toolbar = guiModeToolbar gui
 
