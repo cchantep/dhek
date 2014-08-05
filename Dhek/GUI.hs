@@ -27,8 +27,10 @@ import           System.Environment.Executable (getExecutablePath)
 --------------------------------------------------------------------------------
 import           Dhek.AppUtil (appTerminate)
 import           Dhek.I18N
-import           Dhek.Types
 import qualified Dhek.Resources as Resources
+import           Dhek.Types
+import           Dhek.Widget.Type
+import           Dhek.Widget.BlankDocument
 
 --------------------------------------------------------------------------------
 data GUI =
@@ -38,6 +40,7 @@ data GUI =
     , guiJsonOpenDialog :: Gtk.FileChooserDialog
     , guiJsonSaveDialog :: Gtk.FileChooserDialog
     , guiPdfOpenMenuItem :: Gtk.MenuItem
+    , guiOpenBlankMenuItem :: Gtk.MenuItem
     , guiJsonOpenMenuItem :: Gtk.MenuItem
     , guiJsonSaveMenuItem :: Gtk.MenuItem
     , guiOverlapMenuItem :: Gtk.CheckMenuItem
@@ -76,6 +79,7 @@ data GUI =
     , guiStatusBar :: Gtk.Statusbar
     , guiContextId :: Gtk.ContextId
     , guiDrawPopup :: Gtk.Window
+    , guiBlankDocumentWidget :: Widget BlankDocumentEvent
     }
 
 --------------------------------------------------------------------------------
@@ -141,10 +145,12 @@ makeGUI = do
     malign <- Gtk.alignmentNew 0 0 1 0
     fitem  <- Gtk.menuItemNewWithLabel $ msgStr MsgFile
     oitem  <- Gtk.menuItemNewWithLabel $ msgStr MsgOpenPDF
+    ovitem <- Gtk.menuItemNewWithLabel $ msgStr MsgOpenBlank
     iitem  <- Gtk.menuItemNewWithLabel $ msgStr MsgLoadMappings
     sitem  <- Gtk.menuItemNewWithLabel $ msgStr MsgSaveMappings
     citem  <- Gtk.checkMenuItemNewWithLabel $ msgStr MsgEnableOverlap
     Gtk.menuShellAppend fmenu oitem
+    Gtk.menuShellAppend fmenu ovitem
     Gtk.menuShellAppend fmenu iitem
     Gtk.menuShellAppend fmenu sitem
     Gtk.menuShellAppend fmenu citem
@@ -400,11 +406,14 @@ makeGUI = do
 
     cache  <- newIORef Nothing
 
+    bdw <- newBlankDocumentWidget msgStr win
+
     return $ GUI{ guiWindow = win
                 , guiPdfDialog = pdfch
                 , guiJsonOpenDialog = jsonLch
                 , guiJsonSaveDialog = jsonSch
                 , guiPdfOpenMenuItem = oitem
+                , guiOpenBlankMenuItem = ovitem
                 , guiJsonOpenMenuItem = iitem
                 , guiJsonSaveMenuItem = sitem
                 , guiOverlapMenuItem = citem
@@ -443,6 +452,7 @@ makeGUI = do
                 , guiContextId = ctxId
                 , guiStatusBar = sbar
                 , guiDrawPopup = drawpop
+                , guiBlankDocumentWidget = bdw
                 }
 
 --------------------------------------------------------------------------------

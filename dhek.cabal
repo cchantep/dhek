@@ -59,6 +59,7 @@ executable dhek
                  Dhek.Action
                  Dhek.Engine
                  Dhek.Engine.Instr
+                 Dhek.Engine.Runtime
                  Dhek.Engine.Type
                  Dhek.File
                  Dhek.Geometry
@@ -69,14 +70,17 @@ executable dhek
                  Dhek.Mode.DuplicateKey
                  Dhek.Mode.Normal
                  Dhek.Mode.Selection
+                 Dhek.PDF.Inlined
+                 Dhek.PDF.Type
                  Dhek.Property
-                 Dhek.Engine.Runtime
                  Dhek.Selection
                  Dhek.Signal
                  Dhek.Version
                  Dhek.Types
                  Dhek.AppUtil
                  Dhek.Utils
+                 Dhek.Widget.Type
+                 Dhek.Widget.BlankDocument
 
   default-extensions:  TemplateHaskell
                        CPP
@@ -101,6 +105,7 @@ executable dhek
                        , recursion-schemes >= 4.1
                        , glib
                        , dhek
+                       , raw-strings-qq
 
   if os(windows)
     ghc-options: -O2 -optc-mms-bitfields -optl-mwindows

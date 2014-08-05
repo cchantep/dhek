@@ -16,6 +16,7 @@ import Data.Functor (void)
 import           Control.Lens
 import           Control.Monad.Trans (liftIO)
 import qualified Graphics.UI.Gtk as Gtk
+import           System.FilePath (takeFileName)
 
 --------------------------------------------------------------------------------
 import Dhek.Action (onNext, onPrev, onMinus, onPlus, onRem, onApplidok)
@@ -24,10 +25,13 @@ import Dhek.GUI
 import Dhek.GUI.Action
 import Dhek.File (onJsonImport, onJsonSave)
 import Dhek.I18N
+import Dhek.PDF.Inlined
 import Dhek.Property (onProp)
 import Dhek.Engine
 import Dhek.Selection (onSel)
 import Dhek.Types
+import Dhek.Widget.BlankDocument
+import Dhek.Widget.Type
 
 --------------------------------------------------------------------------------
 connectSignals :: GUI -> RuntimeEnv -> IO ()
@@ -252,6 +256,17 @@ connectSignals g i = do
     --- Applidok Button ---
     _ <- Gtk.onToolButtonClicked (guiDokButton g) onApplidok
 
+    -- Blank document item
+    _ <- Gtk.on (guiOpenBlankMenuItem g) Gtk.menuItemActivate $
+         widgetShow $ guiBlankDocumentWidget g
+
+    -- Blank Document Open
+    _ <- widgetRegister (guiBlankDocumentWidget g) BlankDocumentOpen $
+         \(OpenInput dim pc) ->
+             do doc <- loadPdfInlinedDoc (pdfTemplate dim pc)
+                v   <- makeViewer (guiTranslate g MsgBlankDocument) doc
+                loadViewer i v
+
     return ()
 
 --------------------------------------------------------------------------------
@@ -264,7 +279,10 @@ dhekOpenPdf g i
          case resp of
              Gtk.ResponseOk ->
                  do uriOpt  <- Gtk.fileChooserGetURI $ guiPdfDialog g
-                    traverse_ (loadPdf i) uriOpt
+                    for_ uriOpt $ \uri ->
+                        do doc <- loadPdfFileDoc uri
+                           v   <- makeViewer (takeFileName uri) doc
+                           loadViewer i v
              _ -> return ()
 
 --------------------------------------------------------------------------------

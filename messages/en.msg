@@ -34,3 +34,5 @@ DupHelp: Drag&drop area to duplicate it
 SelectionHelp meta@String: Click to start selection, release to finalize. #{meta} + click to update selection.
 JsonFormatError msg@String: Invalid mapping file: #{msg}
 NormalModeTooltip: Draw areas over document
+OpenBlank: Open blank document
+BlankDocument: *Blank Document*

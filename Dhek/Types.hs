@@ -38,6 +38,7 @@ data Viewer
       { _viewerDocument  :: Poppler.Document
       , _viewerPages     :: Array Int PageItem
       , _viewerPageCount :: Int
+      , _viewerName      :: String
       }
 
 --------------------------------------------------------------------------------

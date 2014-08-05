@@ -564,15 +564,26 @@ zoomValues = array (0, 10) values
              ,(10, 8.0)]  -- 800%
 
 --------------------------------------------------------------------------------
-loadPdf :: RuntimeEnv -> FilePath -> IO ()
-loadPdf i path = do
+loadPdfFileDoc :: FilePath -> IO Poppler.Document
+loadPdfFileDoc path
+    = do Just doc <- Poppler.documentNewFromFile path Nothing
+         return doc
+
+--------------------------------------------------------------------------------
+loadPdfInlinedDoc :: String -> IO Poppler.Document
+loadPdfInlinedDoc repr
+    = do Just doc <- Poppler.documentNewFromData repr Nothing
+         return doc
+
+--------------------------------------------------------------------------------
+loadViewer :: RuntimeEnv -> Viewer -> IO ()
+loadViewer i v = do
     opt <- readIORef $ _internal i
-    v   <- _loadPdf path
     s   <- readIORef $ _state i
     ev  <- readIORef $ _env i
     case opt of
         Nothing -> do
-            let env  = EngineEnv { _engineFilename = takeFileName path }
+            let env  = EngineEnv { _engineFilename = v ^. viewerName }
                 name = _engineFilename env
                 nb   = v ^. viewerPageCount
                 s'   = s & engineBoards .~ boardsNew nb
@@ -592,7 +603,7 @@ loadPdf i path = do
                 (name ++ " (page 1 / " ++ show nb ++ ")")
             Gtk.widgetShowAll ahbox
         Just _ -> do
-            let env  = ev { _engineFilename  = takeFileName path }
+            let env  = ev {  _engineFilename = v ^. viewerName }
                 name = _engineFilename env
                 nb   = v ^. viewerPageCount
                 ds   = s ^. engineDrawState
@@ -621,15 +632,15 @@ loadPdf i path = do
     gui = _gui i
 
 --------------------------------------------------------------------------------
-_loadPdf :: FilePath -> IO Viewer
-_loadPdf path = do
-    doc   <- fmap fromJust (Poppler.documentNewFromFile path Nothing)
+makeViewer :: String -> Poppler.Document -> IO Viewer
+makeViewer name doc = do
     nb    <- Poppler.documentGetNPages doc
     pages <- _loadPages doc
 
     let v = Viewer{ _viewerDocument  = doc
                   , _viewerPages     = pages
                   , _viewerPageCount = nb
+                  , _viewerName      = name
                   }
     return v
 

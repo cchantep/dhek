@@ -38,8 +38,11 @@ module Dhek.Engine
       --
     , engineRatio
     , getRects
-    , loadPdf
+    , loadPdfFileDoc
+    , loadPdfInlinedDoc
+    , loadViewer
     , makeRuntimeEnv
+    , makeViewer
     , runProgram
     ) where
 
