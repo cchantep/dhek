@@ -200,9 +200,7 @@ instance Runtime DefaultRuntime where
              liftIO $ gtkSelectJsonFile  g
 
     rGetAllRects
-        = let tup (i, b) = (i, b ^. boardRects.to I.elems)
-              list       = fmap tup . I.toList in
-          use $ engineBoards.boardsMap.to list
+        = engineGetAllRects
 
     rSetAllRects xs
         = do g <- asks _gui
@@ -242,6 +240,10 @@ instance Runtime DefaultRuntime where
 
     rClearEvents
         = engineEventStack .= []
+
+    rShowWarning e
+        = do g <- asks _gui
+             liftIO $ gtkShowWarning g e
 
 --------------------------------------------------------------------------------
 engineRunMode :: RuntimeEnv -> M a -> IO ()
@@ -422,6 +424,13 @@ _engineRatio s v =
     (base * zoom) / width
 
 --------------------------------------------------------------------------------
+engineGetAllRects :: MonadState EngineState m => m [(Int, [Rect])]
+engineGetAllRects
+    = let tup (i, b) = (i, b ^. boardRects.to I.elems)
+          list       = fmap tup . I.toList in
+      use $ engineBoards.boardsMap.to list
+
+--------------------------------------------------------------------------------
 makeRuntimeEnv :: GUI -> IO RuntimeEnv
 makeRuntimeEnv gui = do
     let env = EngineEnv { _engineFilename = "" }
@@ -488,7 +497,10 @@ runProgram i (Instr (DR action))
 engineHasEvents :: RuntimeEnv -> IO Bool
 engineHasEvents i
     = _engineWithContext i $
-      use $ engineEventStack.to (not . null)
+          do rs <- engineGetAllRects
+             let rs' = rs >>= snd
+             evs <- use engineEventStack
+             return ((not $ null evs) && (not $ null rs'))
 
 --------------------------------------------------------------------------------
 _engineWithContext :: RuntimeEnv -> (forall m. EngineCtx m => m a) -> IO a

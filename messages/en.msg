@@ -36,3 +36,4 @@ JsonFormatError msg@String: Invalid mapping file: #{msg}
 NormalModeTooltip: Draw areas over document
 OpenBlank: Open blank document
 BlankDocument: *Blank Document*
+NoArea: No area was defined. Template file cannot be saved.

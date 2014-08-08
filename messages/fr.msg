@@ -36,3 +36,4 @@ JsonFormatError msg@String: Format du fichier modèle incorrect: #{msg}
 NormalModeTooltip: Dessiner les zones sur le document
 OpenBlank: Ouvrir un document vierge
 BlankDocument: *Document vierge*
+NoArea: Aucune zone n'a été ajoutée. Le fichier modèle ne peut être sauvegardé.

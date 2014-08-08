@@ -35,6 +35,7 @@ data Event
     | UpdateRectPos
     | DeleteRect
     | UpdateRectProps
+    deriving Show
 
 --------------------------------------------------------------------------------
 newtype Instr a = Instr (forall m. Runtime m => m a)
@@ -71,6 +72,7 @@ class (Applicative m, Monad m, MonadIO m) => Runtime m where
     rIsActive         :: DhekOption -> m Bool
     rAddEvent         :: Event -> m ()
     rClearEvents      :: m ()
+    rShowWarning      :: String -> m ()
 
 --------------------------------------------------------------------------------
 instance Functor Instr where
@@ -124,6 +126,7 @@ instance Runtime Instr where
     rIsActive = isActive
     rAddEvent = addEvent
     rClearEvents = clearEvents
+    rShowWarning = showWarning
 
 --------------------------------------------------------------------------------
 getSelected :: Instr (Maybe Rect)
@@ -244,3 +247,7 @@ addEvent e = Instr $ rAddEvent e
 --------------------------------------------------------------------------------
 clearEvents :: Instr ()
 clearEvents = Instr rClearEvents
+
+--------------------------------------------------------------------------------
+showWarning :: String -> Instr ()
+showWarning s = Instr $ rShowWarning s

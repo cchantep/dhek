@@ -58,8 +58,12 @@ connectSignals g i = do
     Gtk.on (guiJsonOpenMenuItem g) Gtk.menuItemActivate $
         void $ runProgram i $ onJsonImport g
 
-    Gtk.on (guiJsonSaveMenuItem g) Gtk.menuItemActivate $
-        void $ runProgram i onJsonSave
+    Gtk.on (guiJsonSaveMenuItem g) Gtk.menuItemActivate $ runProgram i $
+        do rs <- getAllRects
+           let rs' = rs >>= snd
+           if null rs'
+               then showWarning $ guiTranslate g MsgNoArea
+               else void onJsonSave
 
     Gtk.on (guiOverlapMenuItem g) Gtk.menuItemActivate $ void $ runProgram i $
         do b <- isActive Overlap

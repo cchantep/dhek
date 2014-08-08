@@ -29,6 +29,7 @@ module Dhek.GUI.Action
     , gtkSetIndexPropVisible
     , gtkGetIndexPropValue
     , gtkClearSelection
+    , gtkShowWarning
     ) where
 
 --------------------------------------------------------------------------------
@@ -301,6 +302,14 @@ gtkGetIndexPropValue gui = do
 --------------------------------------------------------------------------------
 gtkClearSelection :: GUI -> IO ()
 gtkClearSelection gui = Gtk.treeSelectionUnselectAll $ guiRectTreeSelection gui
+
+--------------------------------------------------------------------------------
+gtkShowWarning :: GUI -> String -> IO ()
+gtkShowWarning gui e = do
+    m <- Gtk.messageDialogNew (Just $ guiWindow gui)
+         [Gtk.DialogModal] Gtk.MessageWarning Gtk.ButtonsOk e
+    Gtk.dialogRun m
+    Gtk.widgetHide m
 
 --------------------------------------------------------------------------------
 -- | Utilities

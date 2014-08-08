@@ -61,8 +61,8 @@ onJsonImport gui
                         either reportError upd rectsE
 
     upd rs
-        = do clearEvents
-             setAllRects rs
+        = do setAllRects rs
+             clearEvents
              draw
 
 --------------------------------------------------------------------------------
