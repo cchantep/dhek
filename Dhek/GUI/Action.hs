@@ -287,6 +287,7 @@ gtkShowConfirm gui msg = do
         Gtk.ResponseUser 1 -> return DhekSave
         Gtk.ResponseUser 2 -> return DhekDontSave
         Gtk.ResponseUser 3 -> return DhekCancel
+        _                  -> return DhekCancel
 
 --------------------------------------------------------------------------------
 gtkGetIndexPropValue :: GUI -> IO (Maybe Int)
