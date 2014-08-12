@@ -22,3 +22,7 @@ isKeyModifier :: String -> Bool
 isKeyModifier "Control_L" = True
 isKeyModifier "Control_R" = True
 isKeyModifier _           = False
+
+--------------------------------------------------------------------------------
+keyModifierName :: String
+keyModifierName = "CTRL"

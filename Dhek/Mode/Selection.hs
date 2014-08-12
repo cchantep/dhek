@@ -30,7 +30,7 @@ import           System.FilePath (joinPath, dropFileName)
 import           System.Environment.Executable (getExecutablePath)
 
 --------------------------------------------------------------------------------
-import           Dhek.AppUtil (isKeyModifier)
+import           Dhek.AppUtil (isKeyModifier, keyModifierName)
 import           Dhek.Engine.Instr
 import           Dhek.Engine.Type
 import           Dhek.Geometry
@@ -654,7 +654,7 @@ selectionModeManager handler gui = do
     -- Display selection Help message
     Gtk.statusbarPop (guiStatusBar gui) (guiContextId gui)
     Gtk.statusbarPush (guiStatusBar gui) (guiContextId gui)
-        (guiTranslate gui $ MsgSelectionHelp metaKey)
+        (guiTranslate gui $ MsgSelectionHelp keyModifierName)
 
     liftIO $ gtkSetDhekCursor gui
         (Just $ DhekCursor $ CursorSelection)
@@ -693,10 +693,6 @@ createToolbarButton gui img
          Gtk.widgetShowAll b
          Gtk.widgetSetSensitive b False
          return b
-
---------------------------------------------------------------------------------
-metaKey :: String
-metaKey = "CTRL"
 
 --------------------------------------------------------------------------------
 -- | Utilities

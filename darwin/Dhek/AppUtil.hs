@@ -35,3 +35,7 @@ isKeyModifier :: String -> Bool
 isKeyModifier "Meta_L" = True
 isKeyModifier "Meta_R" = True
 isKeyModifier _        = False
+
+--------------------------------------------------------------------------------
+keyModifierName :: String
+keyModifierName = "CMD"
