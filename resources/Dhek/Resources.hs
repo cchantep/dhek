@@ -33,6 +33,7 @@ foreign import ccall "&go_previous" goPrevious :: Ptr Gtk.InlineImage
 foreign import ccall "&mouse_normal" mouseNormal :: Ptr Gtk.InlineImage
 foreign import ccall "&mouse_dup" mouseDup :: Ptr Gtk.InlineImage
 foreign import ccall "&mouse_selection" mouseSelection :: Ptr Gtk.InlineImage
+foreign import ccall "&mouse_update" mouseUpdate :: Ptr Gtk.InlineImage
 foreign import ccall "&rectangular_selection" rectangularSelection :: Ptr Gtk.InlineImage
 foreign import ccall "&zoom_in" zoomIn :: Ptr Gtk.InlineImage
 foreign import ccall "&zoom_out" zoomOut :: Ptr Gtk.InlineImage

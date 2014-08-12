@@ -169,7 +169,7 @@ instance ModeMonad SelectionMode where
               do gui <- asks inputGUI
                  setSelectionType XOR
                  liftIO $ gtkSetDhekCursor gui
-                     (Just $ GTKCursor Gtk.Crosshair)
+                     (Just $ DhekCursor CursorSelectionUpdate)
 
     mKeyRelease _
         = setSelectionMode
