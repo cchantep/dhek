@@ -79,11 +79,14 @@ instance ModeMonad NormalMode where
                  _ -> when (statusNamePressed $ kbKeyName kb) $ liftIO $
                           do mgr <- duplicateKeyModeManager g
                              writeIORef ref $ Just mgr
-                             Gtk.statusbarPush (guiStatusBar g) (guiContextId g)
-                                 (guiTranslate g MsgDupHelp)
-                             Gtk.widgetShowAll $ guiDrawPopup g
-                             updatePopupPos g
-                             gtkSetDhekCursor g (Just $ DhekCursor CursorDup)
+                             overDrawingArea <- overDrawingArea g
+                             when overDrawingArea $
+                                 do Gtk.statusbarPush (guiStatusBar g)
+                                        (guiContextId g)
+                                        (guiTranslate g MsgDupHelp)
+                                    Gtk.widgetShowAll $ guiDrawPopup g
+                                    updatePopupPos g
+                                    gtkSetDhekCursor g (Just $ DhekCursor CursorDup)
 
     mKeyRelease kb
         = do input <- ask
@@ -453,3 +456,22 @@ statusNamePressed n
     | "Alt_L" <- n = True
     | "Alt_R" <- n = True
     | otherwise    = False
+
+--------------------------------------------------------------------------------
+isOverGtkRect :: (Int, Int) -> Gtk.Rectangle -> Bool
+isOverGtkRect (x,y) (Gtk.Rectangle rx ry rw rh)
+    = rx <= x && x <= rx + rw &&
+      ry <= y && y <= ry + rh
+
+--------------------------------------------------------------------------------
+overDrawingArea :: GUI -> IO Bool
+overDrawingArea g
+    = do pos    <- Gtk.widgetGetPointer $ guiWindow g
+         size   <- Gtk.widgetGetSize $ guiDrawingAreaViewport g
+         mcoord <- Gtk.widgetTranslateCoordinates
+                   (guiDrawingArea g) (guiWindow g) 0 0
+
+         return $ maybe False (calculate pos size) mcoord
+  where
+    calculate pos (rw, rh) (x,y)
+        = isOverGtkRect pos (Gtk.Rectangle x y rw rh)

@@ -9,6 +9,9 @@
 module Dhek.AppUtil where
 
 --------------------------------------------------------------------------------
+import qualified Graphics.UI.Gtk as Gtk
+
+--------------------------------------------------------------------------------
 appTerminate :: IO ()
 appTerminate = return ()
 
@@ -26,3 +29,7 @@ isKeyModifier _           = False
 --------------------------------------------------------------------------------
 keyModifierName :: String
 keyModifierName = "CTRL"
+
+--------------------------------------------------------------------------------
+closeKeystrokes :: String -> [Gtk.Modifier] -> Bool
+closeKeystrokes _ _ = False

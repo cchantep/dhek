@@ -14,6 +14,9 @@ import Foreign.C
 import Foreign.C.String
 
 --------------------------------------------------------------------------------
+import qualified Graphics.UI.Gtk as Gtk
+
+--------------------------------------------------------------------------------
 foreign import ccall "util.h browser_open" browser_open :: CString -> IO ()
 
 --------------------------------------------------------------------------------
@@ -36,3 +39,8 @@ isKeyModifier _           = False
 --------------------------------------------------------------------------------
 keyModifierName :: String
 keyModifierName = "CTRL"
+
+--------------------------------------------------------------------------------
+closeKeystrokes :: String -> [Gtk.Modifier] -> Bool
+closeKeystrokes "F4" [Gtk.Alt] = True
+closeKeystrokes _ _            = False

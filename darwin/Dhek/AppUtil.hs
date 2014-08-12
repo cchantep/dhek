@@ -14,6 +14,9 @@ import Foreign.C
 import System.Exit (exitSuccess)
 
 --------------------------------------------------------------------------------
+import qualified Graphics.UI.Gtk as Gtk
+
+--------------------------------------------------------------------------------
 foreign import ccall "util.h nsappTerminate" nsappTerminate :: IO ()
 foreign import ccall "util.h nsbrowserOpen" nsbrowserOpen :: CString -> IO ()
 
@@ -39,3 +42,8 @@ isKeyModifier _        = False
 --------------------------------------------------------------------------------
 keyModifierName :: String
 keyModifierName = "CMD"
+
+--------------------------------------------------------------------------------
+closeKeystrokes :: String -> [Gtk.Modifier] -> Bool
+closeKeystrokes "q" [Gtk.Meta] = True
+closeKeystrokes _ _            = False

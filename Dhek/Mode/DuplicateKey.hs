@@ -39,7 +39,9 @@ instance ModeMonad DuplicateKeyMode where
         = DuplicateKeyMode $
               do mMove opts
                  gui <- ask
-                 liftIO $ updatePopupPos gui
+                 liftIO $
+                     do Gtk.widgetShowAll $ guiDrawPopup gui
+                        updatePopupPos gui
 
     mPress opts
         = DuplicateKeyMode $ dupStart opts

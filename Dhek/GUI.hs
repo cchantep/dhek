@@ -80,6 +80,7 @@ data GUI =
     , guiContextId :: Gtk.ContextId
     , guiDrawPopup :: Gtk.Window
     , guiBlankDocumentWidget :: Widget BlankDocumentEvent
+    , guiDrawingAreaViewport :: Gtk.Viewport
     }
 
 --------------------------------------------------------------------------------
@@ -453,6 +454,7 @@ makeGUI = do
                 , guiStatusBar = sbar
                 , guiDrawPopup = drawpop
                 , guiBlankDocumentWidget = bdw
+                , guiDrawingAreaViewport = viewport
                 }
 
 --------------------------------------------------------------------------------

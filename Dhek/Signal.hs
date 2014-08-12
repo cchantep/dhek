@@ -19,6 +19,7 @@ import qualified Graphics.UI.Gtk as Gtk
 import           System.FilePath (takeFileName)
 
 --------------------------------------------------------------------------------
+import Dhek.AppUtil (closeKeystrokes)
 import Dhek.Action (onNext, onPrev, onMinus, onPlus, onRem, onApplidok)
 import Dhek.Engine.Instr
 import Dhek.GUI
@@ -36,18 +37,7 @@ import Dhek.Widget.Type
 --------------------------------------------------------------------------------
 connectSignals :: GUI -> RuntimeEnv -> IO ()
 connectSignals g i = do
-    Gtk.onDelete (guiWindow g) $ \_ ->
-        do hasEvent <- engineHasEvents i
-           case () of
-               _ | hasEvent ->
-                   do resp <- gtkShowConfirm g (guiTranslate g $ MsgConfirmQuit)
-                      case resp of
-                          DhekSave ->
-                              do r <- runProgram i onJsonSave
-                                 return $ not r
-                          DhekDontSave -> return False
-                          DhekCancel   -> return True
-                 | otherwise -> return False
+    Gtk.on (guiWindow g) Gtk.deleteEvent $ liftIO $ closeConfirmation i g
 
     Gtk.on (guiPdfOpenMenuItem g) Gtk.menuItemActivate $ dhekOpenPdf g i
 
@@ -138,19 +128,23 @@ connectSignals g i = do
                       Gtk.set (guiHRuler g) [Gtk.rulerPosition Gtk.:= x/r]
                       Gtk.set (guiVRuler g) [Gtk.rulerPosition Gtk.:= y/r]
 
-    Gtk.on (guiDrawingArea g) Gtk.keyPressEvent $ Gtk.tryEvent $
+    Gtk.after (guiWindow g) Gtk.keyPressEvent $ Gtk.tryEvent $
         do name <- Gtk.eventKeyName
            mod  <- Gtk.eventModifier
-           liftIO $ engineModeKeyPress mod name i
+           if closeKeystrokes name mod
+               then liftIO $
+                        do stay <- closeConfirmation i g
+                           when (not stay) $
+                               Gtk.widgetDestroy $ guiWindow g
+               else liftIO $ engineModeKeyPress mod name i
 
-    Gtk.on (guiDrawingArea g) Gtk.keyReleaseEvent $ Gtk.tryEvent $
+    Gtk.after (guiWindow g) Gtk.keyReleaseEvent $ Gtk.tryEvent $
         do name <- Gtk.eventKeyName
            mod  <- Gtk.eventModifier
            liftIO $ engineModeKeyRelease mod name i
 
     Gtk.on (guiDrawingArea g) Gtk.enterNotifyEvent $ Gtk.tryEvent $ liftIO $
-        do Gtk.widgetGrabFocus $ guiDrawingArea g
-           engineModeEnter i
+        engineModeEnter i
 
     Gtk.on (guiDrawingArea g) Gtk.leaveNotifyEvent $ Gtk.tryEvent $ liftIO $
         engineModeLeave i
@@ -301,3 +295,18 @@ statusNamePressed n
     | "Alt_L" <- n = True
     | "Alt_R" <- n = True
     | otherwise    = False
+
+--------------------------------------------------------------------------------
+closeConfirmation :: RuntimeEnv -> GUI -> IO Bool
+closeConfirmation i g
+    = do hasEvent <- engineHasEvents i
+         case () of
+             _ | hasEvent ->
+                 do resp <- gtkShowConfirm g (guiTranslate g $ MsgConfirmQuit)
+                    case resp of
+                        DhekSave
+                            -> do r <- runProgram i onJsonSave
+                                  return $ not r
+                        DhekDontSave -> return False
+                        DhekCancel   -> return True
+               | otherwise -> return False
