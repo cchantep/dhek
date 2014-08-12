@@ -8,8 +8,17 @@
 --------------------------------------------------------------------------------
 module Dhek.AppUtil where
 
+--------------------------------------------------------------------------------
 appTerminate :: IO ()
 appTerminate = return ()
 
+--------------------------------------------------------------------------------
 browserOpen :: String -> IO ()
 browserOpen url = return ()
+
+--------------------------------------------------------------------------------
+-- | Returns true if given key name is the one of expected modifier
+isKeyModifier :: String -> Bool
+isKeyModifier "Control_L" = True
+isKeyModifier "Control_R" = True
+isKeyModifier _           = False

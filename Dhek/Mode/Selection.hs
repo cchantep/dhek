@@ -30,6 +30,7 @@ import           System.FilePath (joinPath, dropFileName)
 import           System.Environment.Executable (getExecutablePath)
 
 --------------------------------------------------------------------------------
+import           Dhek.AppUtil (isKeyModifier)
 import           Dhek.Engine.Instr
 import           Dhek.Engine.Type
 import           Dhek.Geometry
@@ -93,29 +94,22 @@ instance ModeMonad SelectionMode where
                  oSelected    = oOver >>= \r -> find (sameId r) rs
                  doMove       = isJust oSelected
 
-             if doMove
-                 then
-                     do setSelectionType $ MOVE rs pos
-                        liftIO $ gtkSetDhekCursor gui
-                            (Just $ GTKCursor Gtk.Hand1)
-                 else
-                     do engineDrawState.drawSelection ?= newSelection
-                        gui <- asks inputGUI
-                        when (metaModifierPressed mod) $
-                            do setSelectionType XOR
-                               liftIO $ gtkSetDhekCursor gui
-                                   (Just $ GTKCursor Gtk.Crosshair)
+             currentSelectionType $ \typ ->
+                 case typ of
+                     SELECTION
+                         | doMove -> do setSelectionType $ MOVE rs pos
+                                        liftIO $ gtkSetDhekCursor gui
+                                            (Just $ GTKCursor Gtk.Hand1)
+                         | otherwise -> engineDrawState.drawSelection ?=
+                                            newSelection
+                     XOR -> engineDrawState.drawSelection ?= newSelection
+                     _   -> return ()
 
     mRelease opts
-        = do currentSelectionType $ \typ ->
-                 case typ of
-                     MOVE rs _ -> moveRelease opts rs
-                     _         -> selectionRelease opts typ
-             setSelectionType SELECTION
-             gui <- asks inputGUI
-             liftIO $ gtkSetDhekCursor gui
-                 (Just $ DhekCursor $ CursorSelection)
-
+        = currentSelectionType $ \typ ->
+              case typ of
+                  MOVE rs _ -> moveRelease opts rs
+                  _         -> selectionRelease opts typ
 
     mDrawing page ratio = do
         input <- ask
@@ -170,13 +164,27 @@ instance ModeMonad SelectionMode where
         selectionColor = rgbGreen
         guideColor     = RGB 0.16 0.26 0.87
 
-    mKeyPress _ = return ()
+    mKeyPress kb
+        = when (isKeyModifier $ kbKeyName kb) $
+              do gui <- asks inputGUI
+                 setSelectionType XOR
+                 liftIO $ gtkSetDhekCursor gui
+                     (Just $ GTKCursor Gtk.Crosshair)
 
-    mKeyRelease _ = return ()
+    mKeyRelease _
+        = setSelectionMode
 
     mEnter = return ()
 
     mLeave = return ()
+
+--------------------------------------------------------------------------------
+setSelectionMode :: SelectionMode ()
+setSelectionMode
+    = do setSelectionType SELECTION
+         gui <- asks inputGUI
+         liftIO $ gtkSetDhekCursor gui
+             (Just $ DhekCursor CursorSelection)
 
 --------------------------------------------------------------------------------
 currentSelectionType :: (SelectionType -> SelectionMode a) -> SelectionMode a
@@ -216,6 +224,7 @@ moveRelease opts rs
     = do engineStateSetRects rs
          updateButtonsSensitivity rs
          updateRectSelection rs
+         setSelectionMode
 
 --------------------------------------------------------------------------------
 selectionRelease :: DrawEnv -> SelectionType -> SelectionMode ()
@@ -234,15 +243,15 @@ selectionRelease opts typ
                     crs =
                         case typ of
                             SELECTION -> collected
-                            XOR | metaModifierPressed mod
-                                  -> let indexes = fmap ((^. rectId)) rsSel
-                                         m  = M.fromList (zip indexes rsSel)
-                                         m' = foldl xOrSelection m collected in
-                                     M.elems m'
+                            XOR -> let indexes = fmap ((^. rectId)) rsSel
+                                       m  = M.fromList (zip indexes rsSel)
+                                       m' = foldl xOrSelection m collected in
+                                   M.elems m'
                             _ -> collected
 
                 updateButtonsSensitivity crs
                 updateRectSelection crs
+
   where
     collectSelected r c
         | rectInArea c r = [c]
