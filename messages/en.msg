@@ -6,6 +6,7 @@ EnableOverlap: Enable overlapping areas
 Previous: Previous
 Next: Next
 Remove: Remove
+RemoveTooltip: Remove selected areas
 Name: Name
 Type: Type
 Areas: Areas
@@ -18,6 +19,7 @@ Choose: Choose
 ChooseJSON: Choose a JSON file
 MainTitle: Dhek - PDF templating
 Apply: Apply
+ApplyTooltip: Apply area changes
 Value: Value
 Yes: Yes
 No: No
@@ -34,6 +36,13 @@ DupHelp: Drag&drop area to duplicate it
 SelectionHelp meta@String: Click to start selection, release to finalize. #{meta} + click to update selection.
 JsonFormatError msg@String: Invalid mapping file: #{msg}
 NormalModeTooltip: Draw areas over document
+SelectionModeTooltip: Select several areas, apply bulk operations.
 OpenBlank: Open blank document
+OpenBlankTooltip: Open an in-memory blank document to create a template from scratch
 BlankDocument: *Blank Document*
 NoArea: No area was defined. Template file cannot be saved.
+ZoomInTooltip: Zoom In
+ZoomOutTooltip: Zoom Out
+ApplidokTooltip: Open Applidok service
+PreviousPageTooltip: Go back to previous page
+NextPageTooltip: Go to next page

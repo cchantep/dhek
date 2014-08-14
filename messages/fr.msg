@@ -6,6 +6,7 @@ EnableOverlap: Autoriser le chevauchement des zones
 Previous: Précédent
 Next: Suivant
 Remove: Supprimer
+RemoveTooltip: Supprimer les zones sélectionnées
 Name: Nom
 Type: Type
 Areas: Zones
@@ -18,6 +19,7 @@ Choose: Choisir
 ChooseJSON: Choisir un fichier JSON
 MainTitle: Dhek - Création de modèle PDF
 Apply: Appliquer
+ApplyTooltip: Appliquer les changements sur la zone
 Value: Valeur
 Yes: Oui
 No: Non
@@ -34,6 +36,13 @@ DupHelp: Glisser-déposer une zone pour la dupliquer
 SelectionHelp meta@String: Cliquer pour débuter une sélection, relâcher pour terminer. #{meta} + clic pour modifier la sélection.
 JsonFormatError msg@String: Format du fichier modèle incorrect: #{msg}
 NormalModeTooltip: Dessiner les zones sur le document
+SelectionModeTooltip: Sélectionner plusieurs zones, modifications groupées.
 OpenBlank: Ouvrir un document vierge
+OpenBlankTooltip: Ouvrir un document vierge, pour créer un modèle de zéro.
 BlankDocument: *Document vierge*
 NoArea: Aucune zone n'a été ajoutée. Le fichier modèle ne peut être sauvegardé.
+ZoomInTooltip: Augmenter l'échelle du document
+ZoomOutTooltip: Diminuer l'échelle du document
+ApplidokTooltip: Ouvrir le service Applidok
+PreviousPageTooltip: Aller à la page précédente
+NextPageTooltip: Aller à la page suivante
