@@ -179,7 +179,7 @@ connectSignals g i = do
     _ <- Gtk.on (guiTypeCombo g) Gtk.changed $ do
         opt <- Gtk.comboBoxGetActiveText $ guiTypeCombo g
         for_ opt $ \c -> do
-            gtkSetValuePropVisible (c == "radio") g
+            gtkSetValuePropVisible (c == "radio" || c == "comboitem") g
             gtkSetIndexPropVisible (c == "textcell") g
 
     Gtk.on (guiVRuler g) Gtk.buttonPressEvent $ Gtk.tryEvent $ liftIO $

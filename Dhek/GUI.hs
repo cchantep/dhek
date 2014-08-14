@@ -147,6 +147,8 @@ makeGUI = do
     fitem  <- Gtk.menuItemNewWithLabel $ msgStr MsgFile
     oitem  <- Gtk.menuItemNewWithLabel $ msgStr MsgOpenPDF
     ovitem <- Gtk.menuItemNewWithLabel $ msgStr MsgOpenBlank
+    Gtk.set ovitem [Gtk.widgetTooltipText Gtk.:=
+                    Just $ msgStr MsgOpenBlankTooltip]
     iitem  <- Gtk.menuItemNewWithLabel $ msgStr MsgLoadMappings
     sitem  <- Gtk.menuItemNewWithLabel $ msgStr MsgSaveMappings
     citem  <- Gtk.checkMenuItemNewWithLabel $ msgStr MsgEnableOverlap
@@ -166,18 +168,26 @@ makeGUI = do
     -- Button Next
     nimg <- loadImage Resources.goNext
     next <- Gtk.toolButtonNew (Just nimg) Nothing
+    Gtk.set next [Gtk.widgetTooltipText Gtk.:=
+                  Just $ msgStr MsgNextPageTooltip]
 
      -- Previous Prev
     pimg <- loadImage Resources.goPrevious
     prev <- Gtk.toolButtonNew (Just pimg) Nothing
+    Gtk.set prev [Gtk.widgetTooltipText Gtk.:=
+                  Just $ msgStr MsgPreviousPageTooltip]
 
     -- Button Zoom out
     oimg  <- loadImage Resources.zoomOut
     minus <- Gtk.toolButtonNew (Just oimg) Nothing
+    Gtk.set minus [Gtk.widgetTooltipText Gtk.:=
+                   Just $ msgStr MsgZoomOutTooltip]
 
     -- Button Zoom in
     iimg <- loadImage Resources.zoomIn
     plus <- Gtk.toolButtonNew (Just iimg) Nothing
+    Gtk.set plus [Gtk.widgetTooltipText Gtk.:=
+                  Just $ msgStr MsgZoomInTooltip]
 
     -- Button Draw
     drwb <- Gtk.toggleToolButtonNew
@@ -195,6 +205,8 @@ makeGUI = do
     -- Button MultiSelection
     msb  <- Gtk.toggleToolButtonNew
     simg <- loadImage Resources.rectangularSelection
+    Gtk.set msb [Gtk.widgetTooltipText Gtk.:=
+                 Just $ msgStr MsgSelectionModeTooltip]
     Gtk.toolButtonSetIconWidget msb $ Just simg
 
     -- Main Toolbar
@@ -217,7 +229,8 @@ makeGUI = do
     -- Button Applidok
     kimg <- loadImage Resources.applidok
     akb  <- Gtk.toolButtonNew (Just kimg) Nothing
-
+    Gtk.set akb [Gtk.widgetTooltipText Gtk.:=
+                 Just $ msgStr MsgApplidokTooltip]
 
     -- Mode toolbar
     mtoolbar <- Gtk.toolbarNew
@@ -317,14 +330,19 @@ makeGUI = do
     Gtk.boxPackStart hbox vbox Gtk.PackGrow 0
     Gtk.boxPackStart hbox vleft Gtk.PackNatural 0
 
-    -- Properties
+    -- Remove button
     rem     <- Gtk.buttonNewWithLabel $ msgStr MsgRemove
     rmimg   <- loadImage Resources.drawEraser
     Gtk.buttonSetImage rem rmimg
+    Gtk.set rem [Gtk.widgetTooltipText Gtk.:=
+                 Just $ msgStr MsgRemoveTooltip]
 
+    -- Apply button
     app     <- Gtk.buttonNewWithLabel $ msgStr MsgApply
     apimg   <- loadImage Resources.dialogAccept
     Gtk.buttonSetImage app apimg
+    Gtk.set app [Gtk.widgetTooltipText Gtk.:=
+                 Just $ msgStr MsgApplyTooltip]
 
     idxspin <- Gtk.spinButtonNewWithRange 0 200 1
     nlabel  <- Gtk.labelNew (Just $ msgStr MsgName)
@@ -363,7 +381,7 @@ makeGUI = do
     Gtk.tableAttachDefaults table idxspin 1 2 3 4
     Gtk.tableSetRowSpacings table 10
     Gtk.tableSetColSpacings table 10
-    let types = ["text", "checkbox", "radio", "textcell"]
+    let types = ["text", "checkbox", "radio", "comboitem", "textcell"]
     traverse_ (Gtk.listStoreAppend tstore) types
     Gtk.containerAdd salign hsep
     Gtk.widgetSetSensitive rem False
@@ -520,7 +538,7 @@ guiClearPdfCache gui
 --------------------------------------------------------------------------------
 layoutMapping :: Rect -> [Gtk.AttrOp Gtk.CellRendererText]
 layoutMapping r
-    | r ^. rectType == "radio" =
+    | r ^. rectType == "radio" || r ^. rectType == "comboitem" =
         let value = fromMaybe "" (r ^. rectValue)
             name  = r ^. rectName
             label = name ++ " (" ++ value ++ ")" in
