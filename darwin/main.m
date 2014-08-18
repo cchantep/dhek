@@ -62,12 +62,18 @@ int main(int argc, char *argv[])
   strcpy(pangolib_path, basedir);
   strcat(pangolib_path, "/../Resources/lib");
 
-  NSLog(@"GTK modules path: %s\nWill load GTK theme: %s\nPango configuration: %s\nPango library directory: %s\n", modules_path, theme_path, pangorc_path, pangolib_path);
+  // FontConfig
+  char fontconfig_path[pathlen+25];
+  strcpy(fontconfig_path, basedir);
+  strcat(fontconfig_path, "/../Resources/fonts.conf");
+
+  NSLog(@"GTK modules path: %s\nWill load GTK theme: %s\nPango configuration: %s\nPango library directory: %s\nFontConfig file: %s\n", modules_path, theme_path, pangorc_path, pangolib_path, fontconfig_path);
 
   setenv("GTK_PATH", modules_path, 1);
   setenv("GTK2_RC_FILES", theme_path, 1);
   setenv("PANGO_RC_FILE", pangorc_path, 1);
   setenv("PANGO_LIBDIR", pangolib_path, 1);
+  setenv("FONTCONFIG_FILE", fontconfig_path, 1);
 
   free(basedir);
 
