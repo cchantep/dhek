@@ -16,7 +16,7 @@ import Control.Applicative
 import           Control.Lens
 import           Control.Monad.State
 import qualified Data.IntMap as I
-import           Graphics.UI.Gtk (CursorType, Modifier)
+import           Graphics.UI.Gtk (Modifier)
 
 --------------------------------------------------------------------------------
 import Dhek.Engine.Instr
@@ -72,8 +72,7 @@ data ModeManager
 --------------------------------------------------------------------------------
 data DrawEnv
     = DrawEnv
-      { drawOverlap  :: Bool             -- ^ Rectangle overlap
-      , drawPointer  :: (Double, Double) -- ^ (x, y) pointer position
+      { drawPointer  :: (Double, Double) -- ^ (x, y) pointer position
       , drawRects    :: [Rect]           -- ^ Page rectangle
       , drawRatio    :: Double           -- ^ Page ratio
       , drawModifier :: [Modifier]
@@ -87,25 +86,12 @@ data KbEnv
       }
 
 --------------------------------------------------------------------------------
-data Collision
-    = Collision
-      { colDelta     :: !Double
-      , colRange     :: !(Double, Double)
-      , colPrevPos   :: !(Double, Double)
-      , colDirection :: !Direction
-      }
-
---------------------------------------------------------------------------------
 data DrawState
     = DrawState
-      { _drawEvent     :: !(Maybe BoardEvent)
-      , _drawSelection :: !(Maybe Rect)
-      , _drawSelected  :: !(Maybe Rect)
-      , _drawCursor    :: !(Maybe CursorType)
-      , _drawCollision :: !(Maybe Collision)
+      { _drawSelected  :: !(Maybe Rect)
       , _drawOverRect  :: !(Maybe Rect)
       , _drawFreshId   :: !Int
-      , _drawCurGuide  :: !(Maybe Guide)
+      , _drawNewGuide  :: !(Maybe Guide)
       , _drawOverGuide :: !(Maybe Guide)
       }
 
@@ -135,14 +121,10 @@ data EngineEnv
 -- | Constructors
 --------------------------------------------------------------------------------
 drawStateNew :: DrawState
-drawStateNew = DrawState{ _drawEvent     = Nothing
-                        , _drawSelection = Nothing
-                        , _drawSelected  = Nothing
-                        , _drawCursor    = Nothing
-                        , _drawCollision = Nothing
+drawStateNew = DrawState{ _drawSelected  = Nothing
                         , _drawOverRect  = Nothing
                         , _drawFreshId   = 0
-                        , _drawCurGuide  = Nothing
+                        , _drawNewGuide  = Nothing
                         , _drawOverGuide = Nothing
                         }
 

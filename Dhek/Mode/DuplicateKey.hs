@@ -13,17 +13,13 @@ module Dhek.Mode.DuplicateKey
 import Control.Applicative
 
 --------------------------------------------------------------------------------
-import           Control.Lens
 import           Control.Monad.Reader
-import           Data.Foldable (for_)
-import           Data.IORef
 import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
 import Dhek.Engine.Type
 import Dhek.GUI
 import Dhek.Mode.Duplicate
-import Dhek.Types
 
 --------------------------------------------------------------------------------
 newtype DuplicateKeyMode a
@@ -38,7 +34,7 @@ instance ModeMonad DuplicateKeyMode where
     mMove opts
         = DuplicateKeyMode $
               do mMove opts
-                 gui <- ask
+                 gui <- duplicateGetGUI
                  liftIO $
                      do Gtk.widgetShowAll $ guiDrawPopup gui
                         updatePopupPos gui
@@ -48,10 +44,8 @@ instance ModeMonad DuplicateKeyMode where
 
     mRelease _
         = DuplicateKeyMode $
-              do eOpt <- use $ engineDrawState.drawEvent
-                 case eOpt of
-                     Just (Hold x _) -> dupEnd x
-                     _               -> return ()
+              do mR <- duplicateGetDupRect
+                 maybe (return ()) dupEnd mR
 
     mDrawing page ratio
         = DuplicateKeyMode $ mDrawing page ratio
@@ -65,31 +59,22 @@ instance ModeMonad DuplicateKeyMode where
     mLeave = return ()
 
 --------------------------------------------------------------------------------
-runDuplicateKey :: GUI -> DuplicateKeyMode a -> EngineState -> IO EngineState
-runDuplicateKey gui (DuplicateKeyMode m) s
-    = runDuplicate gui m s
+runDuplicateKey :: ConcreteDuplicateMode
+                -> DuplicateKeyMode a
+                -> EngineState
+                -> IO EngineState
+runDuplicateKey cdm (DuplicateKeyMode m) s
+    = cdmRun cdm m s
 
 --------------------------------------------------------------------------------
-duplicateKeyMode :: GUI -> Mode
-duplicateKeyMode gui = Mode (runDuplicateKey gui . runM)
+duplicateKeyMode :: ConcreteDuplicateMode -> Mode
+duplicateKeyMode cdm = Mode (runDuplicateKey cdm . runM)
 
 --------------------------------------------------------------------------------
 duplicateKeyModeManager :: GUI -> IO ModeManager
 duplicateKeyModeManager gui
-    = return $ ModeManager (duplicateKeyMode gui) (return ())
-
---------------------------------------------------------------------------------
-statusModPressed :: [Gtk.Modifier] -> Bool
-statusModPressed xs
-    | [Gtk.Control] <- xs = True
-    | otherwise           = False
-
---------------------------------------------------------------------------------
-statusNamePressed :: String -> Bool
-statusNamePressed n
-    | "Control_L" <- n = True
-    | "Control_R" <- n = True
-    | otherwise        = False
+    = do cdm <- concreteDuplicateManager gui
+         return $ ModeManager (duplicateKeyMode cdm) (cdmCleanup cdm)
 
 --------------------------------------------------------------------------------
 updatePopupPos :: GUI -> IO ()

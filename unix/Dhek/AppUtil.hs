@@ -16,8 +16,9 @@ appTerminate :: IO ()
 appTerminate = return ()
 
 --------------------------------------------------------------------------------
+-- | Given @String@ must be a valid URL
 browserOpen :: String -> IO ()
-browserOpen url = return ()
+browserOpen _ = return ()
 
 --------------------------------------------------------------------------------
 -- | Returns true if given key name is the one of expected modifier

@@ -16,9 +16,6 @@ module Dhek.Widget.BlankDocument
     ) where
 
 --------------------------------------------------------------------------------
-import Data.Functor (void)
-
---------------------------------------------------------------------------------
 import           Control.Monad.Trans
 import           Data.Text (unpack)
 import qualified Graphics.UI.Gtk as Gtk
@@ -110,11 +107,11 @@ newBlankDocumentWidget msgStr parent
          Gtk.containerAdd box talign
 
          -- Close handler
-         Gtk.on cl Gtk.buttonActivated $ Gtk.widgetHide win
+         _ <- Gtk.on cl Gtk.buttonActivated $ Gtk.widgetHide win
 
-         Gtk.on win Gtk.deleteEvent $ liftIO $
-             do Gtk.widgetHide win
-                return True
+         _ <- Gtk.on win Gtk.deleteEvent $ liftIO $
+                  do Gtk.widgetHide win
+                     return True
 
          let widget = Widget
                       { widgetRegister = blankDocumentRegister ob win combo

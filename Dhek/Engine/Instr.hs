@@ -10,7 +10,6 @@ module Dhek.Engine.Instr where
 
 --------------------------------------------------------------------------------
 import Control.Applicative
-import Data.Foldable (for_, traverse_)
 
 --------------------------------------------------------------------------------
 import Control.Monad.Trans
@@ -27,7 +26,8 @@ data DhekEntry
 data DhekCombo = PropCombo
 
 --------------------------------------------------------------------------------
-data DhekOption = Overlap
+data DhekOption
+    = Overlap
 
 --------------------------------------------------------------------------------
 data Event

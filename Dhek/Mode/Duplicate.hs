@@ -1,3 +1,6 @@
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 --------------------------------------------------------------------------------
 -- |
@@ -5,8 +8,14 @@
 --
 --------------------------------------------------------------------------------
 module Dhek.Mode.Duplicate
-    ( DuplicateMode
+    ( ConcreteDuplicateMode
+    , DuplicateMode
+    , cdmCleanup
+    , cdmRun
+    , concreteDuplicateManager
     , duplicateModeManager
+    , duplicateGetDupRect
+    , duplicateGetGUI
     , dupStart
     , dupEnd
     , runDuplicate
@@ -15,13 +24,12 @@ module Dhek.Mode.Duplicate
 --------------------------------------------------------------------------------
 import Prelude hiding (mapM_)
 import Control.Applicative
-import Data.Foldable (for_, mapM_, traverse_)
+import Data.Foldable (for_, traverse_)
 import Data.IORef
 
 --------------------------------------------------------------------------------
 import           Control.Lens
 import           Control.Monad.RWS.Strict hiding (mapM_)
-import           Control.Monad.Trans
 import qualified Data.IntMap                  as I
 import qualified Graphics.Rendering.Cairo     as Cairo
 import qualified Graphics.UI.Gtk              as Gtk
@@ -38,49 +46,63 @@ import Dhek.Types
 
 --------------------------------------------------------------------------------
 newtype DuplicateMode a
-    = DuplicateMode (RWST GUI () EngineState IO a)
+    = DuplicateMode (RWST Input () EngineState IO a)
     deriving ( Functor
              , Applicative
              , Monad
-             , MonadReader GUI
+             , MonadReader Input
              , MonadState EngineState
              , MonadIO
              )
 
 --------------------------------------------------------------------------------
+data Dup = Dup Pos Rect
+
+--------------------------------------------------------------------------------
+data Input
+    = Input
+      { inputGUI :: GUI
+      , inputDup :: IORef (Maybe Dup)
+      }
+
+--------------------------------------------------------------------------------
+data ConcreteDuplicateMode
+    = CDM { cdmRun :: forall a. DuplicateMode a
+                   -> EngineState
+                   -> IO EngineState
+          , cdmCleanup :: EngineCtx m => m ()
+          }
+
+--------------------------------------------------------------------------------
 instance ModeMonad DuplicateMode where
-    mMove opts = do
-        let oOpt = getOverRect opts
+    mMove opts
+        = do dupRef <- asks inputDup
+             eOpt   <- liftIO $ readIORef dupRef
 
-        eOpt <- use $ engineDrawState.drawEvent
+             let oOpt = getOverRect opts
 
-        engineDrawState.drawOverRect .= oOpt
+             engineDrawState.drawOverRect .= oOpt
 
-        -- We only handle move without caring about overlap
-        for_ eOpt $ \e -> do
-            let pos@(x,y) = drawPointer opts
-            case e of
-                Hold r ppos ->
-                    engineDrawState.drawEvent ?=
-                        Hold (moveRect ppos pos r) (x,y)
+             -- We only handle move without caring about overlap
+             for_ eOpt $ \(Dup pos r) ->
+                 let newPos = drawPointer opts
+                     newDup = Dup newPos (moveRect pos newPos r) in
+                 liftIO $ writeIORef dupRef $ Just newDup
 
-                _ -> return ()
-
-    mPress opts = do
-        eOpt <- use $ engineDrawState.drawEvent
-        case eOpt of
-            Nothing         -> dupStart opts
-            Just (Hold x _) -> dupEnd x
+    mPress env
+        = do dupRef <- asks inputDup
+             eOpt   <- liftIO $ readIORef dupRef
+             maybe (dupStart env) (\(Dup _ r) -> dupEnd r) eOpt
 
     mRelease _ = return ()
 
     mDrawing page ratio = do
-        gui <- ask
-        ds  <- use $ engineDrawState
-        pid <- use $ engineCurPage
-        bd  <- use $ engineBoards.boardsMap.at pid.traverse
-        let guides = bd ^. boardGuides
-            rects  = bd ^. boardRects.to I.elems
+        gui    <- asks inputGUI
+        dupRef <- asks inputDup
+        oEvR   <- liftIO $ readIORef dupRef
+        pid    <- use $ engineCurPage
+        bd     <- use $ engineBoards.boardsMap.at pid.traverse
+        let rects  = bd ^. boardRects.to I.elems
 
         liftIO $ do
             frame     <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
@@ -90,7 +112,7 @@ instance ModeMonad DuplicateMode where
                 height = ratio * (pageHeight page)
                 fw     = fromIntegral fw'
                 fh     = fromIntegral fh'
-                eventR = (ds ^. drawEvent) >>= eventGetRect
+                eventR = fmap (\(Dup _ r) -> r) oEvR
                 area   = guiDrawingArea gui
 
             Gtk.widgetSetSizeRequest area (truncate width) (truncate height)
@@ -100,24 +122,18 @@ instance ModeMonad DuplicateMode where
                 Cairo.paint
 
                 Cairo.scale ratio ratio
-                mapM_ (drawGuide fw fh guideColor) guides
-                Cairo.closePath
-                Cairo.stroke
 
                 -- We consider every rectangle as regular one (e.g not selected)
-                traverse_ (drawRect fw fh regularColor Line) rects
+                traverse_ (drawRect regularColor Line) rects
 
                 -- Draw event rectangle
                 for_ eventR $ \r -> do
-                    drawRect fw fh selectedColor Line r
+                    drawRect selectedColor Line r
                     drawRectGuides fw fh rectGuideColor r
       where
-        overedColor    = RGB 0.16 0.72 0.92
         regularColor   = rgbBlue
         selectedColor  = rgbRed
-        selectionColor = rgbGreen
         rectGuideColor = RGB 0.16 0.72 0.92
-        guideColor     = RGB 0.16 0.26 0.87
 
     mKeyPress _ = return ()
 
@@ -128,16 +144,30 @@ instance ModeMonad DuplicateMode where
     mLeave = return ()
 
 --------------------------------------------------------------------------------
+duplicateGetDupRect :: DuplicateMode (Maybe Rect)
+duplicateGetDupRect
+    = do dupRef <- asks inputDup
+         dup    <- liftIO $ readIORef dupRef
+         return $ fmap (\(Dup _ r) -> r) dup
+
+--------------------------------------------------------------------------------
+duplicateGetGUI :: DuplicateMode GUI
+duplicateGetGUI = asks inputGUI
+
+--------------------------------------------------------------------------------
 dupStart :: DrawEnv -> DuplicateMode ()
 dupStart opts
     = for_ (getOverRect opts) $ \r ->
-          do rid <- engineDrawState.drawFreshId <+= 1
-             let r2    = r & rectId .~ rid
-                 (x,y) = drawPointer opts
+          do rid    <- engineDrawState.drawFreshId <+= 1
+             input  <- ask
+             let r2     = r & rectId .~ rid
+                 pos    = drawPointer opts
+                 dupRef = inputDup input
+                 gui    = inputGUI input
 
-             engineDrawState.drawEvent ?= Hold r2 (x,y)
-             gui <- ask
-             liftIO $ gtkSetDhekCursor gui (Just $ DhekCursor CursorDup)
+             liftIO $
+                 do writeIORef dupRef $ Just $ Dup pos r2
+                    gtkSetDhekCursor gui $ Just $ DhekCursor CursorDup
 
 --------------------------------------------------------------------------------
 dupEnd :: Rect -> DuplicateMode ()
@@ -146,32 +176,48 @@ dupEnd x
          let r = normalize x & rectId    .~ rid
                              & rectIndex %~ (fmap (+1))
          -- Add rectangle
-         gui <- ask
-         engineStateSetRect r
-         liftIO $ gtkAddRect r gui
+         input <- ask
+         let gui    = inputGUI input
+             dupRef = inputDup input
 
-         engineDrawState.drawEvent     .= Nothing
-         engineDrawState.drawCollision .= Nothing
-
-         liftIO $ gtkSetDhekCursor gui Nothing
          engineEventStack %= (CreateRect:)
+         engineStateSetRect r
+
+         liftIO $
+             do gtkAddRect r gui
+                gtkSetDhekCursor gui Nothing
+                writeIORef dupRef Nothing
 
 --------------------------------------------------------------------------------
-runDuplicate :: GUI -> DuplicateMode a -> EngineState -> IO EngineState
-runDuplicate gui (DuplicateMode m) s = do
-    (s', _) <- execRWST m gui s
+runDuplicate :: Input -> DuplicateMode a -> EngineState -> IO EngineState
+runDuplicate input (DuplicateMode m) s = do
+    (s', _) <- execRWST m input s
     return s'
 
 --------------------------------------------------------------------------------
-duplicateMode :: GUI -> Mode
-duplicateMode gui = Mode (runDuplicate gui . runM)
+concreteDuplicateManager :: GUI -> IO ConcreteDuplicateMode
+concreteDuplicateManager gui
+    = do -- Display duplicate Help message
+         Gtk.statusbarPop (guiStatusBar gui) (guiContextId gui)
+         _ <- Gtk.statusbarPush (guiStatusBar gui) (guiContextId gui)
+              (guiTranslate gui MsgDupHelp)
+         ref <- newIORef Nothing
+
+         let input = Input
+                     { inputGUI = gui
+                     , inputDup = ref
+                     }
+
+         return $ CDM
+                  { cdmRun     = runDuplicate input
+                  , cdmCleanup = return ()
+                  }
+
+--------------------------------------------------------------------------------
+concreteToManager :: ConcreteDuplicateMode -> ModeManager
+concreteToManager (CDM run clean)
+    = let mode = Mode (run . runM) in ModeManager mode clean
 
 --------------------------------------------------------------------------------
 duplicateModeManager :: GUI -> IO ModeManager
-duplicateModeManager gui
-    = do -- Display duplicate Help message
-         Gtk.statusbarPop (guiStatusBar gui) (guiContextId gui)
-         Gtk.statusbarPush (guiStatusBar gui) (guiContextId gui)
-             (guiTranslate gui MsgDupHelp)
-
-         return $ ModeManager (duplicateMode gui) (return ())
+duplicateModeManager gui = fmap concreteToManager $ concreteDuplicateManager gui

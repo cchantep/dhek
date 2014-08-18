@@ -37,7 +37,7 @@ import Data.Char (isSpace)
 import Data.Foldable (for_, traverse_)
 import Data.List (dropWhileEnd)
 import Data.Maybe (fromMaybe)
-import Data.Traversable (for, traverse, sequenceA)
+import Data.Traversable (for, sequenceA)
 import Foreign.Ptr
 
 --------------------------------------------------------------------------------
@@ -117,7 +117,7 @@ gtkSelectRect r gui = do
 -- | When a rectangle is created
 gtkAddRect :: Rect -> GUI -> IO ()
 gtkAddRect r gui = do
-    Gtk.listStoreAppend (guiRectStore gui) r
+    _    <-  Gtk.listStoreAppend (guiRectStore gui) r
     iOpt <- lookupStoreIter (sameRectId r) (guiRectStore gui)
     traverse_ (Gtk.treeSelectionSelectIter $ guiRectTreeSelection gui) iOpt
 
@@ -126,9 +126,10 @@ gtkSetDhekCursor :: GUI -> Maybe DhekCursor -> IO ()
 gtkSetDhekCursor gui odc
     = case odc of
         Nothing -> gtkSetImageCursor gui Resources.mouseNormal
-        Just dc
-            | GTKCursor t  <- dc -> gtkSetGtkCursor gui t
-            | DhekCursor d <- dc -> gtkSetImageCursor gui (dhekCursorImage d)
+        Just dc ->
+            case dc of
+                GTKCursor t  -> gtkSetGtkCursor gui t
+                DhekCursor d -> gtkSetImageCursor gui (dhekCursorImage d)
 
 --------------------------------------------------------------------------------
 gtkSetGtkCursor :: GUI -> Gtk.CursorType -> IO ()
@@ -202,7 +203,7 @@ gtkShowError :: String -> GUI -> IO ()
 gtkShowError e gui = do
     m <- Gtk.messageDialogNew (Just $ guiWindow gui)
          [Gtk.DialogModal] Gtk.MessageError Gtk.ButtonsOk e
-    Gtk.dialogRun m
+    _ <- Gtk.dialogRun m
     Gtk.widgetHide m
 
 --------------------------------------------------------------------------------
@@ -247,9 +248,9 @@ gtkSetRects rects gui = do
     traverse_ (Gtk.listStoreAppend $ guiRectStore gui) rects
 
 --------------------------------------------------------------------------------
-gtkSetOverlapActive :: Bool -> GUI -> IO ()
-gtkSetOverlapActive b gui =
-    Gtk.checkMenuItemSetActive (guiOverlapMenuItem gui) b
+gtkSetOverlapActive :: GUI -> Bool -> IO ()
+gtkSetOverlapActive gui b
+    = Gtk.checkMenuItemSetActive (guiOverlapMenuItem gui) b
 
 --------------------------------------------------------------------------------
 gtkSetValuePropVisible :: Bool -> GUI -> IO ()
@@ -278,11 +279,11 @@ gtkSetIndexPropVisible visible gui
 --------------------------------------------------------------------------------
 gtkShowConfirm :: GUI -> String -> IO DhekClosingChoice
 gtkShowConfirm gui msg = do
-    m    <- Gtk.messageDialogNew (Just $ guiWindow gui)
-            [Gtk.DialogModal] Gtk.MessageWarning Gtk.ButtonsNone msg
-    Gtk.dialogAddButton m (guiTranslate gui MsgSave) $ Gtk.ResponseUser 1
-    Gtk.dialogAddButton m (guiTranslate gui MsgDontSave) $ Gtk.ResponseUser 2
-    Gtk.dialogAddButton m (guiTranslate gui MsgCancel) $ Gtk.ResponseUser 3
+    m <- Gtk.messageDialogNew (Just $ guiWindow gui)
+         [Gtk.DialogModal] Gtk.MessageWarning Gtk.ButtonsNone msg
+    _ <- Gtk.dialogAddButton m (guiTranslate gui MsgSave) $ Gtk.ResponseUser 1
+    _ <- Gtk.dialogAddButton m (guiTranslate gui MsgDontSave) $ Gtk.ResponseUser 2
+    _ <- Gtk.dialogAddButton m (guiTranslate gui MsgCancel) $ Gtk.ResponseUser 3
     resp <- Gtk.dialogRun m
     Gtk.widgetHide m
     case resp of
@@ -311,18 +312,18 @@ gtkShowWarning :: GUI -> String -> IO ()
 gtkShowWarning gui e = do
     m <- Gtk.messageDialogNew (Just $ guiWindow gui)
          [Gtk.DialogModal] Gtk.MessageWarning Gtk.ButtonsOk e
-    Gtk.dialogRun m
+    _ <- Gtk.dialogRun m
     Gtk.widgetHide m
 
 --------------------------------------------------------------------------------
 -- | Utilities
 --------------------------------------------------------------------------------
 lookupStoreIter :: (a -> Bool) -> Gtk.ListStore a -> IO (Maybe Gtk.TreeIter)
-lookupStoreIter pred store = Gtk.treeModelGetIterFirst store >>= go
+lookupStoreIter predicate store = Gtk.treeModelGetIterFirst store >>= go
   where
     go (Just it) = do
         a <- Gtk.listStoreGetValue store (Gtk.listStoreIterToIndex it)
-        if pred a
+        if predicate a
             then return (Just it)
             else Gtk.treeModelIterNext store it >>= go
     go _ = return Nothing

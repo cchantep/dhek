@@ -5,8 +5,7 @@
 --
 --------------------------------------------------------------------------------
 module Dhek.Engine
-    ( Collision(..)
-    , DrawEnv(..)
+    ( DrawEnv(..)
     , DhekMode(..)
     , EngineState
     , RuntimeEnv
@@ -25,13 +24,9 @@ module Dhek.Engine
     , engineSetMode
     , engineHasEvents
       -- Draw lenses
-    , drawCollision
-    , drawCursor
-    , drawEvent
     , drawFreshId
     , drawOverRect
     , drawSelected
-    , drawSelection
       -- Engine lenses
     , engineBoards
     , engineDrawState

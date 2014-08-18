@@ -50,13 +50,6 @@ data Board
     deriving Show
 
 --------------------------------------------------------------------------------
-data BoardEvent
-    = None
-    | Hold Rect (Double, Double)
-    | Resize Rect (Double, Double) Area
-    deriving (Show, Eq)
-
---------------------------------------------------------------------------------
 data Area
     = TOP_LEFT
     | TOP
@@ -79,12 +72,8 @@ data Direction
 --------------------------------------------------------------------------------
 data Boards
     = Boards
-      { _boardsState     :: !Int
-      , _boardsEvent     :: !BoardEvent
-      , _boardsSelection :: !(Maybe Rect)
-      , _boardsOvered    :: !(Maybe Rect)
-      , _boardsSelected  :: !(Maybe Rect)
-      , _boardsMap       :: !(IntMap Board)
+      { _boardsState :: !Int
+      , _boardsMap   :: !(IntMap Board)
       }
 
 --------------------------------------------------------------------------------
@@ -295,7 +284,7 @@ saveNew xs = Save dhekFullVersion xs' where
 
 --------------------------------------------------------------------------------
 boardsNew :: Int -> Boards
-boardsNew n = Boards 0 None Nothing Nothing Nothing maps
+boardsNew n = Boards 0 maps
   where
     maps = fromList $ fmap (\i -> (i, Board empty [])) [1..n]
 
@@ -327,18 +316,6 @@ translateRectY :: Double -> Rect -> Rect
 translateRectY y r = r & rectY +~ y
 
 --------------------------------------------------------------------------------
-eventGetRect :: BoardEvent -> Maybe Rect
-eventGetRect (Hold r _)     = Just r
-eventGetRect (Resize r _ _) = Just r
-eventGetRect _              = Nothing
-
---------------------------------------------------------------------------------
-eventSetRect :: Rect -> BoardEvent -> BoardEvent
-eventSetRect r (Hold _ x)     = Hold r x
-eventSetRect r (Resize _ x y) = Resize r x y
-eventSetRect _ e              = e
-
---------------------------------------------------------------------------------
 normalize :: Rect -> Rect
 normalize r = newRectY newRectX
   where
@@ -351,9 +328,9 @@ normalize r = newRectY newRectX
         | w < 0     = r { _rectX = x + w, _rectWidth = abs w }
         | otherwise = r
 
-    newRectY r
-        | h < 0     = r { _rectY = y + h, _rectHeight = abs h }
-        | otherwise = r
+    newRectY xr
+        | h < 0     = xr { _rectY = y + h, _rectHeight = abs h }
+        | otherwise = xr
 
 --------------------------------------------------------------------------------
 addRect :: Int -> Rect -> Boards -> Boards
@@ -420,11 +397,6 @@ rectIntersect a b
 
     wy = w * dy
     hx = h * dx
-
---------------------------------------------------------------------------------
-modifyEventRect :: (Rect -> Rect) -> BoardEvent -> BoardEvent
-modifyEventRect k (Hold r p)     = Hold (k r) p
-modifyEventRect k (Resize r p a) = Resize (k r) p a
 
 --------------------------------------------------------------------------------
 oppositeDirection :: Direction -> Direction

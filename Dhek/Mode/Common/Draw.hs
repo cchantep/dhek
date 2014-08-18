@@ -71,13 +71,11 @@ drawRectGuides fw fh (RGB red green blue) r = do
     Cairo.stroke
 
 --------------------------------------------------------------------------------
-drawRect :: Double -- Frame width
-         -> Double -- Frame Height
-         -> RGB
+drawRect :: RGB
          -> Style
          -> Rect
          -> Cairo.Render ()
-drawRect fw fh (RGB red green blue) s r = do
+drawRect (RGB red green blue) s r = do
     let x = r ^. rectX
         y = r ^. rectY
         h = r ^. rectHeight

@@ -2,8 +2,6 @@
 
 module Dhek.Launcher where
 
-import Foreign.C.Types
-
 import Dhek.Engine (makeRuntimeEnv)
 import Dhek.GUI (makeGUI, runGUI)
 import Dhek.Signal (connectSignals)

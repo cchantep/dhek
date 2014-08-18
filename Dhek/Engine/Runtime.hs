@@ -13,24 +13,20 @@ module Dhek.Engine.Runtime where
 --------------------------------------------------------------------------------
 import           Prelude hiding (foldr)
 import           Control.Applicative
-import           Control.Monad (when)
 import           Data.Array (Array, array, (!))
 import           Data.Char (isSpace)
-import           Data.Foldable (find, foldr, for_, traverse_)
+import           Data.Foldable (foldr, for_, traverse_)
 import qualified Data.IntMap as I
 import           Data.IORef
 import           Data.List (dropWhileEnd)
-import           Data.Maybe (fromJust)
-import           Data.Traversable (for)
 
 --------------------------------------------------------------------------------
-import           Control.Lens
+import           Control.Lens hiding (zoom)
 import           Control.Monad.State
 import           Control.Monad.RWS.Strict
 import qualified Graphics.UI.Gtk                  as Gtk
 import qualified Graphics.UI.Gtk.Poppler.Document as Poppler
 import qualified Graphics.UI.Gtk.Poppler.Page     as Poppler
-import           System.FilePath (takeFileName)
 
 --------------------------------------------------------------------------------
 import Dhek.Engine.Instr
@@ -122,7 +118,6 @@ instance Runtime DefaultRuntime where
              ncur <- engineCurPage <-= 1
              g    <- asks _gui
              s    <- get
-             nb   <- rGetPageCount
              liftIO $ gtkDecrPage ncur 1 (getRects s) g
 
     rDecrZoom
@@ -163,12 +158,12 @@ instance Runtime DefaultRuntime where
              liftIO $ gtkGetTreeSelection g
 
     rGuideNew t
-        = engineDrawState.drawCurGuide ?= Guide 0 t
+        = engineDrawState.drawNewGuide ?= Guide 0 t
 
     rGuideUpdate
-        = do g <- asks _gui
-             x <- liftIO $ Gtk.get (guiHRuler g) Gtk.rulerPosition
-             y <- liftIO $ Gtk.get (guiVRuler g) Gtk.rulerPosition
+        = do gui <- asks _gui
+             x <- liftIO $ Gtk.get (guiHRuler gui) Gtk.rulerPosition
+             y <- liftIO $ Gtk.get (guiVRuler gui) Gtk.rulerPosition
 
              let upd g =
                      let v = case g ^. guideType of
@@ -176,20 +171,20 @@ instance Runtime DefaultRuntime where
                              GuideHorizontal -> y in
                      g & guideValue .~ v
 
-             engineDrawState.drawCurGuide %= fmap upd
+             engineDrawState.drawNewGuide %= fmap upd
 
     rGuideAdd
         = do pid  <- use engineCurPage
-             gOpt <- use $ engineDrawState.drawCurGuide
+             gOpt <- use $ engineDrawState.drawNewGuide
              gs   <- use $ engineBoards.boardsMap.at pid.traverse.boardGuides
 
              let gs1 = foldr (:) gs gOpt
 
-             engineDrawState.drawCurGuide .= Nothing
+             engineDrawState.drawNewGuide .= Nothing
              engineBoards.boardsMap.at pid.traverse.boardGuides .= gs1
 
     rGuideGetCur
-        = use $ engineDrawState.drawCurGuide
+        = use $ engineDrawState.drawNewGuide
 
     rGetGuides
         = do pid <- use engineCurPage
@@ -211,9 +206,9 @@ instance Runtime DefaultRuntime where
              liftIO $ gtkSetRects (getRects s) g
       where
         onEach page r
-            = do id <- boardsState <+= 1
-                 let r1 = r & rectId .~ id
-                 boardsMap.at page.traverse.boardRects.at id ?= r1
+            = do nid <- boardsState <+= 1
+                 let r1 = r & rectId .~ nid
+                 boardsMap.at page.traverse.boardRects.at nid ?= r1
 
         go (page, rs) = traverse_ (onEach page) rs
         action        = traverse_ go xs
@@ -229,11 +224,11 @@ instance Runtime DefaultRuntime where
             Overlap ->
                 do g <- asks _gui
                    engineOverlap .= b
-                   liftIO $ gtkSetOverlapActive b g
+                   liftIO $ gtkSetOverlapActive g b
 
     rIsActive opt
         = case opt of
-            Overlap -> use engineOverlap
+            Overlap  -> use engineOverlap
 
     rAddEvent e
         = engineEventStack %= (e:)
@@ -266,10 +261,8 @@ engineModePointerContext xs k i (x,y) = do
     for_ opt $ \v -> do
         let gui   = _gui i
             ratio = _engineRatio s v
-            pid   = s ^. engineCurPage
             opts  = DrawEnv
-                    { drawOverlap  = s ^. engineOverlap
-                    , drawPointer  = (x/ratio, y/ratio)
+                    { drawPointer  = (x/ratio, y/ratio)
                     , drawRects    = getRects s
                     , drawRatio    = ratio
                     , drawModifier = xs
@@ -284,9 +277,9 @@ engineModeKbContext :: [Gtk.Modifier]
                     -> RuntimeEnv
                     -> (KbEnv -> M a)
                     -> IO ()
-engineModeKbContext mod kname i k
+engineModeKbContext modf kname i k
     = do let kbenv = KbEnv
-                    { kbModifier = mod
+                    { kbModifier = modf
                     , kbKeyName  = kname
                     }
 
@@ -294,23 +287,23 @@ engineModeKbContext mod kname i k
 
 --------------------------------------------------------------------------------
 engineModeMove :: [Gtk.Modifier] -> RuntimeEnv -> Pos -> IO ()
-engineModeMove mod env pos = engineModePointerContext mod move env pos
+engineModeMove modf env pos = engineModePointerContext modf move env pos
 
 --------------------------------------------------------------------------------
 engineModePress :: [Gtk.Modifier] -> RuntimeEnv -> Pos -> IO ()
-engineModePress mod env pos = engineModePointerContext mod press env pos
+engineModePress modf env pos = engineModePointerContext modf press env pos
 
 --------------------------------------------------------------------------------
 engineModeRelease :: [Gtk.Modifier] -> RuntimeEnv -> Pos -> IO ()
-engineModeRelease mod env pos = engineModePointerContext mod release env pos
+engineModeRelease modf env pos = engineModePointerContext modf release env pos
 
 --------------------------------------------------------------------------------
 engineModeKeyPress :: [Gtk.Modifier] -> String -> RuntimeEnv -> IO ()
-engineModeKeyPress mod name env = engineModeKbContext mod name env keyPress
+engineModeKeyPress modf name env = engineModeKbContext modf name env keyPress
 
 --------------------------------------------------------------------------------
 engineModeKeyRelease :: [Gtk.Modifier] -> String -> RuntimeEnv -> IO ()
-engineModeKeyRelease mod name env = engineModeKbContext mod name env keyRelease
+engineModeKeyRelease modf name env = engineModeKbContext modf name env keyRelease
 
 --------------------------------------------------------------------------------
 engineModeEnter :: RuntimeEnv -> IO ()
@@ -380,7 +373,6 @@ engineDrawingArea = guiDrawingArea . _gui
 engineSetMode :: DhekMode -> RuntimeEnv -> IO ()
 engineSetMode m i = do
     s  <- readIORef $ _state i
-    e  <- readIORef $ _env i
     mi <- readIORef $ _modeInfo i
     let prevMgr = _modeInfoMgr mi
         cleanup  = mgrCleanup prevMgr
@@ -508,19 +500,19 @@ _engineWithContext i = _withContext $ _state i
 
 --------------------------------------------------------------------------------
 _withContext :: IORef EngineState -> (forall m. EngineCtx m => m a) -> IO a
-_withContext ref state = do
+_withContext ref action = do
     s      <- readIORef ref
-    (a,s') <- runStateT state s
+    (a,s') <- runStateT action s
     writeIORef ref s'
     return a
 
 --------------------------------------------------------------------------------
 lookupStoreIter :: (a -> Bool) -> Gtk.ListStore a -> IO (Maybe Gtk.TreeIter)
-lookupStoreIter pred store = Gtk.treeModelGetIterFirst store >>= go
+lookupStoreIter predicate store = Gtk.treeModelGetIterFirst store >>= go
   where
     go (Just it) = do
         a <- Gtk.listStoreGetValue store (Gtk.listStoreIterToIndex it)
-        if pred a
+        if predicate a
             then return (Just it)
             else Gtk.treeModelIterNext store it >>= go
     go _ = return Nothing

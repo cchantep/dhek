@@ -29,8 +29,8 @@ onProp gui
          vOpt <- liftIO $ gtkLookupEntryText $ guiValueEntry gui
          iOpt <- liftIO $ gtkGetIndexPropValue gui
          tOpt <- liftIO $ Gtk.comboBoxGetActiveText $ guiTypeCombo gui
-         let r = (,,) <$> sOpt <*> nOpt <*> tOpt
-         for_  r $ \(r,n,t) ->
+         let mParams = (,,) <$> sOpt <*> nOpt <*> tOpt
+         for_  mParams $ \(r,n,t) ->
              do let r1  = r & rectName  .~ n
                             & rectType  .~ t
                             & rectValue .~ vOpt

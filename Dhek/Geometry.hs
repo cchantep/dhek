@@ -191,6 +191,18 @@ updateDrawSelection (x,y) = execState go where
       rectHeight .= y-sy
 
 --------------------------------------------------------------------------------
+updateDrawSelectionX :: Double -> Rect -> Rect
+updateDrawSelectionX x = execState go where
+  go = do sx <- use rectX
+          rectWidth .= x-sx
+
+--------------------------------------------------------------------------------
+updateDrawSelectionY :: Double -> Rect -> Rect
+updateDrawSelectionY y = execState go where
+  go = do sy <- use rectY
+          rectHeight .= y-sy
+
+--------------------------------------------------------------------------------
 moveRect :: Pos -> Pos -> Rect -> Rect
 moveRect (x0,y0) (x,y) = execState go where
   go = do
@@ -253,11 +265,6 @@ fromEdge d (x,y) r =
     ry = r ^. rectY
     rw = r ^. rectWidth
     rh = r ^. rectHeight
-
---------------------------------------------------------------------------------
-eventCursor :: BoardEvent -> CursorType
-eventCursor (Hold _ _)     = Hand1
-eventCursor (Resize _ _ a) = areaCursor a
 
 --------------------------------------------------------------------------------
 areaCursor :: Area -> CursorType

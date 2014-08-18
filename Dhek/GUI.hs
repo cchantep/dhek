@@ -5,28 +5,37 @@
 -- This module declares everything related to the GUI like widgets
 --
 --------------------------------------------------------------------------------
-module Dhek.GUI where
+module Dhek.GUI
+    ( GUI(..)
+    , initGUI
+    , guiClearPdfCache
+    , guiPdfSurface
+    , guiRenderGuide
+    , guiRenderGuides
+    , loadImage
+    , makeGUI
+    , runGUI
+    ) where
 
 --------------------------------------------------------------------------------
 import Prelude hiding (foldr)
-import Control.Monad ((>=>), forM)
+import Control.Monad ((>=>))
 import Control.Monad.Trans (MonadIO(..))
-import Data.Foldable (traverse_, foldr)
+import Data.Foldable (Foldable, foldr, for_, traverse_)
 import Data.IORef
 import Data.Maybe
 import Foreign.Ptr
 
 --------------------------------------------------------------------------------
 import           Control.Lens ((^.))
-import qualified Graphics.Rendering.Cairo as Cairo
-import qualified Graphics.UI.Gtk          as Gtk
+import qualified Graphics.Rendering.Cairo     as Cairo
+import qualified Graphics.UI.Gtk              as Gtk
 import qualified Graphics.UI.Gtk.Poppler.Page as Poppler
-import           System.FilePath (joinPath, dropFileName)
-import           System.Environment.Executable (getExecutablePath)
 
 --------------------------------------------------------------------------------
 import           Dhek.AppUtil (appTerminate)
 import           Dhek.I18N
+import           Dhek.Mode.Common.Draw
 import qualified Dhek.Resources as Resources
 import           Dhek.Types
 import           Dhek.Widget.Type
@@ -88,7 +97,7 @@ initGUI :: IO [String]
 initGUI = do
     gtk      <- Gtk.initGUI
     Gtk.settingsGetDefault >>=
-        foldr (\s err -> settings gtk s) (fail "No GTK default settings")
+        foldr (\s _ -> settings gtk s) (fail "No GTK default settings")
   where
     settings :: [String] -> Gtk.Settings -> IO [String]
     settings gui gs = do
@@ -97,7 +106,7 @@ initGUI = do
 
 makeGUI :: IO GUI
 makeGUI = do
-    gtkUI <- initGUI
+    _ <- initGUI
 
     -- Window creation
     win   <- Gtk.windowNew
@@ -136,10 +145,6 @@ makeGUI = do
               Gtk.FileChooserActionOpen
               msgStr
 
-    -- Runtime directories
-    execPath <- getExecutablePath
-    let resDir = joinPath [dropFileName execPath, "resources"]
-
     -- Menu Bar
     mbar   <- Gtk.menuBarNew
     fmenu  <- Gtk.menuNew
@@ -166,48 +171,23 @@ makeGUI = do
     Gtk.boxPackStart wvbox malign Gtk.PackNatural 0
 
     -- Button Next
-    nimg <- loadImage Resources.goNext
-    next <- Gtk.toolButtonNew (Just nimg) Nothing
-    Gtk.set next [Gtk.widgetTooltipText Gtk.:=
-                  Just $ msgStr MsgNextPageTooltip]
-
+    next  <- createToolButton Resources.goNext $ msgStr MsgNextPageTooltip
      -- Previous Prev
-    pimg <- loadImage Resources.goPrevious
-    prev <- Gtk.toolButtonNew (Just pimg) Nothing
-    Gtk.set prev [Gtk.widgetTooltipText Gtk.:=
-                  Just $ msgStr MsgPreviousPageTooltip]
-
+    prev  <- createToolButton Resources.goPrevious $
+                 msgStr MsgPreviousPageTooltip
     -- Button Zoom out
-    oimg  <- loadImage Resources.zoomOut
-    minus <- Gtk.toolButtonNew (Just oimg) Nothing
-    Gtk.set minus [Gtk.widgetTooltipText Gtk.:=
-                   Just $ msgStr MsgZoomOutTooltip]
-
+    minus <- createToolButton Resources.zoomOut $ msgStr MsgZoomOutTooltip
     -- Button Zoom in
-    iimg <- loadImage Resources.zoomIn
-    plus <- Gtk.toolButtonNew (Just iimg) Nothing
-    Gtk.set plus [Gtk.widgetTooltipText Gtk.:=
-                  Just $ msgStr MsgZoomInTooltip]
-
+    plus  <- createToolButton Resources.zoomIn $ msgStr MsgZoomInTooltip
     -- Button Draw
-    drwb <- Gtk.toggleToolButtonNew
-    dimg <- loadImage Resources.drawRectangle
-    Gtk.set drwb [Gtk.widgetTooltipText Gtk.:=
-                  Just $ msgStr MsgNormalModeTooltip]
-    Gtk.toolButtonSetIconWidget drwb $ Just dimg
+    drwb  <- createToggleToolButton Resources.drawRectangle $
+                Just $ msgStr MsgNormalModeTooltip
     Gtk.toggleToolButtonSetActive drwb True
-
     -- Button Duplicate
-    db   <- Gtk.toggleToolButtonNew
-    dimg <- loadImage Resources.duplicateRectangle
-    Gtk.toolButtonSetIconWidget db $ Just dimg
-
+    db    <- createToggleToolButton Resources.duplicateRectangle Nothing
     -- Button MultiSelection
-    msb  <- Gtk.toggleToolButtonNew
-    simg <- loadImage Resources.rectangularSelection
-    Gtk.set msb [Gtk.widgetTooltipText Gtk.:=
-                 Just $ msgStr MsgSelectionModeTooltip]
-    Gtk.toolButtonSetIconWidget msb $ Just simg
+    msb   <- createToggleToolButton Resources.rectangularSelection $
+                Just $ msgStr MsgSelectionModeTooltip
 
     -- Main Toolbar
     toolbar <- Gtk.toolbarNew
@@ -236,14 +216,8 @@ makeGUI = do
     mtoolbar <- Gtk.toolbarNew
     Gtk.toolbarSetStyle mtoolbar Gtk.ToolbarIcons
     Gtk.toolbarSetIconSize mtoolbar (Gtk.IconSizeUser 32)
-    --mtalign  <- Gtk.alignmentNew 0 0 0 0
-    -- Gtk.boxSetSpacing mtoolbar 2
-    -- Gtk.buttonBoxSetLayout mtoolbar Gtk.ButtonboxEdge
-    -- Gtk.containerAdd mtalign mtoolbar
-    -- Gtk.containerAdd mtoolbar akb
     Gtk.toolbarInsert mtoolbar akb 0
     Gtk.boxPackStart vbox mtoolbar Gtk.PackNatural 0
-    --Gtk.widgetSetSizeRequest mtoolbar (-1) 32
 
     -- Splash screen
     splash   <- Gtk.vBoxNew False 40
@@ -278,16 +252,12 @@ makeGUI = do
     area     <- Gtk.drawingAreaNew
     vruler   <- Gtk.vRulerNew
     hruler   <- Gtk.hRulerNew
-    halign   <- Gtk.alignmentNew 0 0 1 1
-    valign   <- Gtk.alignmentNew 0 0 0 1
     hadj     <- Gtk.adjustmentNew 0 0 0 0 0 0
     vadj     <- Gtk.adjustmentNew 0 0 0 0 0 0
     viewport <- Gtk.viewportNew hadj vadj
     hscroll  <- Gtk.hScrollbarNew hadj
     vscroll  <- Gtk.vScrollbarNew vadj
-    tswin    <- Gtk.scrolledWindowNew Nothing Nothing
     atable   <- Gtk.tableNew 3 3 False
-    atswin   <- Gtk.alignmentNew 0 0 1 1
     Gtk.containerAdd viewport area
     Gtk.set vruler [Gtk.rulerMetric Gtk.:= Gtk.Pixels]
     Gtk.set hruler [Gtk.rulerMetric Gtk.:= Gtk.Pixels]
@@ -322,7 +292,7 @@ makeGUI = do
     Gtk.treeViewColumnSetTitle col $ msgStr $ MsgAreas
     Gtk.cellLayoutPackStart col trend False
     Gtk.cellLayoutSetAttributes col trend store layoutMapping
-    Gtk.treeViewAppendColumn treeV col
+    _ <- Gtk.treeViewAppendColumn treeV col
     Gtk.scrolledWindowAddWithViewport tswin treeV
     Gtk.scrolledWindowSetPolicy tswin Gtk.PolicyAutomatic Gtk.PolicyAutomatic
     Gtk.containerAdd atswin tswin
@@ -331,18 +301,14 @@ makeGUI = do
     Gtk.boxPackStart hbox vleft Gtk.PackNatural 0
 
     -- Remove button
-    rem     <- Gtk.buttonNewWithLabel $ msgStr MsgRemove
-    rmimg   <- loadImage Resources.drawEraser
-    Gtk.buttonSetImage rem rmimg
-    Gtk.set rem [Gtk.widgetTooltipText Gtk.:=
-                 Just $ msgStr MsgRemoveTooltip]
+    remb <- createButton Resources.drawEraser
+            (msgStr MsgRemove)
+            (Just $ msgStr MsgRemoveTooltip)
 
     -- Apply button
-    app     <- Gtk.buttonNewWithLabel $ msgStr MsgApply
-    apimg   <- loadImage Resources.dialogAccept
-    Gtk.buttonSetImage app apimg
-    Gtk.set app [Gtk.widgetTooltipText Gtk.:=
-                 Just $ msgStr MsgApplyTooltip]
+    app  <- createButton Resources.dialogAccept
+            (msgStr MsgApply)
+            (Just $ msgStr MsgApplyTooltip)
 
     idxspin <- Gtk.spinButtonNewWithRange 0 200 1
     nlabel  <- Gtk.labelNew (Just $ msgStr MsgName)
@@ -351,7 +317,6 @@ makeGUI = do
     idxlabel <- Gtk.labelNew (Just $ msgStr MsgIndex)
     pentry  <- Gtk.entryNew
     ventry  <- Gtk.entryNew
-    ualign  <- Gtk.alignmentNew 0.5 0 0 0
     nalign  <- Gtk.alignmentNew 0 0.5 0 0
     talign  <- Gtk.alignmentNew 0 0.5 0 0
     valign  <- Gtk.alignmentNew 0 0.5 0 0
@@ -359,13 +324,12 @@ makeGUI = do
     salign  <- Gtk.alignmentNew 0 0 1 0
     table   <- Gtk.tableNew 2 4 False
     tvbox   <- Gtk.vBoxNew False 10
-    optvbox <- Gtk.vBoxNew False 10
     pcombo  <- Gtk.comboBoxNew
     tstore  <- Gtk.comboBoxSetModelText pcombo
     hsep    <- Gtk.hSeparatorNew
     arem    <- Gtk.alignmentNew 0.5 0 0 0
     aapp    <- Gtk.alignmentNew 0.5 0 0 0
-    Gtk.containerAdd arem rem
+    Gtk.containerAdd arem remb
     Gtk.containerAdd aapp app
     Gtk.containerAdd nalign nlabel
     Gtk.containerAdd talign tlabel
@@ -384,7 +348,7 @@ makeGUI = do
     let types = ["text", "checkbox", "radio", "comboitem", "textcell"]
     traverse_ (Gtk.listStoreAppend tstore) types
     Gtk.containerAdd salign hsep
-    Gtk.widgetSetSensitive rem False
+    Gtk.widgetSetSensitive remb False
     Gtk.widgetSetSensitive app False
     Gtk.widgetSetSensitive pentry False
     Gtk.widgetSetSensitive pcombo False
@@ -417,8 +381,8 @@ makeGUI = do
     Gtk.containerAdd sbalign sbar
     Gtk.boxPackEnd vbox sbalign Gtk.PackNatural 0
 
-    Gtk.onDestroy win $ do
-                Gtk.mainQuit
+    _ <- Gtk.onDestroy win $
+             do Gtk.mainQuit
                 appTerminate
 
     Gtk.widgetShowAll win
@@ -440,7 +404,7 @@ makeGUI = do
                 , guiNextButton = next
                 , guiZoomInButton = plus
                 , guiZoomOutButton = minus
-                , guiRemoveButton = rem
+                , guiRemoveButton = remb
                 , guiApplyButton = app
                 , guiDrawToggle = drwb
                 , guiDupToggle = db
@@ -549,3 +513,65 @@ layoutMapping r
             label = name ++ " (" ++ idx ++ ")" in
         [Gtk.cellText Gtk.:= label]
     | otherwise = [Gtk.cellText Gtk.:= r ^. rectName]
+
+--------------------------------------------------------------------------------
+createToolButton :: Ptr Gtk.InlineImage -> String -> IO Gtk.ToolButton
+createToolButton img msg
+    = do imgb <- loadImage img
+         b    <- Gtk.toolButtonNew (Just imgb) Nothing
+         Gtk.set b [Gtk.widgetTooltipText Gtk.:=
+                       Just msg]
+         return b
+
+--------------------------------------------------------------------------------
+createToggleToolButton :: Ptr Gtk.InlineImage
+                       -> Maybe String
+                       -> IO Gtk.ToggleToolButton
+createToggleToolButton img mMsg
+    = do b    <- Gtk.toggleToolButtonNew
+         dimg <- loadImage img
+         Gtk.toolButtonSetIconWidget b $ Just dimg
+         Gtk.set b [Gtk.widgetTooltipText Gtk.:= mMsg]
+         return b
+
+--------------------------------------------------------------------------------
+createButton :: Ptr Gtk.InlineImage
+             -> String
+             -> Maybe String
+             -> IO Gtk.Button
+createButton img label mTooltipMsg
+    = do b    <- Gtk.buttonNewWithLabel label
+         imgb <- loadImage img
+         Gtk.buttonSetImage b imgb
+         Gtk.set b [Gtk.widgetTooltipText Gtk.:= mTooltipMsg]
+         return b
+
+--------------------------------------------------------------------------------
+guiRenderGuides :: Foldable f
+                => GUI
+                -> Double
+                -> PageItem
+                -> RGB
+                -> f Guide
+                -> IO ()
+guiRenderGuides gui ratio _ guideColor gs
+    = do frame     <- Gtk.widgetGetDrawWindow area
+         (fw',fh') <- Gtk.drawableGetSize frame
+         let fw     = fromIntegral fw'
+             fh     = fromIntegral fh'
+             --width  = ratio * (pageWidth page)
+             --height = ratio * (pageHeight page)
+
+         Gtk.renderWithDrawable frame $
+             do Cairo.scale ratio ratio
+                for_ gs $ \g ->
+                    do drawGuide fw fh guideColor g
+                       Cairo.closePath
+                       Cairo.stroke
+  where
+    area = guiDrawingArea gui
+
+--------------------------------------------------------------------------------
+guiRenderGuide :: GUI -> Double -> PageItem -> RGB -> Guide -> IO ()
+guiRenderGuide gui ratio page guideColor g =
+    guiRenderGuides gui ratio page guideColor [g]

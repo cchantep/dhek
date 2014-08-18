@@ -23,7 +23,7 @@ foreign import ccall "util.h nsbrowserOpen" nsbrowserOpen :: CString -> IO ()
 --------------------------------------------------------------------------------
 appTerminate :: IO ()
 appTerminate = do
-  exitSuccess -- ???
+  _ <- exitSuccess -- ???
   nsappTerminate
 
 --------------------------------------------------------------------------------
