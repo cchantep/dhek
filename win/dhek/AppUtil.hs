@@ -13,11 +13,13 @@ module Dhek.AppUtil where
 import Foreign.C
 import Foreign.C.String
 
---------------------------------------------------------------------------------
 import qualified Graphics.UI.Gtk as Gtk
 
---------------------------------------------------------------------------------
 foreign import ccall "util.h browser_open" browser_open :: CString -> IO ()
+
+--------------------------------------------------------------------------------
+uiLoaded :: Gtk.Window -> IO Gtk.Window
+uiLoaded mainWin = return mainWin
 
 --------------------------------------------------------------------------------
 appTerminate :: IO ()

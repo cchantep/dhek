@@ -1,4 +1,5 @@
 #include <Cocoa/Cocoa.h>
+#include <fontconfig/fontconfig.h>
 #include "util.h"
 
 /** Wraps ObjC call to be used as foreign function. */
@@ -6,8 +7,6 @@ void nsappTerminate() {
   NSLog(@"Terminate Cocoa application...");
   [NSApp terminate: nil];
 }
-
-extern void nsappTerminate();
 
 void nsbrowserOpen(const char* url) {
   NSString* nsstr = [NSString stringWithUTF8String: url];
@@ -19,4 +18,11 @@ void nsbrowserOpen(const char* url) {
   [nsstr release];
 }
 
+unsigned int fcInit() {
+  if (FcInit() == FcFalse) return 0;
+  return 1;
+}
+
+extern void nsappTerminate();
 extern void nsbrowserOpen(const char*);
+extern unsigned int fcInit();

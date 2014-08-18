@@ -25,7 +25,7 @@ import           System.FilePath (joinPath, dropFileName)
 import           System.Environment.Executable (getExecutablePath)
 
 --------------------------------------------------------------------------------
-import           Dhek.AppUtil (appTerminate)
+import           Dhek.AppUtil (appTerminate, uiLoaded)
 import           Dhek.I18N
 import qualified Dhek.Resources as Resources
 import           Dhek.Types
@@ -426,6 +426,8 @@ makeGUI = do
     cache  <- newIORef Nothing
 
     bdw <- newBlankDocumentWidget msgStr win
+
+    _ <- uiLoaded win
 
     return $ GUI{ guiWindow = win
                 , guiPdfDialog = pdfch

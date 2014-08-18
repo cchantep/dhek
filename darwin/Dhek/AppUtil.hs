@@ -12,6 +12,7 @@ module Dhek.AppUtil where
 --------------------------------------------------------------------------------
 import Foreign.C
 import System.Exit (exitSuccess)
+import Control.Concurrent (forkIO)
 
 --------------------------------------------------------------------------------
 import qualified Graphics.UI.Gtk as Gtk
@@ -19,6 +20,24 @@ import qualified Graphics.UI.Gtk as Gtk
 --------------------------------------------------------------------------------
 foreign import ccall "util.h nsappTerminate" nsappTerminate :: IO ()
 foreign import ccall "util.h nsbrowserOpen" nsbrowserOpen :: CString -> IO ()
+foreign import ccall "util.h fcInit" fcInit :: IO CUInt
+
+
+--------------------------------------------------------------------------------
+uiLoaded :: Gtk.Window -> IO Gtk.Window
+uiLoaded mainWin = do
+  m <- Gtk.messageDialogNew (Just mainWin) [Gtk.DialogModal] 
+       Gtk.MessageWarning Gtk.ButtonsNone 
+       "Loading system fonts..." -- TODO: i18n
+  Gtk.postGUIAsync $ do
+    Gtk.dialogRun m
+    return ()
+  fcInit
+  putStrLn "_1"
+  Gtk.dialogResponse m Gtk.ResponseNone
+  Gtk.widgetHide m
+  putStrLn "_2"
+  return mainWin
 
 --------------------------------------------------------------------------------
 appTerminate :: IO ()

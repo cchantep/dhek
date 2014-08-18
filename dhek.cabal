@@ -45,6 +45,7 @@ library
 
 executable dhek
   if os(darwin)
+    pkgconfig-depends: fontconfig
     c-sources: darwin/AppDelegate.m darwin/util.m
     hs-source-dirs: . darwin
     main-is: darwin/main.m
