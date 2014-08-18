@@ -47,3 +47,4 @@ ApplidokTooltip: Open Applidok service
 PreviousPageTooltip: Go back to previous page
 NextPageTooltip: Go to next page
 MagneticForce: Magnetic force
+FontCacheInit: Initializing cache for system fonts. It may take a while. Please wait…

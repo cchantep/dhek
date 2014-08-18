@@ -47,3 +47,4 @@ ApplidokTooltip: Ouvrir le service Applidok
 PreviousPageTooltip: Aller à la page précédente
 NextPageTooltip: Aller à la page suivante
 MagneticForce: Force magnetique
+FontCacheInit: Création du cache pour les polices du système. Cela peut prendre du temps. Veuillez patienter…
