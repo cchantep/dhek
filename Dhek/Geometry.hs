@@ -134,14 +134,14 @@ oppositeTranslate WEST  (_,y1) (_,y0) = translateRectY (y1-y0)
 oppositeTranslate EAST  (_,y1) (_,y0) = translateRectY (y1-y0)
 
 --------------------------------------------------------------------------------
-updateHoldPos :: Direction
-              -> (Double, Double)
-              -> (Double, Double)
-              -> (Double, Double)
-updateHoldPos NORTH (x1,_) (_,y0) = (x1,y0)
-updateHoldPos SOUTH (x1,_) (_,y0) = (x1,y0)
-updateHoldPos WEST (_,y1) (x0,_)  = (x0,y1)
-updateHoldPos EAST (_,y1) (x0,_)  = (x0,y1)
+movePos :: Direction
+        -> (Double, Double)
+        -> (Double, Double)
+        -> (Double, Double)
+movePos NORTH (x1,_) (_,y0) = (x1,y0)
+movePos SOUTH (x1,_) (_,y0) = (x1,y0)
+movePos WEST (_,y1) (x0,_)  = (x0,y1)
+movePos EAST (_,y1) (x0,_)  = (x0,y1)
 
 --------------------------------------------------------------------------------
 correctRect :: Direction -> (Double, Double) -> Rect -> (Rect, (Double, Double))
@@ -191,8 +191,8 @@ updateDrawSelection (x,y) = execState go where
       rectHeight .= y-sy
 
 --------------------------------------------------------------------------------
-updateHoldRect :: Pos -> Pos -> Rect -> Rect
-updateHoldRect (x0,y0) (x,y) = execState go where
+moveRect :: Pos -> Pos -> Rect -> Rect
+moveRect (x0,y0) (x,y) = execState go where
   go = do
       rectX += x-x0
       rectY += y-y0

@@ -215,7 +215,7 @@ selectionMove opts
 moveMove :: DrawEnv -> [Rect] -> (Double, Double) -> SelectionMode ()
 moveMove opts rs pos0
     = do let pos = drawPointer opts
-             rs' = fmap (updateHoldRect pos0 pos) rs
+             rs' = fmap (moveRect pos0 pos) rs
          setSelectionType (MOVE rs' pos)
 
 --------------------------------------------------------------------------------

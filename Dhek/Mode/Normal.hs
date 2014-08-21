@@ -199,7 +199,7 @@ normalMove opts
         case e of
             Hold r ppos
                 -> engineDrawState.drawEvent ?=
-                       Hold (updateHoldRect ppos pos r) (x,y)
+                       Hold (moveRect ppos pos r) (x,y)
             Resize r (x0,y0) a
                 -> let dx = x-x0
                        dy = y-y0 in
@@ -238,7 +238,7 @@ normalMove opts
                             diff        = diffPos d delta (x,y) (px,py)
                             (x0',y0')   = adaptPosDefault d delta (x,y) (x0,y0)
                             r1          = oppositeTranslate d (x,y) (x0,y0) r
-                            (px',py')   = updateHoldPos d (x,y) (px,py)
+                            (px',py')   = movePos d (x,y) (px,py)
                             catchUp     = diff <= 0
 
                         if not catchUp && collides

@@ -62,7 +62,7 @@ instance ModeMonad DuplicateMode where
             case e of
                 Hold r ppos ->
                     engineDrawState.drawEvent ?=
-                        Hold (updateHoldRect ppos pos r) (x,y)
+                        Hold (moveRect ppos pos r) (x,y)
 
                 _ -> return ()
 
