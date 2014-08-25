@@ -10,19 +10,20 @@ module Dhek.Mode.Normal (normalModeManager) where
 import Prelude hiding (mapM_)
 
 --------------------------------------------------------------------------------
-import Control.Applicative
-import Data.Foldable (find, for_, mapM_)
-import Data.IORef
-import Data.Traversable
+import           Control.Applicative
+import           Data.Foldable (find, for_, mapM_)
+import           Data.IORef
+import qualified Data.IntMap as I
+import           Data.Traversable
 
 --------------------------------------------------------------------------------
-import           Control.Lens hiding (Action, act)
+import           Control.Lens      hiding (Action, act)
 import           Control.Monad.RWS hiding (mapM_)
-import qualified Data.IntMap                  as I
-import qualified Graphics.Rendering.Cairo     as Cairo
-import qualified Graphics.UI.Gtk              as Gtk
+import qualified Graphics.Rendering.Cairo as Cairo
+import qualified Graphics.UI.Gtk          as Gtk
 
 --------------------------------------------------------------------------------
+import Dhek.Cartesian
 import Dhek.Engine.Instr
 import Dhek.Engine.Type
 import Dhek.Geometry
@@ -31,6 +32,7 @@ import Dhek.GUI.Action
 import Dhek.I18N
 import Dhek.Mode.Common.Draw
 import Dhek.Mode.DuplicateKey
+import Dhek.Mode.Effect.Collision
 import Dhek.Types
 import Dhek.Utils (findDelete)
 
@@ -43,20 +45,20 @@ data Input
       }
 
 --------------------------------------------------------------------------------
-data Action
-    = Drawing Rect
-    | Moving Pos (Maybe Collision) Rect
-    | Resizing Pos Area Rect
-    | MoveGuide Guide
+data Effect
+    = Col Collide
+    | None
 
 --------------------------------------------------------------------------------
-data Collision
-    = Collision
-      { colDelta     :: !Double
-      , colRange     :: !(Double, Double)
-      , colPrevPos   :: !(Double, Double)
-      , colDirection :: !Direction
-      }
+data Transform
+    = Moving Rect Effect Vector2D
+    | Resizing Rect Area Vector2D
+
+--------------------------------------------------------------------------------
+data Action
+    = Drawing Vector2D
+    | Transform Transform
+    | MoveGuide Guide
 
 --------------------------------------------------------------------------------
 newtype NormalMode a
@@ -172,10 +174,15 @@ normalMove env
 --------------------------------------------------------------------------------
 normalOnAction :: DrawEnv -> Action -> NormalMode Action
 normalOnAction env act
+    = normalActionDispatch env act
+
+--------------------------------------------------------------------------------
+normalActionDispatch :: DrawEnv -> Action -> NormalMode Action
+normalActionDispatch env act
     = case act of
-          Drawing r   -> normalDrawSelection env r
+          Drawing v   -> normalDrawSelection env v
           MoveGuide g -> normalMoveGuide g
-          _           -> normalMoveOrResize env act
+          Transform t -> normalTransform env t
 
 --------------------------------------------------------------------------------
 normalSetActionCursor :: Action -> NormalMode ()
@@ -205,10 +212,12 @@ normalNoAction env
 normalActionCursor :: Action -> Maybe DhekCursor
 normalActionCursor act
     = case act of
-          Moving _ _ _   -> Just $ GTKCursor Gtk.Hand1
-          Resizing _ a _ -> Just $ GTKCursor $ areaCursor a
-          MoveGuide _    -> Just $ GTKCursor Gtk.Hand1
-          _              -> Nothing
+          Transform t ->
+              case t of
+                  Moving _ _ _   -> Just $ GTKCursor Gtk.Hand1
+                  Resizing _ a _ -> Just $ GTKCursor $ areaCursor a
+          MoveGuide _ -> Just $ GTKCursor Gtk.Hand1
+          _           -> Nothing
 
 --------------------------------------------------------------------------------
 normalMoveGuide :: Guide -> NormalMode Action
@@ -226,84 +235,54 @@ normalMoveGuide g
          return $ MoveGuide (g & guideValue .~ newValue)
 
 --------------------------------------------------------------------------------
-normalMoveOrResize :: DrawEnv -> Action -> NormalMode Action
-normalMoveOrResize env act
+normalTransform :: DrawEnv -> Transform -> NormalMode Action
+normalTransform env t
     = do overlap <- use engineOverlap
          if overlap
              then
-             case act of
-                 Moving ppos _ r   -> normalOverlapMove ppos pos r
-                 Resizing ppos a r -> normalOverlapResize ppos pos a r
-                 _                 -> error "impossible normalMoveOrResize"
+             case t of
+                 Moving r _ v   -> normalOverlapMove env r v
+                 Resizing r a v -> normalOverlapResize env r a v
              else
-             case act of
-                 Moving ppos c r   -> normalCollisionMove env ppos c r
-                 Resizing ppos a r -> normalOverlapResize ppos pos a r
-                 _                 -> error "impossible normalMoveOrResize"
+             case t of
+                 Moving r _ v   -> normalCollisionMove env r v
+                 Resizing r a v -> normalOverlapResize env r a v
+
+--------------------------------------------------------------------------------
+normalOverlapMove :: DrawEnv -> Rect -> Vector2D -> NormalMode Action
+normalOverlapMove env r v = return $ Transform $ Moving r None newVect
   where
-    pos = drawPointer env
+    pos     = drawPointer env
+    newVect = v & vectorTo .~ pos
 
 --------------------------------------------------------------------------------
-normalOverlapMove :: Pos -> Pos -> Rect -> NormalMode Action
-normalOverlapMove ppos pos r
-    = return $ Moving pos Nothing $ moveRect ppos pos r
-
---------------------------------------------------------------------------------
-normalOverlapResize :: Pos -> Pos -> Area -> Rect -> NormalMode Action
-normalOverlapResize (x0,y0) pos@(x,y) a r
-    = let dx = x-x0
-          dy = y-y0 in
-      return $ Resizing pos a (resizeRect dx dy a r)
-
---------------------------------------------------------------------------------
-normalCollisionMove :: DrawEnv
-                    -> Pos
-                    -> Maybe Collision
-                    -> Rect
-                    -> NormalMode Action
-normalCollisionMove env ppos mC r
-    = maybe noPreviousCollision withPreviousCollision mC
+normalOverlapResize :: DrawEnv -> Rect -> Area -> Vector2D -> NormalMode Action
+normalOverlapResize env r a v = return $ Transform $ Resizing r a newVect
   where
-    pos@(x,y) = drawPointer env
-
-    noPreviousCollision
-        = case intersection (drawRects env) r of
-              Nothing -> normalOverlapMove ppos pos r
-              Just (t,d)
-                  -> let delta  = collisionDelta d r t
-                         newPos = adaptPos d delta x y
-                         r1     = adaptRect d delta r
-                         c      = Collision
-                                  { colDelta     = delta
-                                  , colRange     = rectRange d t
-                                  , colPrevPos   = ppos
-                                  , colDirection = d
-                                  } in
-                     return $ Moving newPos (Just c) r1
-
-    withPreviousCollision c
-        = let (rmin,rmax) = colRange c
-              prevColPos  = colPrevPos c
-              d           = colDirection c
-              delta       = colDelta c
-              collides    = rangeCollides d rmin rmax r
-              diff        = diffPos d delta pos prevColPos
-              adaptedPos  = adaptPosDefault d delta pos ppos
-              r1          = oppositeTranslate d pos ppos r
-              newPos      = movePos d pos prevColPos
-              catchUp     = diff <= 0 in
-          if not catchUp && collides
-          then return $ Moving newPos (Just c) r1
-          else let (r2, correctedPos)
-                       = correctRect d adaptedPos r in
-               return $ Moving correctedPos Nothing r2
+    pos     = drawPointer env
+    newVect = v & vectorTo .~ pos
 
 --------------------------------------------------------------------------------
-normalDrawSelection :: DrawEnv -> Rect -> NormalMode Action
-normalDrawSelection env s
-    = return $ Drawing $ updateDrawSelection pos s
+normalCollisionMove :: DrawEnv -> Rect -> Vector2D -> NormalMode Action
+normalCollisionMove env r v
+    = case inter of
+        Nothing
+            -> normalOverlapMove env r v
+        Just c
+            -> return $ Transform $ Moving r (Col c) newVect
   where
-    pos = drawPointer env
+    pos     = drawPointer env
+    newVect = v & vectorTo .~ pos
+    rs      = drawRects env
+    inter   = collisionCollide (collisionMove r newVect) rs
+
+--------------------------------------------------------------------------------
+normalDrawSelection :: DrawEnv -> Vector2D -> NormalMode Action
+normalDrawSelection env v
+    = return $ Drawing newVect
+  where
+    pos     = drawPointer env
+    newVect = v & vectorTo .~ pos
 
 --------------------------------------------------------------------------------
 -- | if user:
@@ -319,10 +298,13 @@ normalPress env
 --------------------------------------------------------------------------------
 normalDetectAction :: DrawEnv -> Rect -> Action
 normalDetectAction env r
-    = maybe (Moving pos Nothing r) (\a -> Resizing pos a r) aOpt
+    = maybe moving resizing aOpt
   where
-    pos  = drawPointer env
-    aOpt = getOverArea env
+    pos        = drawPointer env
+    aOpt       = getOverArea env
+    newVect    = vector2D pos pos
+    moving     = Transform $ Moving r None newVect
+    resizing a = Transform $ Resizing r a newVect
 
 --------------------------------------------------------------------------------
 normalPressRect :: DrawEnv -> Rect -> NormalMode ()
@@ -331,7 +313,6 @@ normalPressRect env r
          actRef <- asks inputAction
 
          engineBoards.boardsMap.at pid.traverse.boardRects.at rid .= Nothing
-
          liftIO $ writeIORef actRef $ Just act
   where
     act = normalDetectAction env r
@@ -342,13 +323,13 @@ normalNoRectDetectAction :: DrawEnv -> [Guide] -> (Action, [Guide])
 normalNoRectDetectAction env guides
     = case gOpt of
           Just g  -> (MoveGuide g, newGuides)
-          Nothing -> (Drawing newSelection, guides)
+          Nothing -> (Drawing vect, guides)
   where
     (gOpt, newGuides)  = findOveredGuide guides
     findOveredGuide gs = findDelete (isOverGuide gRange env) gs
     gRange             = guideRange env
-    (x,y)              = drawPointer env
-    newSelection       = rectNew x y 0 0
+    pt                 = drawPointer env
+    vect               = vector2D pt pt
 
 --------------------------------------------------------------------------------
 normalPressNoRect :: DrawEnv -> NormalMode ()
@@ -360,40 +341,48 @@ normalPressNoRect env
          liftIO $ writeIORef actRef $ Just act
          engineStateSetGuides gs'
 
-
 --------------------------------------------------------------------------------
-normalMoveOrResizeRelease :: Rect -> NormalMode ()
-normalMoveOrResizeRelease r
+normalTransformRelease :: Transform -> NormalMode ()
+normalTransformRelease t
     = do pid <- use engineCurPage
+
+         let r = case t of
+                 Moving r' mC v
+                     -> case mC of
+                             None
+                                 -> moveRect v r'
+                             Col c
+                                 -> projectCollision (collisionMove r' v ) c
+                 Resizing r' a v
+                     -> normalize $ resizeRect a v r'
+             rid = r ^. rectId
 
          engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r
          engineEventStack %= (UpdateRectPos:)
 
          normalSelectRectangle r
-  where
-    rid = r ^. rectId
 
 --------------------------------------------------------------------------------
-normalDrawingRelease :: Rect -> NormalMode ()
-normalDrawingRelease r
+normalDrawingRelease :: Vector2D -> NormalMode ()
+normalDrawingRelease v
     = when (w*h >= 30) $
           do rid <- engineDrawState.drawFreshId <+= 1
-             let r2 = r1 & rectId   .~ rid
-                         & rectName %~ (++ show rid)
+             let r1 = r & rectId   .~ rid
+                        & rectName %~ (++ show rid)
 
              -- New rectangle
              gui <- asks inputGUI
              pid <- use engineCurPage
 
-             engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r2
+             engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r1
              engineEventStack %= (CreateRect:)
 
-             liftIO $ gtkAddRect r2 gui
-             normalSelectRectangle r2
+             liftIO $ gtkAddRect r1 gui
+             normalSelectRectangle r1
   where
-    r1 = normalize r
-    w  = r1 ^. rectWidth
-    h  = r1 ^. rectHeight
+    r = makeDrawSelectionRect v
+    w = r ^. rectWidth
+    h = r ^. rectHeight
 
 --------------------------------------------------------------------------------
 normalGuideRelease :: Guide -> NormalMode ()
@@ -409,10 +398,9 @@ normalRelease _
 
          for_ mAct $ \act ->
              case act of
-                 Moving _ _ r   -> normalMoveOrResizeRelease r
-                 Resizing _ _ r -> normalMoveOrResizeRelease r
-                 Drawing r      -> normalDrawingRelease r
-                 MoveGuide g    -> normalGuideRelease g
+                 Transform t -> normalTransformRelease t --  r
+                 Drawing v   -> normalDrawingRelease v
+                 MoveGuide g -> normalGuideRelease g
 
          liftIO $ writeIORef actRef Nothing
 
@@ -482,7 +470,6 @@ normalDrawing page ratio
     selectedColor  = rgbRed
     selectionColor = rgbGreen
     rectGuideColor = RGB 0.16 0.72 0.92
-    --guideColor     = RGB 0.16 0.26 0.87
 
 --------------------------------------------------------------------------------
 runNormal :: Input -> NormalMode a -> EngineState -> IO EngineState
@@ -506,9 +493,9 @@ normalModeManager gui
               (guiTranslate gui MsgDrawHelp)
 
          let input = Input
-                     { inputGUI        = gui
-                     , inputCurModeMgr = mgrRef
-                     , inputAction     = actRef
+                     { inputGUI         = gui
+                     , inputCurModeMgr  = mgrRef
+                     , inputAction      = actRef
                      }
          return $ ModeManager (normalMode input) (return ())
 
@@ -553,13 +540,18 @@ overDrawingArea g
 
 --------------------------------------------------------------------------------
 transGetRect :: Action -> Maybe Rect
-transGetRect (Moving _ _ r)   = Just r
-transGetRect (Resizing _ _ r) = Just r
-transGetRect _                = Nothing
+transGetRect (Transform t)
+    = case t of
+          Moving r mC v
+              -> case mC of
+                      None  -> Just $ moveRect v r
+                      Col c -> Just $ projectCollision (collisionMove r v) c
+          Resizing r a v -> Just $ resizeRect a v r
+transGetRect _ = Nothing
 
 --------------------------------------------------------------------------------
 drawingGetRect :: Action -> Maybe Rect
-drawingGetRect (Drawing r) = Just r
+drawingGetRect (Drawing v) = Just $ makeDrawSelectionRect v
 drawingGetRect _           = Nothing
 
 --------------------------------------------------------------------------------

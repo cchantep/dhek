@@ -29,6 +29,7 @@ import qualified Graphics.UI.Gtk.Poppler.Document as Poppler
 import qualified Graphics.UI.Gtk.Poppler.Page     as Poppler
 
 --------------------------------------------------------------------------------
+import Dhek.Cartesian
 import Dhek.Engine.Instr
 import Dhek.Engine.Type
 import Dhek.GUI
@@ -262,7 +263,7 @@ engineModePointerContext xs k i (x,y) = do
         let gui   = _gui i
             ratio = _engineRatio s v
             opts  = DrawEnv
-                    { drawPointer  = (x/ratio, y/ratio)
+                    { drawPointer  = point2D (x/ratio) (y/ratio)
                     , drawRects    = getRects s
                     , drawRatio    = ratio
                     , drawModifier = xs
@@ -459,19 +460,19 @@ makeRuntimeEnv gui = do
 stateNew :: EngineState
 stateNew
     = EngineState
-      { _engineCurPage    = 1
-      , _engineCurZoom    = 3
-      , _engineRectId     = 0
-      , _engineOverlap    = False
-      , _engineDraw       = False
-      , _enginePropLabel  = ""
-      , _enginePropType   = Nothing
-      , _enginePrevPos    = (negate 1, negate 1)
-      , _engineDrawState  = drawStateNew
-      , _engineBoards     = boardsNew 1
-      , _engineBaseWidth  = 777
-      , _engineThick      = 1
-      , _engineEventStack = []
+      { _engineCurPage      = 1
+      , _engineCurZoom      = 3
+      , _engineRectId       = 0
+      , _engineOverlap      = False
+      , _engineDraw         = False
+      , _enginePropLabel    = ""
+      , _enginePropType     = Nothing
+      , _enginePrevPos      = (negate 1, negate 1)
+      , _engineDrawState    = drawStateNew
+      , _engineBoards       = boardsNew 1
+      , _engineBaseWidth    = 777
+      , _engineThick        = 1
+      , _engineEventStack   = []
       }
 
 --------------------------------------------------------------------------------

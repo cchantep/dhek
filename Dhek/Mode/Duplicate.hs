@@ -14,7 +14,7 @@ module Dhek.Mode.Duplicate
     , cdmRun
     , concreteDuplicateManager
     , duplicateModeManager
-    , duplicateGetDupRect
+    , duplicateGetDup
     , duplicateGetGUI
     , dupStart
     , dupEnd
@@ -35,6 +35,7 @@ import qualified Graphics.Rendering.Cairo     as Cairo
 import qualified Graphics.UI.Gtk              as Gtk
 
 --------------------------------------------------------------------------------
+import Dhek.Cartesian
 import Dhek.Engine.Instr
 import Dhek.Engine.Type
 import Dhek.Geometry
@@ -56,7 +57,7 @@ newtype DuplicateMode a
              )
 
 --------------------------------------------------------------------------------
-data Dup = Dup Pos Rect
+data Dup = Dup Rect Vector2D
 
 --------------------------------------------------------------------------------
 data Input
@@ -84,15 +85,16 @@ instance ModeMonad DuplicateMode where
              engineDrawState.drawOverRect .= oOpt
 
              -- We only handle move without caring about overlap
-             for_ eOpt $ \(Dup pos r) ->
-                 let newPos = drawPointer opts
-                     newDup = Dup newPos (moveRect pos newPos r) in
+             for_ eOpt $ \(Dup r vect) ->
+                 let newPt   = drawPointer opts
+                     newVect = vect & vectorTo .~ newPt
+                     newDup  = Dup r newVect in
                  liftIO $ writeIORef dupRef $ Just newDup
 
     mPress env
         = do dupRef <- asks inputDup
              eOpt   <- liftIO $ readIORef dupRef
-             maybe (dupStart env) (\(Dup _ r) -> dupEnd r) eOpt
+             maybe (dupStart env) (\(Dup r v) -> dupEnd r v) eOpt
 
     mRelease _ = return ()
 
@@ -112,7 +114,7 @@ instance ModeMonad DuplicateMode where
                 height = ratio * (pageHeight page)
                 fw     = fromIntegral fw'
                 fh     = fromIntegral fh'
-                eventR = fmap (\(Dup _ r) -> r) oEvR
+                eventR = fmap (\(Dup r v) -> moveRect v r) oEvR
                 area   = guiDrawingArea gui
 
             Gtk.widgetSetSizeRequest area (truncate width) (truncate height)
@@ -144,11 +146,11 @@ instance ModeMonad DuplicateMode where
     mLeave = return ()
 
 --------------------------------------------------------------------------------
-duplicateGetDupRect :: DuplicateMode (Maybe Rect)
-duplicateGetDupRect
+duplicateGetDup :: DuplicateMode (Maybe (Rect, Vector2D))
+duplicateGetDup
     = do dupRef <- asks inputDup
          dup    <- liftIO $ readIORef dupRef
-         return $ fmap (\(Dup _ r) -> r) dup
+         return $ fmap (\(Dup r v) -> (r,v)) dup
 
 --------------------------------------------------------------------------------
 duplicateGetGUI :: DuplicateMode GUI
@@ -160,21 +162,22 @@ dupStart opts
     = for_ (getOverRect opts) $ \r ->
           do rid    <- engineDrawState.drawFreshId <+= 1
              input  <- ask
-             let r2     = r & rectId .~ rid
-                 pos    = drawPointer opts
-                 dupRef = inputDup input
-                 gui    = inputGUI input
+             let r2      = r & rectId .~ rid
+                 pos     = drawPointer opts
+                 newVect = vector2D pos pos
+                 dupRef  = inputDup input
+                 gui     = inputGUI input
 
              liftIO $
-                 do writeIORef dupRef $ Just $ Dup pos r2
+                 do writeIORef dupRef $ Just $ Dup r2 newVect
                     gtkSetDhekCursor gui $ Just $ DhekCursor CursorDup
 
 --------------------------------------------------------------------------------
-dupEnd :: Rect -> DuplicateMode ()
-dupEnd x
+dupEnd :: Rect -> Vector2D -> DuplicateMode ()
+dupEnd x v
     = do rid <- engineDrawState.drawFreshId <+= 1
-         let r = normalize x & rectId    .~ rid
-                             & rectIndex %~ (fmap (+1))
+         let r = normalize r' & rectId    .~ rid
+                              & rectIndex %~ (fmap (+1))
          -- Add rectangle
          input <- ask
          let gui    = inputGUI input
@@ -187,6 +190,8 @@ dupEnd x
              do gtkAddRect r gui
                 gtkSetDhekCursor gui Nothing
                 writeIORef dupRef Nothing
+  where
+    r' = moveRect v x
 
 --------------------------------------------------------------------------------
 runDuplicate :: Input -> DuplicateMode a -> EngineState -> IO EngineState

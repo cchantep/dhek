@@ -19,6 +19,7 @@ import qualified Data.IntMap as I
 import           Graphics.UI.Gtk (Modifier)
 
 --------------------------------------------------------------------------------
+import Dhek.Cartesian
 import Dhek.Engine.Instr
 import Dhek.Types
 
@@ -72,9 +73,9 @@ data ModeManager
 --------------------------------------------------------------------------------
 data DrawEnv
     = DrawEnv
-      { drawPointer  :: (Double, Double) -- ^ (x, y) pointer position
-      , drawRects    :: [Rect]           -- ^ Page rectangle
-      , drawRatio    :: Double           -- ^ Page ratio
+      { drawPointer  :: Point2D     -- ^ (x, y) pointer position
+      , drawRects    :: [Rect]      -- ^ Page rectangle
+      , drawRatio    :: Double      -- ^ Page ratio
       , drawModifier :: [Modifier]
       }
 
@@ -97,19 +98,19 @@ data DrawState
 
 --------------------------------------------------------------------------------
 data EngineState = EngineState
-    { _engineCurPage    :: {-# UNPACK #-} !Int
-    , _engineCurZoom    :: {-# UNPACK #-} !Int
-    , _engineRectId     :: {-# UNPACK #-} !Int
-    , _engineOverlap    :: !Bool
-    , _engineDraw       :: !Bool
-    , _enginePropLabel  :: !String
-    , _enginePropType   :: !(Maybe String)
-    , _enginePrevPos    :: !(Double, Double)
-    , _engineBoards     :: !Boards
-    , _engineDrawState  :: !DrawState
-    , _engineBaseWidth  :: !Int
-    , _engineThick      :: !Double
-    , _engineEventStack :: ![Event]
+    { _engineCurPage      :: {-# UNPACK #-} !Int
+    , _engineCurZoom      :: {-# UNPACK #-} !Int
+    , _engineRectId       :: {-# UNPACK #-} !Int
+    , _engineOverlap      :: !Bool
+    , _engineDraw         :: !Bool
+    , _enginePropLabel    :: !String
+    , _enginePropType     :: !(Maybe String)
+    , _enginePrevPos      :: !(Double, Double)
+    , _engineBoards       :: !Boards
+    , _engineDrawState    :: !DrawState
+    , _engineBaseWidth    :: !Int
+    , _engineThick        :: !Double
+    , _engineEventStack   :: ![Event]
     }
 
 --------------------------------------------------------------------------------

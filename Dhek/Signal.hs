@@ -55,7 +55,7 @@ connectSignals g i = do
                     then showWarning $ guiTranslate g MsgNoArea
                     else void onJsonSave
 
-    _ <- Gtk.on (guiOverlapMenuItem g) Gtk.menuItemActivate $ void $
+    _ <- Gtk.on (guiOverlapMenuItem g) Gtk.menuItemActivate $
              runProgram i $
                  do b <- isActive Overlap
                     active Overlap (not b)

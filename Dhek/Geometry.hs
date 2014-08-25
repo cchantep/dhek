@@ -6,8 +6,7 @@
 module Dhek.Geometry where
 
 --------------------------------------------------------------------------------
-import Data.Foldable (find, foldMap)
-import Data.Monoid (First(..))
+import Data.Foldable (find)
 
 --------------------------------------------------------------------------------
 import Control.Lens
@@ -15,28 +14,29 @@ import Control.Monad.State.Strict
 import Graphics.UI.Gtk (CursorType(..))
 
 --------------------------------------------------------------------------------
+import Dhek.Cartesian
 import Dhek.Engine.Type
 import Dhek.Types
 
 --------------------------------------------------------------------------------
 getOverRect :: DrawEnv -> (Maybe Rect)
 getOverRect o =
-    let (x,y) = drawPointer o
-        rs    = drawRects o in
-    find (isOver 1.0 x y) rs
+    let pt = drawPointer o
+        rs = drawRects o in
+    find (isOver 1.0 pt) rs
 
 --------------------------------------------------------------------------------
 getOverArea :: DrawEnv -> (Maybe Area)
 getOverArea o =
     let ratio = drawRatio o
-        (x,y) = drawPointer o
+        pt    = drawPointer o
         rOpt  = getOverRect o in
     rOpt >>= \r ->
-        find (isOver 1.0 x y . rectArea (5/ratio) r) $ enumFrom TOP_LEFT
+        find (isOver 1.0 pt . rectArea (5/ratio) r) $ enumFrom TOP_LEFT
 
 --------------------------------------------------------------------------------
-isOver :: Double -> Double -> Double -> Rect -> Bool
-isOver thick x y r = go
+isOver :: Double -> Point2D -> Rect -> Bool
+isOver thick pt r = go
   where
     x0 = r ^. rectX
     y0 = r ^. rectY
@@ -44,142 +44,54 @@ isOver thick x y r = go
     w  = r ^. rectWidth
     x1 = (x0 + w + thick)
     y1 = (y0 + h + thick)
+    x  = pt ^. pointX
+    y  = pt ^. pointY
     x' = (x0 - thick)
     y' = (y0 - thick)
 
     go = x >= x' && x <= x1 && y >= y' && y <= y1
 
 --------------------------------------------------------------------------------
-adaptPos :: Direction
-         -> Double
-         -> Double
-         -> Double
-         -> (Double, Double)
-adaptPos NORTH delta x y = (x, y-delta)
-adaptPos SOUTH delta x y = (x, y-delta)
-adaptPos WEST  delta x y = (x-delta, y)
-adaptPos EAST  delta x y = (x-delta, y)
-
---------------------------------------------------------------------------------
-adaptPosDefault :: Direction
-                -> Double
-                -> (Double, Double)
-                -> (Double, Double)
-                -> (Double, Double)
-adaptPosDefault NORTH delta (dx,_) (_,y) = (dx, y-delta)
-adaptPosDefault SOUTH delta (dx,_) (_,y) = (dx, y-delta)
-adaptPosDefault WEST  delta (_,dy) (x,_) = (x-delta, dy)
-adaptPosDefault EAST  delta (_,dy) (x,_) = (x-delta, dy)
-
---------------------------------------------------------------------------------
-adaptRect :: Direction -> Double -> Rect -> Rect
-adaptRect NORTH delta r = r & rectY -~ delta
-adaptRect SOUTH delta r = r & rectY -~ delta
-adaptRect WEST  delta r = r & rectX -~ delta
-adaptRect EAST  delta r = r & rectX -~ delta
-
---------------------------------------------------------------------------------
-rangeCollides :: Direction -> Double -> Double -> Rect -> Bool
-rangeCollides d tmin tmax r = collides
+resizeRect :: Area -> Vector2D -> Rect -> Rect
+resizeRect a v r = execState (go a) r
   where
-    rx = r ^. rectX
-    ry = r ^. rectY
-    rw = r ^. rectWidth
-    rh = r ^. rectHeight
+    go TOP_LEFT
+        = do rectX      += dx
+             rectY      += dy
+             rectWidth  -= dx
+             rectHeight -= dy
+    go TOP
+        = do rectY      += dy
+             rectHeight -= dy
+    go TOP_RIGHT
+        = do rectY      += dy
+             rectWidth  += dx
+             rectHeight -= dy
+    go RIGHT
+        = rectWidth += dx
+    go BOTTOM_RIGHT
+        = do rectWidth  += dx
+             rectHeight += dy
+    go BOTTOM
+        = rectHeight += dy
+    go BOTTOM_LEFT
+        = do rectX      += dx
+             rectWidth  -= dx
+             rectHeight += dy
+    go LEFT
+        = do rectX     += dx
+             rectWidth -= dx
 
-    collides =
-        case d of
-            NORTH -> tmin <= (rx+rw) && rx <= tmax
-            SOUTH -> tmin <= (rx+rw) && rx <= tmax
-            EAST  -> tmin <= (ry+rh) && ry <= tmax
-            WEST  -> tmin <= (ry+rh) && ry <= tmax
+    dx = vector2DDeltaX v
+    dy = vector2DDeltaY v
 
 --------------------------------------------------------------------------------
-collisionDelta :: Direction -> Rect -> Rect -> Double
-collisionDelta d l r = delta
+vector2DRect :: Vector2D -> Rect
+vector2DRect v = rectNew fpt height width
   where
-    lx = l ^. rectX
-    ly = l ^. rectY
-    lw = l ^. rectWidth
-    lh = l ^. rectHeight
-
-    rx = r ^. rectX
-    ry = r ^. rectY
-    rw = r ^. rectWidth
-    rh = r ^. rectHeight
-
-    delta =
-        case d of
-            NORTH -> ly + lh - ry
-            WEST  -> lx + lw - rx
-            SOUTH -> negate (ry + rh - ly)
-            EAST  -> negate (rx + rw - lx)
-
---------------------------------------------------------------------------------
-diffPos :: Direction -> Double -> (Double, Double) -> (Double, Double) -> Double
-diffPos NORTH delta (_,y1) (_,y0) = y1 - y0 + delta
-diffPos SOUTH delta (_,y1) (_,y0) = negate (y1 - y0 + delta)
-diffPos WEST  delta (x1,_) (x0,_) = x1 - x0 + delta
-diffPos EAST  delta (x1,_) (x0,_) = negate (x1 - x0 + delta)
-
---------------------------------------------------------------------------------
-oppositeTranslate :: Direction
-                  -> (Double, Double)
-                  -> (Double, Double)
-                  -> Rect
-                  -> Rect
-oppositeTranslate NORTH (x1,_) (x0,_) = translateRectX (x1-x0)
-oppositeTranslate SOUTH (x1,_) (x0,_) = translateRectX (x1-x0)
-oppositeTranslate WEST  (_,y1) (_,y0) = translateRectY (y1-y0)
-oppositeTranslate EAST  (_,y1) (_,y0) = translateRectY (y1-y0)
-
---------------------------------------------------------------------------------
-movePos :: Direction
-        -> (Double, Double)
-        -> (Double, Double)
-        -> (Double, Double)
-movePos NORTH (x1,_) (_,y0) = (x1,y0)
-movePos SOUTH (x1,_) (_,y0) = (x1,y0)
-movePos WEST (_,y1) (x0,_)  = (x0,y1)
-movePos EAST (_,y1) (x0,_)  = (x0,y1)
-
---------------------------------------------------------------------------------
-correctRect :: Direction -> (Double, Double) -> Rect -> (Rect, (Double, Double))
-correctRect NORTH (x,y) r = (translateRectY (negate 1) r, (x, y-1))
-correctRect SOUTH (x,y) r = (translateRectY 1 r, (x, y+1))
-correctRect WEST  (x,y) r = (translateRectX (negate 1) r, (x-1, y))
-correctRect EAST  (x,y) r = (translateRectX 1 r, (x+1, y))
-
---------------------------------------------------------------------------------
-resizeRect :: Double -> Double -> Area -> Rect -> Rect
-resizeRect dx dy area r = execState (go area) r
-  where
-    go TOP_LEFT = do
-        rectX += dx
-        rectY += dy
-        rectWidth  -= dx
-        rectHeight -= dy
-    go TOP = do
-        rectY += dy
-        rectHeight -= dy
-    go TOP_RIGHT = do
-        rectY += dy
-        rectWidth  += dx
-        rectHeight -= dy
-    go RIGHT = do
-        rectWidth += dx
-    go BOTTOM_RIGHT = do
-        rectWidth += dx
-        rectHeight += dy
-    go BOTTOM = do
-        rectHeight += dy
-    go BOTTOM_LEFT = do
-        rectX += dx
-        rectWidth -= dx
-        rectHeight += dy
-    go LEFT = do
-        rectX += dx
-        rectWidth -= dx
+    fpt    = v ^. vectorFrom
+    width  = vector2DWidth v
+    height = vector2DHeight v
 
 --------------------------------------------------------------------------------
 updateDrawSelection :: Pos -> Rect -> Rect
@@ -203,68 +115,29 @@ updateDrawSelectionY y = execState go where
           rectHeight .= y-sy
 
 --------------------------------------------------------------------------------
-moveRect :: Pos -> Pos -> Rect -> Rect
-moveRect (x0,y0) (x,y) = execState go where
+moveRect :: Vector2D -> Rect -> Rect
+moveRect vect = execState go where
   go = do
       rectX += x-x0
       rectY += y-y0
 
---------------------------------------------------------------------------------
-replaceRect :: Direction -> Rect -> Rect -> (Double, Rect)
-replaceRect d l r  = r1
-  where
-    lx = l ^. rectX
-    ly = l ^. rectY
-    lw = l ^. rectWidth
-    lh = l ^. rectHeight
-
-    rx = r ^. rectX
-    ry = r ^. rectY
-    rw = r ^. rectWidth
-    rh = r ^. rectHeight
-
-    r1 =
-        case d of
-            NORTH -> let e = ly + lh - ry in (e, l & rectY -~ e)
-            WEST  -> let e = lx + lw - rx in (e, l & rectX -~ e)
-            SOUTH -> let e = ry + rh - ly in (e, l & rectY +~ e)
-            EAST  -> let e = rx + rw - lx in (e, l & rectX +~ e)
+  pt0 = vect ^. vectorFrom
+  pt  = vect ^. vectorTo
+  x0  = pt0  ^. pointX
+  y0  = pt0  ^. pointY
+  x   = pt   ^. pointX
+  y   = pt   ^. pointY
 
 --------------------------------------------------------------------------------
-intersection :: [Rect] -> Rect -> Maybe (Rect, Direction)
-intersection rs l = getFirst $ foldMap (First . go) rs
+makeDrawSelectionRect :: Vector2D -> Rect
+makeDrawSelectionRect v = rect
   where
-    go r = do
-        dir <- rectIntersect l r
-        return (r, dir)
+    v1 | vector2DBackward v
+         = if vector2DUpward v then swapVector2D v else swapXVector2D v
+       | otherwise
+         = if vector2DUpward v then swapYVector2D v else v
 
---------------------------------------------------------------------------------
-rectRange :: Direction -> Rect -> (Double, Double)
-rectRange d r =
-    case d of
-        NORTH -> (x, x+w)
-        EAST  -> (y, y+h)
-        SOUTH -> (x, x+w)
-        WEST  -> (y, y+h)
-  where
-    x = r ^. rectX
-    y = r ^. rectY
-    w = r ^. rectWidth
-    h = r ^. rectHeight
-
---------------------------------------------------------------------------------
-fromEdge :: Direction -> (Double, Double) -> Rect -> Double
-fromEdge d (x,y) r =
-    case d of
-        NORTH -> y - ry
-        SOUTH -> y - (ry+rh)
-        WEST  -> x - rx
-        EAST  -> x - (rx+rw)
-  where
-    rx = r ^. rectX
-    ry = r ^. rectY
-    rw = r ^. rectWidth
-    rh = r ^. rectHeight
+    rect = vector2DRect v1
 
 --------------------------------------------------------------------------------
 areaCursor :: Area -> CursorType
@@ -284,4 +157,6 @@ isOverGuide gRange opts (Guide pos typ)
     GuideVertical   -> pos-gRange <= x && x <= pos+gRange
     GuideHorizontal -> pos-gRange <= y && y <= pos+gRange
   where
-    (x,y) = drawPointer opts
+    pt = drawPointer opts
+    x  = pt ^. pointX
+    y  = pt ^. pointY

@@ -28,6 +28,7 @@ import qualified Data.Vector                      as V
 import qualified Graphics.UI.Gtk.Poppler.Document as Poppler
 
 --------------------------------------------------------------------------------
+import Dhek.Cartesian
 import Dhek.Version
 
 --------------------------------------------------------------------------------
@@ -62,14 +63,6 @@ data Area
     deriving (Enum, Show, Eq)
 
 --------------------------------------------------------------------------------
-data Direction
-    = NORTH
-    | EAST
-    | SOUTH
-    | WEST
-    deriving (Eq, Show)
-
---------------------------------------------------------------------------------
 data Boards
     = Boards
       { _boardsState :: !Int
@@ -88,8 +81,7 @@ data GType = TextCell
 data Rect
     = Rect
       { _rectId     :: !Int
-      , _rectX      :: !Double
-      , _rectY      :: !Double
+      , _rectPoint  :: !Point2D
       , _rectHeight :: !Double
       , _rectWidth  :: !Double
       , _rectName   :: !String
@@ -136,6 +128,14 @@ makeLenses ''Board
 makeLenses ''Boards
 makeLenses ''Rect
 makeLenses ''Guide
+
+--------------------------------------------------------------------------------
+rectX :: Lens Rect Rect Double Double
+rectX = lens (^. rectPoint.pointX) $ \r d -> r & rectPoint.pointX .~ d
+
+--------------------------------------------------------------------------------
+rectY :: Lens Rect Rect Double Double
+rectY = lens (^. rectPoint.pointY) $ \r d -> r & rectPoint.pointY .~ d
 
 --------------------------------------------------------------------------------
 -- | Instances
@@ -187,30 +187,35 @@ instance ToJSON Rect where
             ps' = maybe ps (const $ iProp:ps) (_rectIndex r) in
         ps'
       where
+        pt    = r ^. rectPoint
         vProp = "value" .= _rectValue r
         iProp = "index" .= _rectIndex r
 
-        props = [ "x"      .= _rectX r
-                , "y"      .= _rectY r
-                , "height" .= _rectHeight r
-                , "width"  .= _rectWidth r
-                , "name"   .= _rectName r
-                , "type"   .= _rectType r
+        props = [ "x"      .= (pt ^. pointX)
+                , "y"      .= (pt ^. pointY)
+                , "height" .= (r ^. rectHeight)
+                , "width"  .= (r ^. rectWidth)
+                , "name"   .= (r ^. rectName)
+                , "type"   .= (r ^. rectType)
                 ]
 
 --------------------------------------------------------------------------------
 instance FromJSON Rect where
     parseJSON (Object v) =
-        Rect 0         <$>
-        v .:  "x"      <*>
-        v .:  "y"      <*>
-        v .:  "height" <*>
-        v .:  "width"  <*>
-        v .:  "name"   <*>
-        v .:  "type"   <*>
-        v .:? "value"  <*>
+        Rect 0            <$>
+        fromJsonPoint2B v <*>
+        v .:  "height"    <*>
+        v .:  "width"     <*>
+        v .:  "name"      <*>
+        v .:  "type"      <*>
+        v .:? "value"     <*>
         v .:? "index"
     parseJSON _ = mzero
+
+--------------------------------------------------------------------------------
+fromJsonPoint2B :: Object -> Parser Point2D
+fromJsonPoint2B v
+    = point2D <$> v .: "x" <*> v .: "y"
 
 --------------------------------------------------------------------------------
 toJsonGrouped :: Grouped -> Value
@@ -229,8 +234,8 @@ toJsonTextCell name rs
              ]
   where
     toCell r
-        = object [ "x"      .= _rectX r
-                 , "y"      .= _rectY r
+        = object [ "x"      .= (r ^. rectX)
+                 , "y"      .= (r ^. rectY)
                  , "width"  .= _rectWidth r
                  , "height" .= _rectHeight r
                  , "index"  .= _rectIndex r
@@ -262,8 +267,7 @@ parseTextCell (Object v)
                       h <- c .: "height"
                       i <- c .: "index"
                       return Rect{ _rectId     = 0
-                                 , _rectX      = x
-                                 , _rectY      = y
+                                 , _rectPoint  = point2D x y
                                  , _rectType   = "textcell"
                                  , _rectWidth  = w
                                  , _rectHeight = h
@@ -300,36 +304,34 @@ fillUp n xs = go xs [1..n]
     go _ _ = error "impossible situation in Types.fillUp"
 
 --------------------------------------------------------------------------------
-rectNew :: Double -> Double -> Double -> Double -> Rect
-rectNew x y h w = Rect 0 x y h w "field" "text" Nothing Nothing
-
---------------------------------------------------------------------------------
-translateRect :: Double -> Double -> Rect -> Rect
-translateRect x y r = r & rectX +~ x & rectY +~ y
-
---------------------------------------------------------------------------------
-translateRectX :: Double -> Rect -> Rect
-translateRectX x r = r & rectX +~ x
-
---------------------------------------------------------------------------------
-translateRectY :: Double -> Rect -> Rect
-translateRectY y r = r & rectY +~ y
+rectNew :: Point2D -> Double -> Double -> Rect
+rectNew pt h w
+    = Rect
+      { _rectId     = 0
+      , _rectPoint  = pt
+      , _rectHeight = h
+      , _rectWidth  = w
+      , _rectName   = "field"
+      , _rectType   = "text"
+      , _rectValue  = Nothing
+      , _rectIndex  = Nothing
+      }
 
 --------------------------------------------------------------------------------
 normalize :: Rect -> Rect
 normalize r = newRectY newRectX
   where
-    x = _rectX r
-    y = _rectY r
-    w = _rectWidth r
-    h = _rectHeight r
+    w = r ^. rectWidth
+    h = r ^. rectHeight
 
     newRectX
-        | w < 0     = r { _rectX = x + w, _rectWidth = abs w }
+        | w < 0 = r & rectX     +~ w
+                    & rectWidth .~ abs w
         | otherwise = r
 
     newRectY xr
-        | h < 0     = xr { _rectY = y + h, _rectHeight = abs h }
+        | h < 0 = xr & rectY      +~ h
+                     & rectHeight .~ abs h
         | otherwise = xr
 
 --------------------------------------------------------------------------------
@@ -351,59 +353,15 @@ rectArea eps r area = go area
     h = r ^. rectHeight
     w = r ^. rectWidth
 
-    go TOP_LEFT     = rectNew x y eps eps
-    go TOP          = rectNew (x+eps) y eps (w-2*eps)
-    go TOP_RIGHT    = rectNew (x+w-eps) y eps eps
-    go RIGHT        = rectNew (x+w-eps) (y+eps) (h-2*eps) eps
-    go BOTTOM_RIGHT = rectNew (x+w-eps) (y+h-eps) eps eps
-    go BOTTOM       = rectNew (x+eps) (y+h-eps) eps (w-2*eps)
-    go BOTTOM_LEFT  = rectNew x (y+h-eps) eps eps
-    go LEFT         = rectNew x (y+eps) (h-2*eps) eps
+    go TOP_LEFT     = rectNew (point2D x y) eps eps
+    go TOP          = rectNew (point2D (x+eps) y) eps (w-2*eps)
+    go TOP_RIGHT    = rectNew (point2D (x+w-eps) y) eps eps
+    go RIGHT        = rectNew (point2D (x+w-eps) (y+eps)) (h-2*eps) eps
+    go BOTTOM_RIGHT = rectNew (point2D (x+w-eps) (y+h-eps)) eps eps
+    go BOTTOM       = rectNew (point2D (x+eps) (y+h-eps)) eps (w-2*eps)
+    go BOTTOM_LEFT  = rectNew (point2D x (y+h-eps)) eps eps
+    go LEFT         = rectNew (point2D x (y+eps)) (h-2*eps) eps
 
---------------------------------------------------------------------------------
--- | Using Minkowski Sum
-rectIntersect :: Rect -> Rect -> Maybe Direction
-rectIntersect a b
-    | not collides = Nothing
-    | otherwise =
-        if wy > hx
-        then if wy > negate hx
-             then Just SOUTH
-             else Just WEST
-        else if wy > negate hx
-             then Just EAST
-             else Just NORTH
-  where
-    aw = a ^. rectWidth
-    ah = a ^. rectHeight
-    ax = a ^. rectX
-    ay = a ^. rectY
-    acenterx = ax + aw / 2
-    acentery = ay + ah / 2
-
-    bw = b ^. rectWidth
-    bh = b ^. rectHeight
-    bx = b ^. rectX
-    by = b ^. rectY
-    bcenterx = bx + bw / 2
-    bcentery = by + bh / 2
-
-    w  = 0.5 * (aw + bw)
-    h  = 0.5 * (ah + bh)
-    dx = acenterx - bcenterx
-    dy = acentery - bcentery
-
-    collides = abs dx <= w && abs dy <= h
-
-    wy = w * dy
-    hx = h * dx
-
---------------------------------------------------------------------------------
-oppositeDirection :: Direction -> Direction
-oppositeDirection NORTH = SOUTH
-oppositeDirection SOUTH = NORTH
-oppositeDirection EAST  = WEST
-oppositeDirection WEST  = EAST
 
 --------------------------------------------------------------------------------
 sameRectId :: Rect -> Rect -> Bool

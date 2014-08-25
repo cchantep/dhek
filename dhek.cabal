@@ -58,6 +58,7 @@ executable dhek
 
   other-modules: Dhek.Launcher
                  Dhek.Action
+                 Dhek.Cartesian
                  Dhek.Engine
                  Dhek.Engine.Instr
                  Dhek.Engine.Runtime
@@ -69,6 +70,7 @@ executable dhek
                  Dhek.Mode.Common.Draw
                  Dhek.Mode.Duplicate
                  Dhek.Mode.DuplicateKey
+                 Dhek.Mode.Effect.Collision
                  Dhek.Mode.Normal
                  Dhek.Mode.Selection
                  Dhek.PDF.Inlined

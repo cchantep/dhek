@@ -44,8 +44,8 @@ instance ModeMonad DuplicateKeyMode where
 
     mRelease _
         = DuplicateKeyMode $
-              do mR <- duplicateGetDupRect
-                 maybe (return ()) dupEnd mR
+              do mR <- duplicateGetDup
+                 maybe (return ()) (\(r, v) -> dupEnd r v) mR
 
     mDrawing page ratio
         = DuplicateKeyMode $ mDrawing page ratio
