@@ -11,7 +11,6 @@ module Dhek.AppUtil where
 
 --------------------------------------------------------------------------------
 import Foreign.C
-import Foreign.C.String
 
 --------------------------------------------------------------------------------
 import qualified Graphics.UI.Gtk as Gtk
@@ -25,9 +24,7 @@ appTerminate = return ()
 
 --------------------------------------------------------------------------------
 browserOpen :: String -> IO ()
-browserOpen url = do
-  curl <- newCString url
-  browser_open curl
+browserOpen url = withCString url browser_open
 
 --------------------------------------------------------------------------------
 -- | Returns true if given key name is the one of expected modifier

@@ -28,9 +28,7 @@ appTerminate = do
 
 --------------------------------------------------------------------------------
 browserOpen :: String -> IO ()
-browserOpen url = do
-  curl <- newCString url
-  nsbrowserOpen curl
+browserOpen url = withCString url nsbrowserOpen
 
 --------------------------------------------------------------------------------
 -- | Returns true if given key name is the one of expected modifier
