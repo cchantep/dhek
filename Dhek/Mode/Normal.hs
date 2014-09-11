@@ -33,6 +33,7 @@ import Dhek.I18N
 import Dhek.Mode.Common.Draw
 import Dhek.Mode.DuplicateKey
 import Dhek.Mode.Effect.Collision
+import Dhek.Mode.Effect.Magnetic
 import Dhek.Types
 import Dhek.Utils (findDelete)
 
@@ -47,6 +48,7 @@ data Input
 --------------------------------------------------------------------------------
 data Effect
     = Col Collide
+    | Att Attract
     | None
 
 --------------------------------------------------------------------------------
@@ -162,6 +164,10 @@ runOrMode nm m
                        put s'
 
 --------------------------------------------------------------------------------
+magneticForce :: Double -> Double
+magneticForce ratio = 25 / ratio
+
+--------------------------------------------------------------------------------
 normalMove :: DrawEnv -> NormalMode ()
 normalMove env
     = do actRef  <- asks inputAction
@@ -174,7 +180,10 @@ normalMove env
 --------------------------------------------------------------------------------
 normalOnAction :: DrawEnv -> Action -> NormalMode Action
 normalOnAction env act
-    = normalActionDispatch env act
+    = do magnet <- use engineMagnetic
+         if magnet
+             then magneticAction env act
+             else normalActionDispatch env act
 
 --------------------------------------------------------------------------------
 normalActionDispatch :: DrawEnv -> Action -> NormalMode Action
@@ -183,6 +192,62 @@ normalActionDispatch env act
           Drawing v   -> normalDrawSelection env v
           MoveGuide g -> normalMoveGuide g
           Transform t -> normalTransform env t
+
+--------------------------------------------------------------------------------
+magneticAttract :: DrawEnv -> Action -> NormalMode (Maybe Action)
+magneticAttract env act
+    = do gs <- engineStateGetGuides
+         let ls = fmap toLine gs
+         case act of
+             Drawing v
+                 -> return $ attractDraw env v ls
+             MoveGuide _
+                 -> return Nothing
+             Transform t
+                 -> case t of
+                        Moving r _ v
+                            -> return $ attractMove env r v ls
+                        Resizing r a v
+                            -> return $ attractResize env r a v ls
+  where
+    toLine g
+        = case g ^. guideType of
+              GuideVertical   -> verticalLine (g ^. guideValue)
+              GuideHorizontal -> horizontalLine (g ^. guideValue)
+
+--------------------------------------------------------------------------------
+attractMove :: DrawEnv -> Rect -> Vector2D -> [Line] -> Maybe Action
+attractMove env r v ls
+    = fmap go mAtt
+  where
+    go att  = Transform $ Moving r (Att att) newVect
+    mAtt    = magneticAttraction (magneticMove r newVect) force ls
+    pt      = drawPointer env
+    ratio   = drawRatio env
+    newVect = v & vectorTo .~ pt
+    force   = magneticForce ratio
+
+--------------------------------------------------------------------------------
+attractDraw :: DrawEnv -> Vector2D -> [Line] -> Maybe Action
+attractDraw _ _ _
+    = Nothing
+  -- where
+  --   mAtt = magneticAttraction (magneticDraw v) ls
+
+--------------------------------------------------------------------------------
+attractResize :: DrawEnv -> Rect -> Area -> Vector2D -> [Line] -> Maybe Action
+attractResize _ _ _ _ _
+    = Nothing
+  -- where
+  --   mAtt = magneticAttraction (magneticResize r a v) ls
+
+--------------------------------------------------------------------------------
+magneticAction :: DrawEnv -> Action -> NormalMode Action
+magneticAction env act
+    = do mAtt <- magneticAttract env act
+         case mAtt of
+             Nothing     -> normalActionDispatch env act
+             Just newAct -> return newAct
 
 --------------------------------------------------------------------------------
 normalSetActionCursor :: Action -> NormalMode ()
@@ -353,6 +418,8 @@ normalTransformRelease t
                                  -> moveRect v r'
                              Col c
                                  -> projectCollision (collisionMove r' v ) c
+                             Att a
+                                 -> projectMagnetic (magneticMove r' v) a
                  Resizing r' a v
                      -> normalize $ resizeRect a v r'
              rid = r ^. rectId
@@ -546,6 +613,7 @@ transGetRect (Transform t)
               -> case mC of
                       None  -> Just $ moveRect v r
                       Col c -> Just $ projectCollision (collisionMove r v) c
+                      Att a -> Just $ projectMagnetic (magneticMove r v) a
           Resizing r a v -> Just $ resizeRect a v r
 transGetRect _ = Nothing
 

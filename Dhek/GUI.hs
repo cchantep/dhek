@@ -90,6 +90,7 @@ data GUI =
     , guiDrawPopup :: Gtk.Window
     , guiBlankDocumentWidget :: Widget BlankDocumentEvent
     , guiDrawingAreaViewport :: Gtk.Viewport
+    , guiMagneticForceMenuItem :: Gtk.CheckMenuItem
     }
 
 --------------------------------------------------------------------------------
@@ -157,17 +158,21 @@ makeGUI = do
     iitem  <- Gtk.menuItemNewWithLabel $ msgStr MsgLoadMappings
     sitem  <- Gtk.menuItemNewWithLabel $ msgStr MsgSaveMappings
     citem  <- Gtk.checkMenuItemNewWithLabel $ msgStr MsgEnableOverlap
+    mitem  <- Gtk.checkMenuItemNewWithLabel $ msgStr MsgMagneticForce
     Gtk.menuShellAppend fmenu oitem
     Gtk.menuShellAppend fmenu ovitem
     Gtk.menuShellAppend fmenu iitem
     Gtk.menuShellAppend fmenu sitem
     Gtk.menuShellAppend fmenu citem
+    Gtk.menuShellAppend fmenu mitem
     Gtk.menuItemSetSubmenu fitem fmenu
     Gtk.menuShellAppend mbar fitem
     Gtk.containerAdd malign mbar
     Gtk.widgetSetSensitive iitem False
     Gtk.widgetSetSensitive sitem False
     Gtk.widgetSetSensitive citem False
+    Gtk.widgetSetSensitive mitem False
+    Gtk.checkMenuItemSetActive mitem True
     Gtk.boxPackStart wvbox malign Gtk.PackNatural 0
 
     -- Button Next
@@ -437,6 +442,7 @@ makeGUI = do
                 , guiDrawPopup = drawpop
                 , guiBlankDocumentWidget = bdw
                 , guiDrawingAreaViewport = viewport
+                , guiMagneticForceMenuItem = mitem
                 }
 
 --------------------------------------------------------------------------------

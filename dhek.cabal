@@ -1,5 +1,5 @@
 name:                dhek
-version:             1.0.12
+version:             1.0.13
 -- synopsis:
 -- description:
 -- license:
@@ -71,6 +71,7 @@ executable dhek
                  Dhek.Mode.Duplicate
                  Dhek.Mode.DuplicateKey
                  Dhek.Mode.Effect.Collision
+                 Dhek.Mode.Effect.Magnetic
                  Dhek.Mode.Normal
                  Dhek.Mode.Selection
                  Dhek.PDF.Inlined

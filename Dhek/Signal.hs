@@ -60,6 +60,11 @@ connectSignals g i = do
                  do b <- isActive Overlap
                     active Overlap (not b)
 
+    _ <- Gtk.on (guiMagneticForceMenuItem g) Gtk.menuItemActivate $
+         runProgram i $
+             do b <- isActive Magnetic
+                active Magnetic (not b)
+
     -- Previous Button ---
     _ <- Gtk.onToolButtonClicked (guiPrevButton g) $
              do runProgram i onPrev

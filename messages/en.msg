@@ -46,3 +46,4 @@ ZoomOutTooltip: Zoom Out
 ApplidokTooltip: Open Applidok service
 PreviousPageTooltip: Go back to previous page
 NextPageTooltip: Go to next page
+MagneticForce: Magnetic force

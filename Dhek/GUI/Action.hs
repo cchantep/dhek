@@ -24,6 +24,7 @@ module Dhek.GUI.Action
     , gtkOpenJsonFile
     , gtkSetRects
     , gtkSetOverlapActive
+    , gtkSetMagneticActive
     , gtkSetValuePropVisible
     , gtkShowConfirm
     , gtkSetIndexPropVisible
@@ -251,6 +252,11 @@ gtkSetRects rects gui = do
 gtkSetOverlapActive :: GUI -> Bool -> IO ()
 gtkSetOverlapActive gui b
     = Gtk.checkMenuItemSetActive (guiOverlapMenuItem gui) b
+
+--------------------------------------------------------------------------------
+gtkSetMagneticActive :: GUI -> Bool -> IO ()
+gtkSetMagneticActive gui b
+    = Gtk.checkMenuItemSetActive (guiMagneticForceMenuItem gui) b
 
 --------------------------------------------------------------------------------
 gtkSetValuePropVisible :: Bool -> GUI -> IO ()

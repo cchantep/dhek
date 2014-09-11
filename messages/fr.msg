@@ -46,3 +46,4 @@ ZoomOutTooltip: Diminuer l'échelle du document
 ApplidokTooltip: Ouvrir le service Applidok
 PreviousPageTooltip: Aller à la page précédente
 NextPageTooltip: Aller à la page suivante
+MagneticForce: Force magnetique

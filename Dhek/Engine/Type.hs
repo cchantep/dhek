@@ -102,6 +102,7 @@ data EngineState = EngineState
     , _engineCurZoom      :: {-# UNPACK #-} !Int
     , _engineRectId       :: {-# UNPACK #-} !Int
     , _engineOverlap      :: !Bool
+    , _engineMagnetic     :: !Bool
     , _engineDraw         :: !Bool
     , _enginePropLabel    :: !String
     , _enginePropType     :: !(Maybe String)

@@ -226,10 +226,15 @@ instance Runtime DefaultRuntime where
                 do g <- asks _gui
                    engineOverlap .= b
                    liftIO $ gtkSetOverlapActive g b
+            Magnetic ->
+                do g <- asks _gui
+                   engineMagnetic .= b
+                   liftIO $ gtkSetMagneticActive g b
 
     rIsActive opt
         = case opt of
             Overlap  -> use engineOverlap
+            Magnetic -> use engineMagnetic
 
     rAddEvent e
         = engineEventStack %= (e:)
@@ -464,6 +469,7 @@ stateNew
       , _engineCurZoom      = 3
       , _engineRectId       = 0
       , _engineOverlap      = False
+      , _engineMagnetic     = True
       , _engineDraw         = False
       , _enginePropLabel    = ""
       , _enginePropType     = Nothing
@@ -602,6 +608,7 @@ loadViewer i v = do
             Gtk.widgetSetSensitive (guiJsonOpenMenuItem gui) True
             Gtk.widgetSetSensitive (guiJsonSaveMenuItem gui) True
             Gtk.widgetSetSensitive (guiOverlapMenuItem gui) True
+            Gtk.widgetSetSensitive (guiMagneticForceMenuItem gui) True
             Gtk.widgetSetSensitive (guiPrevButton gui) False
             Gtk.widgetSetSensitive (guiNextButton gui) (nb /= 1)
             Gtk.windowSetTitle (guiWindow gui)
@@ -627,6 +634,7 @@ loadViewer i v = do
             Gtk.widgetSetSensitive (guiJsonOpenMenuItem gui) True
             Gtk.widgetSetSensitive (guiJsonSaveMenuItem gui) True
             Gtk.widgetSetSensitive (guiOverlapMenuItem gui) True
+            Gtk.widgetSetSensitive (guiMagneticForceMenuItem gui) True
             Gtk.widgetSetSensitive (guiPrevButton gui) False
             Gtk.widgetSetSensitive (guiNextButton gui) (nb /= 1)
             Gtk.windowSetTitle (guiWindow gui)
