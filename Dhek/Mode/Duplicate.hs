@@ -99,11 +99,12 @@ instance ModeMonad DuplicateMode where
     mRelease _ = return ()
 
     mDrawing page ratio = do
-        gui    <- asks inputGUI
-        dupRef <- asks inputDup
-        oEvR   <- liftIO $ readIORef dupRef
-        pid    <- use $ engineCurPage
-        bd     <- use $ engineBoards.boardsMap.at pid.traverse
+        gui       <- asks inputGUI
+        dupRef    <- asks inputDup
+        oEvR      <- liftIO $ readIORef dupRef
+        pid       <- use $ engineCurPage
+        bd        <- use $ engineBoards.boardsMap.at pid.traverse
+        mSelected <- use $ engineDrawState.drawSelected
         let rects  = bd ^. boardRects.to I.elems
 
         liftIO $ do
@@ -127,6 +128,8 @@ instance ModeMonad DuplicateMode where
 
                 -- We consider every rectangle as regular one (e.g not selected)
                 traverse_ (drawRect regularColor Line) rects
+
+                traverse_ (drawRect selectedColor Line) mSelected
 
                 -- Draw event rectangle
                 for_ eventR $ \r -> do
@@ -176,8 +179,8 @@ dupStart opts
 dupEnd :: Rect -> Vector2D -> DuplicateMode ()
 dupEnd x v
     = do rid <- engineDrawState.drawFreshId <+= 1
-         let r = normalize r' & rectId    .~ rid
-                              & rectIndex %~ (fmap (+1))
+         let r =  r' & rectId    .~ rid
+                     & rectIndex %~ (fmap (+1))
          -- Add rectangle
          input <- ask
          let gui    = inputGUI input
@@ -185,9 +188,11 @@ dupEnd x v
 
          engineEventStack %= (CreateRect:)
          engineStateSetRect r
+         engineDrawState.drawSelected ?= r
 
          liftIO $
              do gtkAddRect r gui
+                gtkSelectRect r gui
                 gtkSetDhekCursor gui Nothing
                 writeIORef dupRef Nothing
   where
