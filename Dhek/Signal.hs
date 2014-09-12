@@ -123,7 +123,7 @@ connectSignals g i = do
                        runProgram i $
                            do gs <- getGuides
                               mG <- guideGetCurrent
-                              let guideColor = RGB 0.16 0.26 0.87
+                              let guideColor = RGB 196 160 0
                               liftIO $
                                   guiRenderGuides g ratio page guideColor gs
                               liftIO $
