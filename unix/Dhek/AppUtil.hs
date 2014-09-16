@@ -12,6 +12,13 @@ module Dhek.AppUtil where
 import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
+import Dhek.I18N
+
+--------------------------------------------------------------------------------
+uiLoaded :: (DhekMessage -> String) -> Gtk.Window -> IO Gtk.Window
+uiLoaded _ mainWin = return mainWin
+
+--------------------------------------------------------------------------------
 appTerminate :: IO ()
 appTerminate = return ()
 

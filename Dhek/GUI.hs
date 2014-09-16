@@ -33,7 +33,7 @@ import qualified Graphics.UI.Gtk              as Gtk
 import qualified Graphics.UI.Gtk.Poppler.Page as Poppler
 
 --------------------------------------------------------------------------------
-import           Dhek.AppUtil (appTerminate)
+import           Dhek.AppUtil (appTerminate, uiLoaded)
 import           Dhek.I18N
 import           Dhek.Mode.Common.Draw
 import qualified Dhek.Resources as Resources
@@ -390,11 +390,12 @@ makeGUI = do
              do Gtk.mainQuit
                 appTerminate
 
-    Gtk.widgetShowAll win
-
     cache  <- newIORef Nothing
 
     bdw <- newBlankDocumentWidget msgStr win
+
+    _ <- uiLoaded msgStr win
+    Gtk.widgetShowAll win
 
     return $ GUI{ guiWindow = win
                 , guiPdfDialog = pdfch
@@ -468,7 +469,7 @@ createDialog win title pat filtName afflabel action msgStr = do
 
 --------------------------------------------------------------------------------
 runGUI :: GUI -> IO ()
-runGUI _ = Gtk.mainGUI
+runGUI _ = do Gtk.mainGUI
 
 --------------------------------------------------------------------------------
 loadImage :: Ptr (Gtk.InlineImage) -> IO Gtk.Image

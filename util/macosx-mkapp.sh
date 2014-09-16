@@ -49,6 +49,7 @@ mkdir -p "$BUILDDIR/$APPNAME.app/Contents/Resources/lib/gtk-2.0/2.10.0"
 echo 'APPLdhek' > "$BUILDDIR/$APPNAME.app/Contents/PkgInfo"
 sed -e "s/@VER@/$VER/g" < "$UTILDIR/macosx-app/Info.plist" > "$BUILDDIR/$APPNAME.app/Contents/Info.plist"
 cp "$UTILDIR/macosx-app/dhek.icns" "$BUILDDIR/$APPNAME.app/Contents/Resources"
+cp "$UTILDIR/macosx-app/fonts.conf" "$BUILDDIR/$APPNAME.app/Contents/Resources"
  
 cp "$BINPATH" "$BUILDDIR/$APPNAME.app/Contents/MacOS/"
 cp -R "$UTILDIR/../resources" "$BUILDDIR/$APPNAME.app/Contents/MacOS/resources"

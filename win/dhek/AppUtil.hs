@@ -16,7 +16,14 @@ import Foreign.C
 import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
+import Dhek.I18N
+
+--------------------------------------------------------------------------------
 foreign import ccall "util.h browser_open" browser_open :: CString -> IO ()
+
+--------------------------------------------------------------------------------
+uiLoaded :: (DhekMessage -> String) -> Gtk.Window -> IO Gtk.Window
+uiLoaded _ mainWin = return mainWin
 
 --------------------------------------------------------------------------------
 appTerminate :: IO ()
