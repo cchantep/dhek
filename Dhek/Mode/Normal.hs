@@ -25,6 +25,7 @@ import qualified Graphics.UI.Gtk          as Gtk
 --------------------------------------------------------------------------------
 import Dhek.Cartesian
 import Dhek.Engine.Instr
+import Dhek.Engine.Misc.LastHistory
 import Dhek.Engine.Type
 import Dhek.Geometry
 import Dhek.GUI
@@ -480,8 +481,8 @@ normalDrawing page ratio
          ds     <- use $ engineDrawState
          pid    <- use $ engineCurPage
          bd     <- use $ engineBoards.boardsMap.at pid.traverse
-         let --guides    = bd ^. boardGuides
-             curGuide  = mAct >>= actionGetGuide
+         mSid   <- use $ engineDrawState.drawSelected.to lhPeek
+         let curGuide  = mAct >>= actionGetGuide
              rects     = bd ^. boardRects.to I.elems
              overGuide = ds ^. drawOverGuide
 
@@ -513,7 +514,7 @@ normalDrawing page ratio
                  -- Draw the entire board
                  for_ rects $ \r ->
                      case () of
-                         _ | Just r == ds ^. drawSelected -> do
+                         _ | Just (r ^. rectId) == mSid -> do
                              drawRect selectedColor Line r
 
                            | Just r == ds ^. drawOverRect ->
@@ -569,7 +570,7 @@ normalModeManager gui
 --------------------------------------------------------------------------------
 normalSelectRectangle :: Rect -> NormalMode ()
 normalSelectRectangle r = do
-    engineDrawState.drawSelected ?= r
+    engineDrawState.drawSelected %= lhPush (r ^. rectId)
     gui <- asks inputGUI
     liftIO $ gtkSelectRect r gui
 

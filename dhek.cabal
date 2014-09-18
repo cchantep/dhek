@@ -62,6 +62,7 @@ executable dhek
                  Dhek.Cartesian
                  Dhek.Engine
                  Dhek.Engine.Instr
+                 Dhek.Engine.Misc.LastHistory
                  Dhek.Engine.Runtime
                  Dhek.Engine.Type
                  Dhek.File

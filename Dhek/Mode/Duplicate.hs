@@ -37,6 +37,7 @@ import qualified Graphics.UI.Gtk              as Gtk
 --------------------------------------------------------------------------------
 import Dhek.Cartesian
 import Dhek.Engine.Instr
+import Dhek.Engine.Misc.LastHistory
 import Dhek.Engine.Type
 import Dhek.Geometry
 import Dhek.GUI
@@ -99,13 +100,15 @@ instance ModeMonad DuplicateMode where
     mRelease _ = return ()
 
     mDrawing page ratio = do
-        gui       <- asks inputGUI
-        dupRef    <- asks inputDup
-        oEvR      <- liftIO $ readIORef dupRef
-        pid       <- use $ engineCurPage
-        bd        <- use $ engineBoards.boardsMap.at pid.traverse
-        mSelected <- use $ engineDrawState.drawSelected
-        let rects  = bd ^. boardRects.to I.elems
+        gui    <- asks inputGUI
+        dupRef <- asks inputDup
+        oEvR   <- liftIO $ readIORef dupRef
+        pid    <- use $ engineCurPage
+        bd     <- use $ engineBoards.boardsMap.at pid.traverse
+        mSid   <- use $ engineDrawState.drawSelected.to lhPeek
+        mSel   <- traverse engineStateGetRect mSid
+        let mSelected = join mSel
+            rects     = bd ^. boardRects.to I.elems
 
         liftIO $ do
             frame     <- Gtk.widgetGetDrawWindow $ guiDrawingArea gui
@@ -188,7 +191,7 @@ dupEnd x v
 
          engineEventStack %= (CreateRect:)
          engineStateSetRect r
-         engineDrawState.drawSelected ?= r
+         engineDrawState.drawSelected %= lhPush (r ^. rectId)
 
          liftIO $
              do gtkAddRect r gui

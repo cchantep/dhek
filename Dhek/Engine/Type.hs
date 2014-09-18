@@ -21,6 +21,7 @@ import           Graphics.UI.Gtk (Modifier)
 --------------------------------------------------------------------------------
 import Dhek.Cartesian
 import Dhek.Engine.Instr
+import Dhek.Engine.Misc.LastHistory
 import Dhek.Types
 
 --------------------------------------------------------------------------------
@@ -89,7 +90,7 @@ data KbEnv
 --------------------------------------------------------------------------------
 data DrawState
     = DrawState
-      { _drawSelected  :: !(Maybe Rect)
+      { _drawSelected  :: !(LastHistory Int) -- hold Rect id
       , _drawOverRect  :: !(Maybe Rect)
       , _drawFreshId   :: !Int
       , _drawNewGuide  :: !(Maybe Guide)
@@ -123,7 +124,7 @@ data EngineEnv
 -- | Constructors
 --------------------------------------------------------------------------------
 drawStateNew :: DrawState
-drawStateNew = DrawState{ _drawSelected  = Nothing
+drawStateNew = DrawState{ _drawSelected  = lhNew
                         , _drawOverRect  = Nothing
                         , _drawFreshId   = 0
                         , _drawNewGuide  = Nothing
@@ -230,6 +231,13 @@ engineStateSetRect r
     = do pid <- use engineCurPage
          let rid = r ^. rectId
          engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r
+
+--------------------------------------------------------------------------------
+engineStateGetRect :: MonadState EngineState m => Int -> m (Maybe Rect)
+engineStateGetRect rid
+    = do pid <- use engineCurPage
+         m   <- use $ engineBoards.boardsMap.at pid.traverse.boardRects
+         return $ I.lookup rid m
 
 --------------------------------------------------------------------------------
 engineStateGetGuides :: MonadState EngineState m => m [Guide]

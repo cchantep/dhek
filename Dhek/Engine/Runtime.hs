@@ -31,6 +31,7 @@ import qualified Graphics.UI.Gtk.Poppler.Page     as Poppler
 --------------------------------------------------------------------------------
 import Dhek.Cartesian
 import Dhek.Engine.Instr
+import Dhek.Engine.Misc.LastHistory
 import Dhek.Engine.Type
 import Dhek.GUI
 import Dhek.GUI.Action
@@ -80,7 +81,9 @@ newtype DefaultRuntime a
 --------------------------------------------------------------------------------
 instance Runtime DefaultRuntime where
     rGetSelected
-        = use $ engineDrawState.drawSelected
+        = do mSid <- use $ engineDrawState.drawSelected.to lhPeek
+             mSel <- traverse engineStateGetRect mSid
+             return $ join mSel
 
     rGetAllSelected
         = do gui <- asks _gui
@@ -102,7 +105,7 @@ instance Runtime DefaultRuntime where
              return $ maybe (-1) (\v -> v ^. viewerPageCount) vopt
 
     rIncrPage
-        = do engineDrawState.drawSelected .= Nothing
+        = do engineDrawState.drawSelected .= lhNew
              ncur <- engineCurPage <+= 1
              g    <- asks _gui
              s    <- get
@@ -115,7 +118,7 @@ instance Runtime DefaultRuntime where
              liftIO $ gtkIncrZoom ncur 10 g
 
     rDecrPage
-        = do engineDrawState.drawSelected .= Nothing
+        = do engineDrawState.drawSelected .= lhNew
              ncur <- engineCurPage <-= 1
              g    <- asks _gui
              s    <- get
@@ -135,8 +138,11 @@ instance Runtime DefaultRuntime where
 
     rUnselectRect
         = do g <- asks _gui
-             engineDrawState.drawSelected .= Nothing
-             liftIO $ gtkUnselect g
+             engineDrawState.drawSelected %= lhPop
+             mSid <- use $ engineDrawState.drawSelected.to lhPeek
+             mSel <- traverse engineStateGetRect mSid
+             let mSelected = join mSel
+             liftIO $ maybe (gtkUnselect g) (\r -> gtkSelectRect r g) mSelected
 
     rDraw
         = engineDraw .= True
@@ -339,7 +345,7 @@ _selectRect gui r = do
 
      pid <- use engineCurPage
 
-     engineDrawState.drawSelected ?= r
+     engineDrawState.drawSelected %= lhPush (r ^. rectId)
      engineBoards.boardsMap.at pid.traverse.boardRects.at rid ?= r
 
      liftIO $ gtkSelectRect r gui
