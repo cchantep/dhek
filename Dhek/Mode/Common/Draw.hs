@@ -16,6 +16,9 @@ import Dhek.Types
 data RGB = RGB Double Double Double
 
 --------------------------------------------------------------------------------
+data RGBA = RGBA Double Double Double Double
+
+--------------------------------------------------------------------------------
 data Style = Line
            | Dash
 
@@ -90,6 +93,35 @@ drawRect (RGB red green blue) s r = do
     Cairo.closePath
     Cairo.stroke
     Cairo.restore
+
+--------------------------------------------------------------------------------
+drawRectA :: RGBA
+          -> RGBA
+          -> Style
+          -> Rect
+          -> Cairo.Render ()
+drawRectA rgbaR rgbaB s r = do
+    let x = r ^. rectX
+        y = r ^. rectY
+        h = r ^. rectHeight
+        w = r ^. rectWidth
+
+    Cairo.save
+    Cairo.setSourceRGBA redB greenB blueB alphaB
+    case s of
+        Line -> Cairo.setLineWidth 1
+        Dash -> Cairo.setDash [5] 5
+    Cairo.rectangle x y w h
+    Cairo.stroke
+    Cairo.setSourceRGBA redR greenR blueR alphaR
+    Cairo.rectangle x y w h
+    Cairo.fill
+    Cairo.closePath
+    Cairo.restore
+
+  where
+    (RGBA redR greenR blueR alphaR) = rgbaR
+    (RGBA redB greenB blueB alphaB) = rgbaB
 
 --------------------------------------------------------------------------------
 drawGuide :: Double -- Width

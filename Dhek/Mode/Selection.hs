@@ -115,7 +115,9 @@ instance ModeMonad SelectionMode where
                                   (rects \\ rsSel)
 
                     _ -> do let selection = mAct >>= getSelectionRect
-                            traverse_ (drawRect selectionColor Dash) selection
+                            traverse_
+                                (drawRectA selectionRColor selectionBColor Line)
+                                selection
                             traverse_ (drawRect regularColor Line)
                                 (rects \\ rsSel)
                             traverse_ (drawRect selectedColor Line) rsSel
@@ -123,7 +125,8 @@ instance ModeMonad SelectionMode where
       where
         regularColor   = rgbBlue
         selectedColor  = rgbRed
-        selectionColor = rgbGreen
+        selectionRColor = RGBA 0 0 0 0.18
+        selectionBColor = RGBA 0 0 0 0.3
 
     mKeyPress kb
         = when (isKeyModifier $ kbKeyName kb) $
