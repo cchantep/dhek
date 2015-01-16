@@ -78,6 +78,8 @@ cabal update
 cabal install alex happy gtk2hs-buildtools
 ```
 
+> Due to dependency-resolution-hell, before install other Haskell packages you should install the following: `text-1.1.1.3`, `mtl-2.1.3.1` and `utf8-string-0.3.8`.
+
 #### Dhek
 
 In order to build Dhek itself (finally):
