@@ -16,6 +16,7 @@ import Control.Applicative
 import           Control.Lens
 import           Control.Monad.State
 import qualified Data.IntMap as I
+import           Data.Text
 import           Graphics.UI.Gtk (Modifier)
 
 --------------------------------------------------------------------------------
@@ -83,7 +84,7 @@ data DrawEnv
 --------------------------------------------------------------------------------
 data KbEnv
     = KbEnv
-      { kbKeyName  :: String
+      { kbKeyName  :: Text
       , kbModifier :: [Modifier]
       }
 

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 --------------------------------------------------------------------------------
 -- |
 -- Module : Dhek.GUI
@@ -24,10 +25,12 @@ import Control.Monad.Trans (MonadIO(..))
 import Data.Foldable (Foldable, foldr, for_, traverse_)
 import Data.IORef
 import Data.Maybe
+import Data.Monoid ((<>))
 import Foreign.Ptr
 
 --------------------------------------------------------------------------------
 import           Control.Lens ((^.))
+import           Data.Text (pack)
 import qualified Graphics.Rendering.Cairo     as Cairo
 import qualified Graphics.UI.Gtk              as Gtk
 import qualified Graphics.UI.Gtk.Poppler.Page as Poppler
@@ -70,7 +73,7 @@ data GUI =
     , guiValueEntry :: Gtk.Entry
     , guiTypeCombo :: Gtk.ComboBox
     , guiRectTreeSelection :: Gtk.TreeSelection
-    , guiTypeStore :: Gtk.ListStore String
+    , guiTypeStore :: Gtk.ListStore Gtk.ComboBoxText
     , guiValueEntryAlign :: Gtk.Alignment
     , guiWindowVBox :: Gtk.VBox
     , guiWindowHBox :: Gtk.HBox
@@ -102,7 +105,10 @@ initGUI = do
   where
     settings :: [String] -> Gtk.Settings -> IO [String]
     settings gui gs = do
-        Gtk.settingsSetLongProperty gs "gtk-button-images" 1 "Dhek"
+        Gtk.settingsSetLongProperty gs
+                                   ("gtk-button-images" :: String)
+                                   1
+                                   "Dhek"
         return gui
 
 makeGUI :: IO GUI
@@ -213,7 +219,7 @@ makeGUI = do
 
     -- Button Applidok
     kimg <- loadImage Resources.applidok
-    akb  <- Gtk.toolButtonNew (Just kimg) Nothing
+    akb  <- Gtk.toolButtonNew (Just kimg) (Nothing :: Maybe String)
     Gtk.set akb [Gtk.widgetTooltipText Gtk.:=
                  Just $ msgStr MsgApplidokTooltip]
 
@@ -246,7 +252,7 @@ makeGUI = do
 
     -- Drawing Area tooltip
     drawpop <- Gtk.windowNewPopup
-    dplabel <- Gtk.labelNew Nothing
+    dplabel <- Gtk.labelNew (Nothing :: Maybe String)
     Gtk.labelSetMarkup dplabel $ msgStr MsgDuplicationModePopup
     Gtk.containerAdd drawpop dplabel
     Gtk.windowSetTypeHint drawpop Gtk.WindowTypeHintTooltip
@@ -381,7 +387,7 @@ makeGUI = do
     -- Status bar
     sbar    <- Gtk.statusbarNew
     sbalign <- Gtk.alignmentNew 0 1 1 0
-    ctxId   <- Gtk.statusbarGetContextId sbar "mode"
+    ctxId   <- Gtk.statusbarGetContextId sbar ("mode" :: String)
     Gtk.statusbarSetHasResizeGrip sbar False
     Gtk.containerAdd sbalign sbar
     Gtk.boxPackEnd vbox sbalign Gtk.PackNatural 0
@@ -512,12 +518,12 @@ layoutMapping r
     | r ^. rectType == "radio" || r ^. rectType == "comboitem" =
         let value = fromMaybe "" (r ^. rectValue)
             name  = r ^. rectName
-            label = name ++ " (" ++ value ++ ")" in
+            label = name <> " (" <> value <> ")" in
         [Gtk.cellText Gtk.:= label]
     | r ^. rectType == "textcell" =
-        let idx   = maybe "" show (r ^. rectIndex)
+        let idx   = maybe "" (pack . show) (r ^. rectIndex)
             name  = r ^. rectName
-            label = name ++ " (" ++ idx ++ ")" in
+            label = name <> " (" <> idx <> ")" in
         [Gtk.cellText Gtk.:= label]
     | otherwise = [Gtk.cellText Gtk.:= r ^. rectName]
 
@@ -525,7 +531,7 @@ layoutMapping r
 createToolButton :: Ptr Gtk.InlineImage -> String -> IO Gtk.ToolButton
 createToolButton img msg
     = do imgb <- loadImage img
-         b    <- Gtk.toolButtonNew (Just imgb) Nothing
+         b    <- Gtk.toolButtonNew (Just imgb) (Nothing :: Maybe String)
          Gtk.set b [Gtk.widgetTooltipText Gtk.:=
                        Just msg]
          return b

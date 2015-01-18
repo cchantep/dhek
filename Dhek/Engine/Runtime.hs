@@ -24,6 +24,7 @@ import           Data.List (dropWhileEnd)
 import           Control.Lens hiding (zoom)
 import           Control.Monad.State
 import           Control.Monad.RWS.Strict
+import           Data.Text (Text)
 import qualified Graphics.UI.Gtk                  as Gtk
 import qualified Graphics.UI.Gtk.Poppler.Document as Poppler
 import qualified Graphics.UI.Gtk.Poppler.Page     as Poppler
@@ -285,7 +286,7 @@ engineModePointerContext xs k i (x,y) = do
 
 --------------------------------------------------------------------------------
 engineModeKbContext :: [Gtk.Modifier]
-                    -> String
+                    -> Text
                     -> RuntimeEnv
                     -> (KbEnv -> M a)
                     -> IO ()
@@ -310,11 +311,11 @@ engineModeRelease :: [Gtk.Modifier] -> RuntimeEnv -> Pos -> IO ()
 engineModeRelease modf env pos = engineModePointerContext modf release env pos
 
 --------------------------------------------------------------------------------
-engineModeKeyPress :: [Gtk.Modifier] -> String -> RuntimeEnv -> IO ()
+engineModeKeyPress :: [Gtk.Modifier] -> Text -> RuntimeEnv -> IO ()
 engineModeKeyPress modf name env = engineModeKbContext modf name env keyPress
 
 --------------------------------------------------------------------------------
-engineModeKeyRelease :: [Gtk.Modifier] -> String -> RuntimeEnv -> IO ()
+engineModeKeyRelease :: [Gtk.Modifier] -> Text -> RuntimeEnv -> IO ()
 engineModeKeyRelease modf name env = engineModeKbContext modf name env keyRelease
 
 --------------------------------------------------------------------------------

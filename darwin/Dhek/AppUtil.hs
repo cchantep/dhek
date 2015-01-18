@@ -1,4 +1,5 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE OverloadedStrings        #-}
 --------------------------------------------------------------------------------
 -- |
 -- Module : Dhek.AppUtil
@@ -15,6 +16,7 @@ import Foreign.C
 import System.Exit (exitSuccess)
 
 --------------------------------------------------------------------------------
+import           Data.Text
 import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
@@ -67,7 +69,7 @@ browserOpen url = withCString url nsbrowserOpen
 
 --------------------------------------------------------------------------------
 -- | Returns true if given key name is the one of expected modifier
-isKeyModifier :: String -> Bool
+isKeyModifier :: Text -> Bool
 isKeyModifier "Meta_L" = True
 isKeyModifier "Meta_R" = True
 isKeyModifier _        = False
@@ -77,6 +79,6 @@ keyModifierName :: String
 keyModifierName = "CMD"
 
 --------------------------------------------------------------------------------
-closeKeystrokes :: String -> [Gtk.Modifier] -> Bool
+closeKeystrokes :: Text -> [Gtk.Modifier] -> Bool
 closeKeystrokes "q" [Gtk.Meta] = True
 closeKeystrokes _ _            = False

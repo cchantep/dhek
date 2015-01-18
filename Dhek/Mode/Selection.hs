@@ -1,6 +1,7 @@
 {-# LANGUAGE ConstraintKinds            #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
 --------------------------------------------------------------------------------
 -- |
@@ -709,7 +710,7 @@ selectionModeManager handler gui = do
 createToolbarButton :: GUI -> Ptr Gtk.InlineImage -> IO Gtk.ToolButton
 createToolbarButton gui img
     = do bimg <- loadImage img
-         b   <- Gtk.toolButtonNew (Just bimg) Nothing
+         b   <- Gtk.toolButtonNew (Just bimg) (Nothing :: Maybe String)
          Gtk.toolbarInsert (guiModeToolbar gui) b (-1)
          Gtk.widgetShowAll b
          Gtk.widgetSetSensitive b False

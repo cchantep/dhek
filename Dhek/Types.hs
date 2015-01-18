@@ -23,7 +23,8 @@ import           Data.Aeson hiding (Array)
 import           Data.Aeson.Types (Parser)
 import           Data.IntMap (IntMap, empty, fromList)
 import qualified Data.Map                         as Map
-import           Data.Monoid (Monoid (..))
+import           Data.Monoid (Monoid (..), (<>))
+import           Data.Text (Text, pack)
 import qualified Data.Vector                      as V
 import qualified Graphics.UI.Gtk.Poppler.Document as Poppler
 
@@ -72,7 +73,7 @@ data Boards
 --------------------------------------------------------------------------------
 data Grouped
     = Simple Rect
-    | Grouped String GType [Rect]
+    | Grouped Text GType [Rect]
 
 --------------------------------------------------------------------------------
 data GType = TextCell
@@ -84,9 +85,9 @@ data Rect
       , _rectPoint  :: !Point2D
       , _rectHeight :: !Double
       , _rectWidth  :: !Double
-      , _rectName   :: !String
-      , _rectType   :: !String
-      , _rectValue  :: !(Maybe String)
+      , _rectName   :: !Text
+      , _rectType   :: !Text
+      , _rectValue  :: !(Maybe Text)
       , _rectIndex  :: !(Maybe Int)
       }
     deriving (Eq, Show)
@@ -226,7 +227,7 @@ toJsonGrouped (Grouped name typ rs)
     TextCell -> toJsonTextCell name rs
 
 --------------------------------------------------------------------------------
-toJsonTextCell :: String -> [Rect] -> Value
+toJsonTextCell :: Text -> [Rect] -> Value
 toJsonTextCell name rs
     = object [ "type"  .= ("celltext" :: String)
              , "name"  .= name
@@ -341,7 +342,7 @@ addRect page x = execState action
     action = do
         i <- use boardsState
         boardsState += 1
-        let x' = x & rectId .~ i & rectName %~ (++ show i)
+        let x' = x & rectId .~ i & rectName %~ (<> (pack $ show i))
         (boardsMap.at page.traverse.boardRects.at i) ?= x'
 
 --------------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings          #-}
 --------------------------------------------------------------------------------
 -- |
 -- Module : Dhek.Mode.Normal
@@ -19,6 +20,7 @@ import           Data.Traversable
 --------------------------------------------------------------------------------
 import           Control.Lens      hiding (Action, act)
 import           Control.Monad.RWS hiding (mapM_)
+import           Data.Text (Text, pack)
 import qualified Graphics.Rendering.Cairo as Cairo
 import qualified Graphics.UI.Gtk          as Gtk
 
@@ -436,7 +438,7 @@ normalDrawingRelease v
     = when (w*h >= 30) $
           do rid <- engineDrawState.drawFreshId <+= 1
              let r1 = r & rectId   .~ rid
-                        & rectName %~ (++ show rid)
+                        & rectName %~ (<> (pack $ show rid))
 
              -- New rectangle
              gui <- asks inputGUI
@@ -581,7 +583,7 @@ guideRange opts
     = 10 / ratio where ratio = drawRatio opts
 
 --------------------------------------------------------------------------------
-statusNamePressed :: String -> Bool
+statusNamePressed :: Text -> Bool
 statusNamePressed n
     | "Alt_L" <- n = True
     | "Alt_R" <- n = True

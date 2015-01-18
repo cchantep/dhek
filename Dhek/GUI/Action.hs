@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 --------------------------------------------------------------------------------
 -- |
 -- Module : Dhek.GUI.Action
@@ -36,13 +37,13 @@ module Dhek.GUI.Action
 --------------------------------------------------------------------------------
 import Data.Char (isSpace)
 import Data.Foldable (for_, traverse_)
-import Data.List (dropWhileEnd)
 import Data.Maybe (fromMaybe)
 import Data.Traversable (for, sequenceA)
 import Foreign.Ptr
 
 --------------------------------------------------------------------------------
 import           Control.Lens
+import qualified Data.Text       as T
 import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
@@ -76,7 +77,7 @@ gtkUnselect gui = do
     Gtk.widgetSetSensitive (guiNameEntry gui) False
     Gtk.widgetSetSensitive (guiRemoveButton gui) False
     Gtk.widgetSetSensitive (guiApplyButton gui) False
-    Gtk.entrySetText (guiNameEntry gui) ""
+    Gtk.entrySetText (guiNameEntry gui) ("" :: String)
     Gtk.comboBoxSetActive (guiTypeCombo gui) (- 1)
     gtkSetValuePropVisible False gui
     gtkSetIndexPropVisible False gui
@@ -94,7 +95,7 @@ gtkSelectRect r gui = do
         Gtk.entrySetText (guiNameEntry gui) name
 
         case r ^. rectValue of
-            Nothing -> Gtk.entrySetText (guiValueEntry gui) ""
+            Nothing -> Gtk.entrySetText (guiValueEntry gui) ("" :: String)
             Just v  -> Gtk.entrySetText (guiValueEntry gui) v
 
         case r ^. rectIndex of
@@ -192,11 +193,11 @@ gtkRemoveRect r gui = do
         Gtk.listStoreRemove (guiRectStore gui) idx
 
 --------------------------------------------------------------------------------
-gtkLookupEntryText :: Gtk.Entry -> IO (Maybe String)
+gtkLookupEntryText :: Gtk.Entry -> IO (Maybe T.Text)
 gtkLookupEntryText entry = do
     txt <- Gtk.entryGetText entry
     let txt1 = trimString txt
-        r    = if null txt1 then Nothing else Just txt1
+        r    = if T.null txt1 then Nothing else Just txt1
     return r
 
 --------------------------------------------------------------------------------
@@ -335,5 +336,5 @@ lookupStoreIter predicate store = Gtk.treeModelGetIterFirst store >>= go
     go _ = return Nothing
 
 --------------------------------------------------------------------------------
-trimString :: String -> String
-trimString = dropWhileEnd isSpace . dropWhile isSpace
+trimString :: T.Text -> T.Text
+trimString = T.dropWhileEnd isSpace . T.dropWhile isSpace

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 --------------------------------------------------------------------------------
 -- |
 -- Module : Dhek.AppUtil
@@ -9,6 +10,7 @@
 module Dhek.AppUtil where
 
 --------------------------------------------------------------------------------
+import           Data.Text (Text)
 import qualified Graphics.UI.Gtk as Gtk
 
 --------------------------------------------------------------------------------
@@ -29,7 +31,7 @@ browserOpen _ = return ()
 
 --------------------------------------------------------------------------------
 -- | Returns true if given key name is the one of expected modifier
-isKeyModifier :: String -> Bool
+isKeyModifier :: Text -> Bool
 isKeyModifier "Control_L" = True
 isKeyModifier "Control_R" = True
 isKeyModifier _           = False
@@ -39,5 +41,5 @@ keyModifierName :: String
 keyModifierName = "CTRL"
 
 --------------------------------------------------------------------------------
-closeKeystrokes :: String -> [Gtk.Modifier] -> Bool
+closeKeystrokes :: Text -> [Gtk.Modifier] -> Bool
 closeKeystrokes _ _ = False

@@ -8,11 +8,14 @@ import System.Process
 
 import Data.Text (Text, unpack, pack)
 import Distribution.System (OS(..), buildOS)
+import System.FilePath
 import Text.Shakespeare.I18N
 
 data Dhek = Dhek
 
-mkMessage "Dhek" "messages" "en"
+mkMessage "Dhek"
+          (joinPath ["messages", "main"])
+          "en"
 
 mkI18N :: IO (DhekMessage -> String)
 mkI18N = fmap (\l -> unpack . renderMessage Dhek [l]) determineLang
