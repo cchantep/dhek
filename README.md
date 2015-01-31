@@ -71,6 +71,12 @@ Build on Mac OS X has following requirements.
 - [GTK2 with Quartz](http://applicius-en.tumblr.com/post/91636015743/gtk2-with-osx-quartz).
 - [GTK2 Murrine theme engine](git://git.gnome.org/murrine); Optional but recommanded to make it look nice (see [Mac OS X patch](https://bugzilla.gnome.org/show_bug.cgi?id=733124) to build it).
 
+#### Windows 7+
+
+Build on Windows has following requirements.
+
+- GTK2 hackage must be installed with `-f-fmode-binary`
+
 #### Haskell Platform
 
 ```
